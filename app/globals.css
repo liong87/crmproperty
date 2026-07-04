@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Tropical estate: deep teal + warm amber on warm off-white */
+    --background: 40 33% 98%;
+    --foreground: 177 42% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 177 42% 11%;
+    --primary: 179 74% 19%;
+    --primary-foreground: 40 33% 97%;
+    --secondary: 176 27% 93%;
+    --secondary-foreground: 179 55% 15%;
+    --accent: 40 82% 52%;
+    --accent-foreground: 30 50% 14%;
+    --muted: 44 22% 93%;
+    --muted-foreground: 186 9% 40%;
+    --destructive: 6 63% 45%;
+    --destructive-foreground: 40 33% 97%;
+    --border: 44 22% 88%;
+    --input: 44 22% 88%;
+    --ring: 179 74% 26%;
+    --radius: 0.7rem;
+  }
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Page + section titles pick up the display serif automatically. */
+  h1 { font-family: var(--font-display), Georgia, serif; letter-spacing: -0.015em; }
+}
+
+@layer utilities {
+  .tnum { font-variant-numeric: tabular-nums; }
+  .font-display { font-family: var(--font-display), Georgia, serif; }
+}

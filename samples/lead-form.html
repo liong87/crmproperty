@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Find Your Home — Register Interest</title>
+  <style>
+    :root { --teal:#0E5C5B; --amber:#E4A11B; --ink:#12312F; --bg:#FBFAF7; --border:#E6E2D8; --muted:#5B6B6A; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--ink); }
+    .wrap { max-width:520px; margin:0 auto; padding:32px 20px; }
+    .card { background:#fff; border:1px solid var(--border); border-radius:16px; padding:24px; }
+    .eyebrow { color:var(--amber); font-weight:600; text-transform:uppercase; letter-spacing:.06em; font-size:12px; }
+    h1 { margin:6px 0 4px; font-size:26px; }
+    p.sub { margin:0 0 20px; color:var(--muted); font-size:14px; }
+    label { display:block; font-size:13px; font-weight:600; margin:14px 0 6px; }
+    input, select { width:100%; height:44px; padding:0 12px; border:1px solid var(--border); border-radius:8px; font-size:15px; background:#fff; }
+    .row { display:flex; gap:12px; }
+    .row > div { flex:1; }
+    .consent { display:flex; gap:8px; align-items:flex-start; margin-top:16px; font-size:13px; color:var(--muted); }
+    .consent input { width:auto; height:auto; margin-top:3px; }
+    button { margin-top:20px; width:100%; height:48px; background:var(--teal); color:#fff; border:0; border-radius:8px; font-size:16px; font-weight:600; cursor:pointer; }
+    button:disabled { opacity:.6; cursor:default; }
+    .hp { position:absolute; left:-9999px; }
+    .msg { margin-top:16px; padding:12px 14px; border-radius:8px; font-size:14px; display:none; }
+    .msg.ok { background:#e6f4ea; color:#1e6b3a; display:block; }
+    .msg.err { background:#fbe9e7; color:#b3261e; display:block; }
+    .hint { margin-top:10px; font-size:12px; color:var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="eyebrow">Mont Kiara Residences</div>
+      <h1>Register your interest</h1>
+      <p class="sub">Leave your details and one of our agents will be in touch shortly.</p>
+
+      <form id="lead-form">
+        <label for="name">Full name</label>
+        <input id="name" name="name" required placeholder="Ali bin Ahmad" />
+
+        <div class="row">
+          <div>
+            <label for="phone">Phone (with +60)</label>
+            <input id="phone" name="phone" required placeholder="+60123456789" />
+          </div>
+          <div>
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" placeholder="you@email.com" />
+          </div>
+        </div>
+
+        <label for="interest">I want to</label>
+        <select id="interest" name="interest">
+          <option value="buy">Buy</option>
+          <option value="rent">Rent</option>
+          <option value="sell">Sell</option>
+          <option value="invest">Invest</option>
+        </select>
+
+        <!-- honeypot: bots fill this; humans never see it -->
+        <input class="hp" type="text" name="hp" tabindex="-1" autocomplete="off" />
+
+        <button type="submit" id="submit">Submit enquiry</button>
+        <p style="margin-top:10px;font-size:12px;color:var(--muted);">
+          By submitting, you agree to be contacted about your enquiry.
+        </p>
+        <div class="msg" id="msg"></div>
+        <div class="hint">Testing against <code id="ep"></code></div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // ---- Config: point this at your CRM + the API key for this landing page ----
+    const ENDPOINT = "http://localhost:3000/api/public/leads";
+    const API_KEY  = "devkey123"; // matches PUBLIC_LEAD_API_KEYS in the CRM .env
+    // This landing page is for ONE project — the area is fixed here, not asked of the prospect.
+    const PROJECT_AREA = "Mont Kiara";
+    const PROJECT_NAME = "mont-kiara-lp";
+    document.getElementById("ep").textContent = ENDPOINT;
+
+    const form = document.getElementById("lead-form");
+    const msg = document.getElementById("msg");
+    const btn = document.getElementById("submit");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      msg.className = "msg"; msg.textContent = "";
+      btn.disabled = true; btn.textContent = "Submitting…";
+
+      const payload = {
+        name: form.name.value.trim(),
+        phone: form.phone.value.trim(),
+        email: form.email.value.trim() || null,
+        interest: form.interest.value,
+        preferredAreas: PROJECT_AREA,        // fixed by the landing page, not the prospect
+        sourceDetail: PROJECT_NAME,          // which landing page produced this lead
+        consentGiven: true, // implied by submission (see notice under the button)
+        hp: form.hp.value, // honeypot
+        utmSource: "sample-form",
+      };
+
+      try {
+        const res = await fetch(ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          msg.className = "msg ok";
+          msg.textContent = data.deduped
+            ? "Thanks! We already had your details — an agent will follow up."
+            : "Thank you! Your enquiry has been received.";
+          form.reset();
+        } else {
+          msg.className = "msg err";
+          msg.textContent = data.error || "Something went wrong. Please try again.";
+        }
+      } catch (err) {
+        msg.className = "msg err";
+        msg.textContent = "Could not reach the server. Is the CRM running on localhost:3000?";
+      } finally {
+        btn.disabled = false; btn.textContent = "Submit enquiry";
+      }
+    });
+  </script>
+</body>
+</html>

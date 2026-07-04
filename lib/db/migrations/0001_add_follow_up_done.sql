@@ -1,0 +1,1 @@
+ALTER TABLE "activities" ADD COLUMN "follow_up_done_at" timestamp with time zone;

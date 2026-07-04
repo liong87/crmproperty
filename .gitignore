@@ -1,0 +1,13 @@
+node_modules
+.next
+.open-next
+.env
+.env*.local
+*.log
+.DS_Store
+.wrangler
+coverage
+next-env.d.ts
+
+# Temp files
+_tmp_*
