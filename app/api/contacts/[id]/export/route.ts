@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getCurrentDbUser } from "@/lib/auth";
 import { collectContactData } from "@/server/pdpa/service";
 
+export const dynamic = "force-dynamic";
+
 /** GET /api/contacts/[id]/export — full JSON export of a contact's data (PDPA). Admin only. */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const me = await getCurrentDbUser();

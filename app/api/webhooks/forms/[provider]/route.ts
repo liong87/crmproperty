@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createLeadFromIntake } from "@/server/leads/intake";
 import { INTEREST } from "@/lib/constants";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Webhook receiver for no-code form tools (Tally, Typeform, generic).
  * POST /api/webhooks/forms/tally  (or /typeform, /generic)

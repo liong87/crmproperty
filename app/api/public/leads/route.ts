@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createLeadFromIntake } from "@/server/leads/intake";
 import { resolveLandingPage } from "@/lib/public-keys";
 
+export const dynamic = "force-dynamic";
+
 // Public intake — no session. Protected by a per-landing-page API key.
 // Middleware allows /api/public/* through unauthenticated.
 

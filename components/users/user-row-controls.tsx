@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
-import { setUserRole, setUserActive } from "@/server/users/actions";
+import { useRouter } from "next/navigation";
+import { setUserRole, setUserActive, deleteUser } from "@/server/users/actions";
 import { USER_ROLE } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 
@@ -17,10 +18,12 @@ export function UserRowControls({
   active: boolean;
   disabled?: boolean;
 }) {
+  const router = useRouter();
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
   const [localRole, setLocalRole] = React.useState<Role>(role);
   const [localActive, setLocalActive] = React.useState(active);
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
 
   function onRoleChange(next: Role) {
     setError(null);
@@ -29,7 +32,7 @@ export function UserRowControls({
       const res = await setUserRole({ userId, role: next });
       if (!res.success) {
         setError(res.error);
-        setLocalRole(role); // revert
+        setLocalRole(role);
       }
     });
   }
@@ -38,12 +41,26 @@ export function UserRowControls({
     setError(null);
     const next = !localActive;
     setLocalActive(next);
+    setConfirmDelete(false);
     startTransition(async () => {
       const res = await setUserActive({ userId, active: next });
       if (!res.success) {
         setError(res.error);
-        setLocalActive(!next); // revert
+        setLocalActive(!next);
       }
+    });
+  }
+
+  function onDelete() {
+    setError(null);
+    startTransition(async () => {
+      const res = await deleteUser(userId);
+      if (!res.success) {
+        setError(res.error);
+        setConfirmDelete(false);
+        return;
+      }
+      router.refresh();
     });
   }
 
@@ -69,6 +86,24 @@ export function UserRowControls({
       >
         {localActive ? "Deactivate" : "Activate"}
       </Button>
+
+      {!localActive && !disabled && (
+        confirmDelete ? (
+          <span className="flex items-center gap-1">
+            <Button type="button" size="sm" variant="destructive" disabled={pending} onClick={onDelete}>
+              {pending ? "Deleting…" : "Confirm"}
+            </Button>
+            <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+          </span>
+        ) : (
+          <Button type="button" size="sm" variant="ghost" className="text-destructive" disabled={pending} onClick={() => setConfirmDelete(true)}>
+            Delete
+          </Button>
+        )
+      )}
+
       {error && <span className="text-xs text-destructive">{error}</span>}
     </div>
   );
