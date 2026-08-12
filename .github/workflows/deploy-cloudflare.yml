@@ -1,0 +1,85 @@
+name: Deploy to Cloudflare Workers
+
+# Manual only. Nothing deploys on push until you decide it should — change to
+# `push: branches: [main]` once you are happy with the workflow.
+#
+# Why this exists: OpenNext is not fully supported on Windows (it says so itself),
+# and `next build` fails there with EPERM when creating the symlinks for
+# .next/standalone. GitHub runners are Linux, so the problem disappears — and
+# deploys stop depending on one laptop.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build only — do not deploy"
+        type: boolean
+        default: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck and test
+        # A deploy that skips these is how a broken build reaches your agents.
+        run: |
+          pnpm typecheck
+          pnpm test
+
+      - name: Build for Workers
+        env:
+          # Build-time values. NEXT_PUBLIC_* are baked into the client bundle, so
+          # they must be present here, not only at runtime.
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_CLERK_SIGN_IN_URL: /sign-in
+          NEXT_PUBLIC_CLERK_SIGN_UP_URL: /sign-up
+        run: pnpm cf:build
+
+      - name: Report bundle size
+        # The Workers limit is 10 MB compressed. Worth seeing every build, not
+        # discovering it the day it stops fitting.
+        run: |
+          if [ -f .open-next/worker.js ]; then
+            RAW=$(stat -c%s .open-next/worker.js)
+            GZ=$(gzip -c .open-next/worker.js | wc -c)
+            echo "worker.js: $((RAW/1024)) KiB raw, $((GZ/1024)) KiB gzipped"
+            echo "Workers limit is 10 MB compressed."
+            if [ "$GZ" -gt 10485760 ]; then
+              echo "::error::Worker exceeds the 10 MB compressed limit."
+              exit 1
+            fi
+          else
+            echo "::warning::.open-next/worker.js not found - check the build output above."
+          fi
+
+      - name: Deploy
+        if: ${{ inputs.dry_run == false }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec opennextjs-cloudflare deploy
+
+      - name: Reminder
+        if: ${{ inputs.dry_run == true }}
+        run: |
+          echo "Dry run complete - nothing was deployed."
+          echo "Re-run with dry_run unchecked to deploy."
+          echo
+          echo "Runtime secrets are set on the Worker itself, not here:"
+          echo "  npx wrangler secret put DATABASE_URL"
+          echo "  npx wrangler secret put CLERK_SECRET_KEY"
+          echo "  npx wrangler secret put PUBLIC_LEAD_API_KEYS"
+          echo "  ...and the WEBHOOK_SECRET_* and S3_* values when you need them."
