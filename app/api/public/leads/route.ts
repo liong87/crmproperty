@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createLeadFromIntake } from "@/server/leads/intake";
 import { resolveLandingPage } from "@/lib/public-keys";
-import { clientIp, withinRateLimit, tooManyRequests } from "@/lib/rate-limit";
+import { clientIp, checkRateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -42,9 +42,12 @@ export async function POST(req: Request) {
   // brute-force keys, and so invalid traffic costs us nothing but a counter
   // increment. Keyed on IP: the API key is public by design and would be a useless
   // thing to bucket by.
-  if (!(await withinRateLimit("RATE_LIMIT_LEADS", clientIp(req)))) {
-    return tooManyRequests(CORS);
-  }
+  const rl = await checkRateLimit("RATE_LIMIT_LEADS", clientIp(req));
+  // The limiter fails open by design, which makes a broken limiter invisible.
+  // Reporting its state on every response makes it verifiable from outside with a
+  // single curl, rather than by reading logs and inferring.
+  const headers = { ...CORS, "X-RateLimit-State": rl.state };
+  if (!rl.allowed) return tooManyRequests(headers);
 
   // API key from header (x-api-key) or Authorization: Bearer <key>
   const headerKey =
@@ -54,14 +57,14 @@ export async function POST(req: Request) {
 
   const landingPage = resolveLandingPage(headerKey);
   if (!landingPage) {
-    return NextResponse.json({ ok: false, error: "Invalid API key" }, { status: 401, headers: CORS });
+    return NextResponse.json({ ok: false, error: "Invalid API key" }, { status: 401, headers });
   }
 
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400, headers: CORS });
+    return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400, headers });
   }
 
   // Attach the landing page as source_detail unless the caller set one.
@@ -74,11 +77,11 @@ export async function POST(req: Request) {
   const result = await createLeadFromIntake(payload, "api");
   if (!result.success) {
     // Return a generic 400 — never leak internal detail beyond the validation message.
-    return NextResponse.json({ ok: false, error: result.error }, { status: 400, headers: CORS });
+    return NextResponse.json({ ok: false, error: result.error }, { status: 400, headers });
   }
 
   // Return nothing identifying. `deduped` used to be exposed here, which made
   // this endpoint a lookup oracle: anyone holding a (public, embedded) landing-page
   // key could test whether a phone number already belonged to a client.
-  return NextResponse.json({ ok: true }, { status: 200, headers: CORS });
+  return NextResponse.json({ ok: true }, { status: 200, headers });
 }

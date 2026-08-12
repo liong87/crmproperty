@@ -45,31 +45,44 @@ export function clientIp(req: Request): string {
  *
  * @returns true when the caller is within the limit (or limiting is unavailable).
  */
-export async function withinRateLimit(binding: string, key: string): Promise<boolean> {
+/** Outcome of a limit check — surfaced in a response header so it is observable. */
+export type RateLimitState = "ok" | "blocked" | "unavailable" | "error";
+
+export interface RateLimitResult {
+  allowed: boolean;
+  state: RateLimitState;
+}
+
+export async function checkRateLimit(binding: string, key: string): Promise<RateLimitResult> {
   try {
     const env = getCloudflareContext()?.env as Record<string, unknown> | undefined;
     const limiter = env?.[binding] as RateLimitBinding | undefined;
     if (!limiter?.limit) {
       // Failing open is deliberate, but it must not be silent: a limiter that
       // quietly does nothing looks identical to one that is working until the day
-      // someone floods the endpoint. Logged so it is visible in Workers Logs.
+      // someone floods the endpoint.
       console.warn(
         `[rate-limit] binding ${binding} unavailable — request allowed. ` +
           `env keys: ${env ? Object.keys(env).join(",") : "(no env)"}`,
       );
-      return true;
+      return { allowed: true, state: "unavailable" };
     }
     const { success } = await limiter.limit({ key });
     if (!success) console.warn(`[rate-limit] ${binding} blocked key=${key}`);
-    return success;
+    return { allowed: success, state: success ? "ok" : "blocked" };
   } catch (err) {
     console.warn(
       `[rate-limit] ${binding} threw, request allowed: ` +
         (err instanceof Error ? err.message : String(err)),
     );
     // Never let the limiter itself take the endpoint down.
-    return true;
+    return { allowed: true, state: "error" };
   }
+}
+
+/** Convenience wrapper for callers that only care whether to proceed. */
+export async function withinRateLimit(binding: string, key: string): Promise<boolean> {
+  return (await checkRateLimit(binding, key)).allowed;
 }
 
 /** 429 with Retry-After, merged with whatever headers the caller already sends. */
