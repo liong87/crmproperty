@@ -11,7 +11,7 @@
  *  - Log to activity + message_log
  */
 import { z } from "zod";
-import { and, eq, isNull, or, asc } from "drizzle-orm";
+import { and, eq, isNull, ne, or, asc, desc, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { leads, users, activities, assignmentCounter } from "@/lib/db/schema";
 import { messaging } from "@/lib/messaging";
@@ -47,7 +47,20 @@ export const intakeSchema = z.object({
 export type IntakePayload = z.infer<typeof intakeSchema>;
 export type LeadSource = (typeof LEAD_SOURCE)[number];
 
-/** Round-robin assignment using a DB-persisted counter (serverless-safe). */
+/**
+ * Round-robin assignment using a DB-persisted counter.
+ *
+ * The counter is incremented in ONE statement and the new value returned, so two
+ * leads arriving at the same moment (a landing page plus a webhook, or any CSV
+ * import) cannot read the same index. The previous version did SELECT then UPDATE
+ * as separate round trips: concurrent leads went to the same agent and the counter
+ * advanced by one instead of two.
+ *
+ * The stored value is monotonically increasing and the modulo is applied at read
+ * time. Storing the post-modulo value - as it did before - meant the counter was
+ * bounded by the *current* agent count, so adding or deactivating an agent made the
+ * rotation jump instead of continuing.
+ */
 async function pickAssignee(): Promise<string | null> {
   const agents = await db
     .select({ id: users.id })
@@ -57,24 +70,16 @@ async function pickAssignee(): Promise<string | null> {
 
   if (agents.length === 0) return null;
 
-  // Read-modify-write the counter row atomically enough for low volume.
-  const [counter] = await db
-    .select()
-    .from(assignmentCounter)
-    .where(eq(assignmentCounter.id, ROUND_ROBIN_KEY));
+  const rows = (await db.execute(sql`
+    insert into assignment_counter (id, last_index)
+    values (${ROUND_ROBIN_KEY}, 0)
+    on conflict (id) do update set last_index = assignment_counter.last_index + 1,
+                                   updated_at = now()
+    returning last_index
+  `)) as unknown as Array<{ last_index: number }>;
 
-  const nextIndex = ((counter?.lastIndex ?? -1) + 1) % agents.length;
-
-  if (counter) {
-    await db
-      .update(assignmentCounter)
-      .set({ lastIndex: nextIndex })
-      .where(eq(assignmentCounter.id, ROUND_ROBIN_KEY));
-  } else {
-    await db.insert(assignmentCounter).values({ id: ROUND_ROBIN_KEY, lastIndex: nextIndex });
-  }
-
-  return agents[nextIndex]?.id ?? null;
+  const ticket = Number(rows[0]?.last_index ?? 0);
+  return agents[ticket % agents.length]?.id ?? null;
 }
 
 export async function createLeadFromIntake(
@@ -93,18 +98,31 @@ export async function createLeadFromIntake(
   }
 
   try {
-    // Dedup by phone or email among non-deleted leads.
+    // Dedup by phone or email among OPEN, non-deleted leads only.
+    //
+    // Previously this matched any lead, including ones already converted to a
+    // contact or marked disqualified. A past client enquiring again was matched to
+    // their old, read-only record: the pipeline appended a note nobody reads,
+    // reported success, and the new enquiry was never created and never assigned to
+    // anyone. For a returning-customer business that is silent lost revenue.
+    //
+    // Also ordered and limited: without ORDER BY, PostgreSQL row order is
+    // unspecified, so which lead received the duplicate note could vary run to run.
     const existingMatches = await db
       .select()
       .from(leads)
       .where(
         and(
           isNull(leads.deletedAt),
+          isNull(leads.convertedToContactId),
+          ne(leads.status, "disqualified"),
           p.email
             ? or(eq(leads.phone, p.phone), eq(leads.email, p.email))
             : eq(leads.phone, p.phone),
         ),
-      );
+      )
+      .orderBy(desc(leads.createdAt))
+      .limit(1);
     const existing = existingMatches[0];
 
     if (existing) {

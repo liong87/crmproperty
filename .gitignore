@@ -11,3 +11,15 @@ next-env.d.ts
 
 # Temp files
 _tmp_*
+_backup_before_patch
+_to_delete
+# Transfer artefacts and local scratch - never commit
+*.zip
+*.backup.gz
+*.dump
+*.dump.gpg
+_apply*.zip
+_backup_before_patch/
+_to_delete/
+*.tsbuildinfo
+tsconfig.tsbuildinfo

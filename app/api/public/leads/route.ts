@@ -7,17 +7,35 @@ export const dynamic = "force-dynamic";
 // Public intake — no session. Protected by a per-landing-page API key.
 // Middleware allows /api/public/* through unauthenticated.
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, x-api-key",
-};
+/**
+ * Restrict CORS to our own landing pages instead of "*".
+ * PUBLIC_LEAD_ALLOWED_ORIGINS is a comma-separated list, e.g.
+ *   "https://www.agency.com.my,https://lp.agency.com.my"
+ * With none configured we send no CORS header at all: server-to-server posts
+ * (Make, Zapier, Google Ads) are unaffected, only browser JS is blocked.
+ */
+function corsHeaders(origin: string | null): Record<string, string> {
+  const base: Record<string, string> = {
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, x-api-key",
+    Vary: "Origin",
+  };
+  const allowed = (process.env.PUBLIC_LEAD_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (origin && allowed.includes(origin)) {
+    base["Access-Control-Allow-Origin"] = origin;
+  }
+  return base;
+}
 
-export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: CORS });
+export async function OPTIONS(req: Request) {
+  return new NextResponse(null, { status: 204, headers: corsHeaders(req.headers.get("origin")) });
 }
 
 export async function POST(req: Request) {
+  const CORS = corsHeaders(req.headers.get("origin"));
   // API key from header (x-api-key) or Authorization: Bearer <key>
   const headerKey =
     req.headers.get("x-api-key") ??
@@ -49,9 +67,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 400, headers: CORS });
   }
 
-  // Success: expose only the lead id. Never internal data.
-  return NextResponse.json(
-    { ok: true, leadId: result.data.leadId, deduped: result.data.deduped },
-    { status: 200, headers: CORS },
-  );
+  // Return nothing identifying. `deduped` used to be exposed here, which made
+  // this endpoint a lookup oracle: anyone holding a (public, embedded) landing-page
+  // key could test whether a phone number already belonged to a client.
+  return NextResponse.json({ ok: true }, { status: 200, headers: CORS });
 }

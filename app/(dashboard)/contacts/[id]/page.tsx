@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getCurrentDbUser, canEdit } from "@/lib/auth";
+import { getCurrentDbUser, canEdit, canView } from "@/lib/auth";
 import { getContactById } from "@/server/contacts/queries";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,10 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const contact = await getContactById(id);
   if (!contact) notFound();
+  // Read access must be checked, not just edit access. Without this an agent could
+  // open any contact by URL and read NRIC/passport numbers, budget and notes.
+  // notFound() rather than a 403 so the page does not confirm the record exists.
+  if (!canView(me, contact.assignedTo)) notFound();
   const editable = canEdit(me, contact.assignedTo);
 
   return (

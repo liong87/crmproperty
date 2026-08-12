@@ -6,7 +6,7 @@ import { FollowUpList } from "@/components/activities/follow-up-list";
 export default async function RemindersPage() {
   const me = await getCurrentDbUser();
   if (!me) redirect("/sign-in");
-  const items = await listFollowUps(me);
+  const items = await listFollowUps(me, 200);
   const overdue = items.filter((i) => i.overdue).length;
 
   return (

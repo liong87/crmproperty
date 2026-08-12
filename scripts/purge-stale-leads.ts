@@ -4,7 +4,11 @@
  * Converted leads are kept (they belong to an active contact relationship).
  *
  * Run manually:  pnpm purge:leads
- * Or via cron (e.g. GitHub Actions monthly).
+ * Scheduled by:   .github/workflows/pdpa-purge.yml (1st of each month)
+ *
+ * Set PURGE_DRY_RUN=1 to report what would be deleted without deleting anything.
+ * The retention cutoff is computed in Malaysia time, not the runner's local zone —
+ * a GitHub runner is on UTC, which previously moved the boundary by up to a day.
  */
 import "dotenv/config";
 import { and, eq, inArray, isNull, lt } from "drizzle-orm";
@@ -13,11 +17,28 @@ import { leads, activities, documents, messageLog } from "../lib/db/schema";
 import { storage } from "../lib/storage";
 
 const RETENTION_MONTHS = 24;
+const DRY_RUN = (process.env.PURGE_DRY_RUN ?? "") !== "";
+
+/**
+ * Start of the retention window, anchored to Malaysia time (UTC+8, no daylight
+ * saving). Using the process's local zone made the cutoff drift by up to a day
+ * depending on where the job ran.
+ */
+function retentionCutoff(): Date {
+  const nowMy = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  const y = nowMy.getUTCFullYear();
+  const m = nowMy.getUTCMonth() - RETENTION_MONTHS;
+  const d = nowMy.getUTCDate();
+  // Midnight Malaysia time on the cutoff date == 16:00 UTC the previous day.
+  return new Date(Date.UTC(y, m, d, 0, 0, 0) - 8 * 60 * 60 * 1000);
+}
 
 async function main() {
-  const cutoff = new Date();
-  cutoff.setMonth(cutoff.getMonth() - RETENTION_MONTHS);
-  console.log(`Purging unconverted leads created before ${cutoff.toISOString()}…`);
+  const cutoff = retentionCutoff();
+  console.log(
+    `${DRY_RUN ? "[DRY RUN] " : ""}Purging unconverted leads created before ` +
+      `${cutoff.toISOString()} (24 months, Malaysia time)…`,
+  );
 
   const stale = await db
     .select({ id: leads.id })
@@ -27,6 +48,11 @@ async function main() {
   const ids = stale.map((l) => l.id);
   if (ids.length === 0) {
     console.log("Nothing to purge.");
+    process.exit(0);
+  }
+
+  if (DRY_RUN) {
+    console.log(`[DRY RUN] Would purge ${ids.length} leads. Nothing was deleted.`);
     process.exit(0);
   }
 

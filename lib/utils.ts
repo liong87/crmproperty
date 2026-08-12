@@ -17,3 +17,43 @@ export function pricePerSqft(askingPriceCents: number, builtUpSqft: number | nul
   const rm = askingPriceCents / 100 / builtUpSqft;
   return new Intl.NumberFormat("en-MY", { style: "currency", currency: "MYR", maximumFractionDigits: 0 }).format(rm);
 }
+
+/**
+ * Malaysia is UTC+8 all year (no daylight saving), so a fixed offset is correct.
+ */
+const MY_OFFSET = "+08:00";
+
+/**
+ * Convert a `datetime-local` input value ("2026-08-12T09:00") to an ISO instant,
+ * interpreting it as MALAYSIA time regardless of the device's own timezone.
+ *
+ * The bug this fixes: the follow-up form did `new Date(value).toISOString()`, which
+ * parses a zone-less string in the BROWSER's timezone. Both places that display
+ * follow-ups force Asia/Kuala_Lumpur, so an agent whose laptop or phone was set to
+ * another zone typed 09:00 and the reminder showed — and fired — at a different
+ * hour, with nothing on screen to reveal the discrepancy.
+ */
+export function localInputToIso(value: string): string | null {
+  if (!value) return null;
+  // datetime-local gives "YYYY-MM-DDTHH:mm" (seconds optional).
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(:\d{2})?$/.exec(value.trim());
+  if (!m) {
+    // Already carries a zone, or is something unexpected — fall back to Date parsing.
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  const d = new Date(`${m[1]}T${m[2]}${m[3] ?? ":00"}${MY_OFFSET}`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/**
+ * Inverse of localInputToIso: an ISO instant back to a `datetime-local` value
+ * showing MALAYSIA time, so edit forms round-trip without shifting.
+ */
+export function isoToLocalInput(iso: string | Date | null | undefined): string {
+  if (!iso) return "";
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  if (Number.isNaN(d.getTime())) return "";
+  const my = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+  return my.toISOString().slice(0, 16);
+}

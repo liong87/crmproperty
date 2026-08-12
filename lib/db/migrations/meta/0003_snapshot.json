@@ -1,6 +1,6 @@
 {
-  "id": "05ba42f2-eb5d-4c62-8e17-92b851a29d9d",
-  "prevId": "6a538ad4-cc46-4365-bfbd-2885c77099b7",
+  "id": "26effa04-3334-4341-8481-7408025c3754",
+  "prevId": "f9e8e523-e22a-4178-b279-f293e7b9dba5",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -133,6 +133,49 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "activities_timeline_idx": {
+          "name": "activities_timeline_idx",
+          "columns": [
+            {
+              "expression": "entity_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "first"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "activities_open_follow_up_idx": {
+          "name": "activities_open_follow_up_idx",
+          "columns": [
+            {
+              "expression": "follow_up_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "follow_up_at is not null and follow_up_done_at is null and deleted_at is null",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -393,6 +436,22 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "contacts_live_created_idx": {
+          "name": "contacts_live_created_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "first"
+            }
+          ],
+          "isUnique": false,
+          "where": "deleted_at is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -455,6 +514,13 @@
         },
         "is_terminal": {
           "name": "is_terminal",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_won": {
+          "name": "is_won",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
@@ -1065,6 +1131,22 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "leads_live_created_idx": {
+          "name": "leads_live_created_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "first"
+            }
+          ],
+          "isUnique": false,
+          "where": "deleted_at is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -1582,6 +1664,22 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "properties_live_created_idx": {
+          "name": "properties_live_created_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "first"
+            }
+          ],
+          "isUnique": false,
+          "where": "deleted_at is null",
           "concurrently": false,
           "method": "btree",
           "with": {}

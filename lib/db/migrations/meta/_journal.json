@@ -15,6 +15,20 @@
       "when": 1783090447193,
       "tag": "0001_add_follow_up_done",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786372789960,
+      "tag": "0002_add_performance_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786377001569,
+      "tag": "0003_add_deal_stage_is_won",
+      "breakpoints": true
     }
   ]
 }

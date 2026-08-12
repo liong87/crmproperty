@@ -1,0 +1,85 @@
+name: Database backup
+
+# Daily at 18:00 UTC = 02:00 Malaysia time (quiet hours for the agency).
+on:
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch: {}        # lets you run it by hand from the Actions tab
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Install PostgreSQL 17 client
+        # pg_dump must be the same major version as the server or newer.
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
+          sudo sh -c 'echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          pg_dump --version
+
+      - name: Dump the database
+        env:
+          # IMPORTANT: this must be the DIRECT connection (port 5432),
+          # not the pooler on 6543 - pg_dump cannot run through transaction pooling.
+          PGCONN: ${{ secrets.SUPABASE_DIRECT_URL }}
+        run: |
+          set -euo pipefail
+          STAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
+          echo "STAMP=$STAMP" >> "$GITHUB_ENV"
+          pg_dump "$PGCONN" \
+            --format=custom \
+            --schema=public \
+            --no-owner --no-privileges \
+            --file="crm-$STAMP.dump"
+          ls -lh "crm-$STAMP.dump"
+
+      - name: Fail if the dump looks empty
+        # A 'successful' 2 KB dump is the classic silent backup failure.
+        run: |
+          SIZE=$(stat -c%s "crm-${STAMP}.dump")
+          echo "Dump size: $SIZE bytes"
+          if [ "$SIZE" -lt 51200 ]; then
+            echo "::error::Dump is only $SIZE bytes - refusing to treat this as a valid backup."
+            exit 1
+          fi
+
+      - name: Encrypt
+        # Client data includes NRIC and passport numbers - it must not sit unencrypted in a bucket.
+        env:
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$PASSPHRASE" > /tmp/pp
+          gpg --batch --yes --symmetric --cipher-algo AES256 \
+              --passphrase-file /tmp/pp \
+              -o "crm-${STAMP}.dump.gpg" "crm-${STAMP}.dump"
+          shred -u /tmp/pp "crm-${STAMP}.dump"
+          ls -lh "crm-${STAMP}.dump.gpg"
+
+      - name: Upload to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
+        run: |
+          set -euo pipefail
+          aws s3 cp "crm-${STAMP}.dump.gpg" \
+            "s3://${R2_BUCKET}/db/crm-${STAMP}.dump.gpg" \
+            --endpoint-url "$R2_ENDPOINT" --only-show-errors
+          echo "Uploaded db/crm-${STAMP}.dump.gpg"
+
+      - name: List what is now stored
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
+        run: |
+          aws s3 ls "s3://${R2_BUCKET}/db/" --endpoint-url "$R2_ENDPOINT" | tail -40

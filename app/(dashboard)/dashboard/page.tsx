@@ -12,7 +12,8 @@ export default async function DashboardPage() {
   const user = await getCurrentDbUser();
   if (!user) return null;
 
-  const [followUps, report] = await Promise.all([listFollowUps(user), getReportData(user)]);
+  // Ask for 5, not "all of them then slice to 5".
+  const [followUps, report] = await Promise.all([listFollowUps(user, 5), getReportData(user)]);
   const overdue = followUps.filter((f) => f.overdue).length;
   const firstName = user.name.split(" ")[0] ?? user.name;
 
@@ -45,7 +46,7 @@ export default async function DashboardPage() {
           <Link href="/reminders" className="text-sm text-primary underline-offset-2 hover:underline">View all</Link>
         </CardHeader>
         <CardContent>
-          <FollowUpList items={followUps.slice(0, 5)} />
+          <FollowUpList items={followUps} />
         </CardContent>
       </Card>
 

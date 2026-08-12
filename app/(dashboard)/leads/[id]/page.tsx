@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getCurrentDbUser, canEdit } from "@/lib/auth";
+import { getCurrentDbUser, canEdit, canView } from "@/lib/auth";
 import { getLeadById } from "@/server/leads/queries";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   const lead = await getLeadById(id);
   if (!lead) notFound();
+  // See contacts/[id]/page.tsx - read access needs its own check.
+  if (!canView(me, lead.assignedTo)) notFound();
 
   const editable = canEdit(me, lead.assignedTo) && !lead.convertedToContactId;
 

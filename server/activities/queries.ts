@@ -1,9 +1,9 @@
 /** Activity reads: per-entity timeline + user follow-up reminders. */
-import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { activities, users, type User } from "@/lib/db/schema";
 import { isManagerOrAbove } from "@/lib/auth";
-import { resolveEntity, type EntityType } from "./entity";
+import { resolveEntitiesBatch, type EntityType } from "./entity";
 
 export interface TimelineItem {
   id: string;
@@ -49,8 +49,17 @@ export interface FollowUp {
 /**
  * Open follow-ups (follow_up_at set, not yet done).
  * Agents see the ones they created; managers/admins see all.
+ *
+ * Two fixes over the original, both of which showed up as a slow dashboard:
+ *
+ *  1. LIMIT. There was none, so every open follow-up in the agency was fetched
+ *     even though the dashboard displays five.
+ *  2. No more N+1. It called resolveEntity() once PER ROW inside a loop, so 200
+ *     open follow-ups meant 200 extra sequential round trips. Labels are now
+ *     resolved with ONE query per entity type (4 at most, usually 1-2), batched
+ *     with an IN list.
  */
-export async function listFollowUps(user: User): Promise<FollowUp[]> {
+export async function listFollowUps(user: User, limit = 50): Promise<FollowUp[]> {
   const where = and(
     isNull(activities.deletedAt),
     isNotNull(activities.followUpAt),
@@ -69,13 +78,24 @@ export async function listFollowUps(user: User): Promise<FollowUp[]> {
     })
     .from(activities)
     .where(where)
-    .orderBy(asc(activities.followUpAt));
+    .orderBy(asc(activities.followUpAt))
+    .limit(limit);
+
+  // Group the ids we need by entity type, then resolve each type in one query.
+  const byType = new Map<EntityType, string[]>();
+  for (const r of rows) {
+    const t = r.entityType as EntityType;
+    const list = byType.get(t);
+    if (list) list.push(r.entityId);
+    else byType.set(t, [r.entityId]);
+  }
+  const labels = await resolveEntitiesBatch(byType);
 
   const now = Date.now();
   const out: FollowUp[] = [];
   for (const r of rows) {
     if (!r.followUpAt) continue;
-    const resolved = await resolveEntity(r.entityType as EntityType, r.entityId);
+    const resolved = labels.get(`${r.entityType}:${r.entityId}`);
     out.push({
       id: r.id,
       type: r.type,
@@ -89,6 +109,18 @@ export async function listFollowUps(user: User): Promise<FollowUp[]> {
   return out;
 }
 
+/** Count only — never materialise every row just to measure how many there are. */
 export async function countOpenFollowUps(user: User): Promise<number> {
-  return (await listFollowUps(user)).length;
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(activities)
+    .where(
+      and(
+        isNull(activities.deletedAt),
+        isNotNull(activities.followUpAt),
+        isNull(activities.followUpDoneAt),
+        isManagerOrAbove(user) ? undefined : eq(activities.createdBy, user.id),
+      ),
+    );
+  return row?.n ?? 0;
 }

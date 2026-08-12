@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { localInputToIso } from "@/lib/utils";
 
 export function AddActivity({ entityType, entityId }: { entityType: string; entityId: string }) {
   const router = useRouter();
@@ -25,7 +26,8 @@ export function AddActivity({ entityType, entityId }: { entityType: string; enti
         entityId,
         type,
         body: body || null,
-        followUpAt: followUp ? new Date(followUp).toISOString() : null,
+        // Interpret the entered time as Malaysia time, not the device's timezone.
+        followUpAt: localInputToIso(followUp),
       });
       if (!res.success) return setError(res.error);
       setBody(""); setFollowUp(""); setType("note");

@@ -1,85 +1,93 @@
 "use server";
 /**
- * CSV bulk import (authenticated agents). Each row funnels through the shared
- * createLeadFromIntake pipeline (dedup, round-robin, consent, logging) with source=import.
+ * CSV bulk import (authenticated staff). Each row funnels through the shared
+ * createLeadFromIntake pipeline (dedup, round-robin, consent, logging) with
+ * source=import.
  *
- * Expected headers (case-insensitive, extra columns ignored):
- *   name, phone, email, interest, preferredAreas, budgetMin, budgetMax
- * Budgets are read as whole Ringgit and stored as integer cents.
+ * Headers are matched loosely — case, spaces, underscores and hyphens are ignored —
+ * so exports from Facebook Lead Ads ("Full Name", "Phone Number") and Google Ads
+ * ("CSV for CRM" format) can be imported without editing the file first.
+ *
+ * Recognised columns (extras ignored):
+ *   name | full name         phone | phone number      email
+ *   interest                  preferred areas | city    consent
+ *   budget min                budget max
+ *
+ * Budgets are read as whole Ringgit and stored as integer cents. "1,200,000",
+ * "RM 850000" and "850k" all work — previously any of those rejected the whole row.
  */
 import { requireDbUser } from "@/lib/auth";
 import { createLeadFromIntake } from "./intake";
 import { ok, fail } from "@/lib/action-result";
 import type { ActionResult } from "@/types";
+import { parseCsv, pick, ringgitToCents, toE164My, toInterest, toConsent } from "./csv";
+
+const MAX_ROWS = 1000;
 
 export interface ImportSummary {
   total: number;
   created: number;
   deduped: number;
   failed: number;
-  errors: { row: number; error: string }[];
+  /** `line` is the real line number in the uploaded file. */
+  errors: { line: number; name: string; error: string }[];
+  /** True when consent was absent for at least one row — see the PDPA note below. */
+  missingConsent: number;
 }
 
-/** Minimal CSV parser: handles quoted fields and escaped quotes. */
-function parseCsv(text: string): Record<string, string>[] {
-  const rows: string[][] = [];
-  let field = "";
-  let row: string[] = [];
-  let inQuotes = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inQuotes) {
-      if (c === '"') {
-        if (text[i + 1] === '"') { field += '"'; i++; } else inQuotes = false;
-      } else field += c;
-    } else if (c === '"') inQuotes = true;
-    else if (c === ",") { row.push(field); field = ""; }
-    else if (c === "\n" || c === "\r") {
-      if (c === "\r" && text[i + 1] === "\n") i++;
-      row.push(field); field = "";
-      if (row.some((f) => f.trim() !== "")) rows.push(row);
-      row = [];
-    } else field += c;
-  }
-  if (field !== "" || row.length) { row.push(field); if (row.some((f) => f.trim() !== "")) rows.push(row); }
-
-  if (rows.length === 0) return [];
-  const headers = rows[0]!.map((h) => h.trim().toLowerCase());
-  return rows.slice(1).map((r) => {
-    const obj: Record<string, string> = {};
-    headers.forEach((h, i) => { obj[h] = (r[i] ?? "").trim(); });
-    return obj;
-  });
-}
-
-export async function importLeadsFromCsv(csvText: string): Promise<ActionResult<ImportSummary>> {
+export async function importLeadsFromCsv(csvText: unknown): Promise<ActionResult<ImportSummary>> {
   try {
     await requireDbUser(); // any authenticated staff may import
+
+    if (typeof csvText !== "string") return fail("No CSV content provided.");
+    if (csvText.length > 5_000_000) return fail("File is too large. Please split it up.");
+
     const rows = parseCsv(csvText);
     if (rows.length === 0) return fail("No data rows found in the CSV.");
-    if (rows.length > 1000) return fail("Please import 1000 rows or fewer at a time.");
+    if (rows.length > MAX_ROWS) {
+      return fail(`Please import ${MAX_ROWS} rows or fewer at a time.`);
+    }
 
-    const summary: ImportSummary = { total: rows.length, created: 0, deduped: 0, failed: 0, errors: [] };
+    const summary: ImportSummary = {
+      total: rows.length,
+      created: 0,
+      deduped: 0,
+      failed: 0,
+      errors: [],
+      missingConsent: 0,
+    };
 
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i]!;
-      const rm = (v: string) => (v ? Math.round(Number(v) * 100) : null);
+    for (const { line, values } of rows) {
+      const name = pick(values, "name", "full name", "fullname");
+      const consentCol = pick(values, "consent", "pdpa consent", "pdpa", "agree");
+
+      // PDPA: consent is taken from the file when the column exists. When it does
+      // NOT exist we still import (these are leads the agency already holds) but we
+      // count it, so the person importing can see how many records carry no consent
+      // evidence. The old code stamped consent_given_at = now() on every row
+      // unconditionally, manufacturing a consent record that could not be defended.
+      const hasConsentColumn = consentCol !== "";
+      const consentGiven = hasConsentColumn ? toConsent(consentCol) : false;
+      if (!consentGiven) summary.missingConsent++;
+
       const payload = {
-        name: r["name"] ?? "",
-        phone: r["phone"] ?? "",
-        email: r["email"] || null,
-        interest: (r["interest"] || null) as never,
-        preferredAreas: r["preferredareas"] || r["preferred areas"] || null,
-        budgetMin: rm(r["budgetmin"] || r["budget min"] || ""),
-        budgetMax: rm(r["budgetmax"] || r["budget max"] || ""),
-        consentGiven: true,
+        name,
+        phone: toE164My(pick(values, "phone", "phone number", "phonenumber", "mobile")) ?? "",
+        email: pick(values, "email", "email address") || null,
+        interest: toInterest(pick(values, "interest", "looking for", "type")),
+        preferredAreas:
+          pick(values, "preferred areas", "preferredareas", "area", "areas", "city") || null,
+        budgetMin: ringgitToCents(pick(values, "budget min", "budgetmin", "min budget")),
+        budgetMax: ringgitToCents(pick(values, "budget max", "budgetmax", "max budget")),
+        consentGiven,
         consentSource: "csv-import",
         sourceDetail: "csv-import",
       };
+
       const res = await createLeadFromIntake(payload, "import");
       if (!res.success) {
         summary.failed++;
-        summary.errors.push({ row: i + 2, error: res.error }); // +2: header + 1-indexed
+        summary.errors.push({ line, name: name || "(no name)", error: res.error });
       } else if (res.data.deduped) summary.deduped++;
       else summary.created++;
     }
@@ -87,6 +95,9 @@ export async function importLeadsFromCsv(csvText: string): Promise<ActionResult<
     return ok(summary);
   } catch (err) {
     if (err instanceof Error && err.message === "UNAUTHENTICATED") return fail("Please sign in.");
+    if (err instanceof Error && err.message === "INACTIVE_USER") {
+      return fail("Your account is awaiting approval.");
+    }
     return fail("Import failed.");
   }
 }

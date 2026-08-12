@@ -1,0 +1,5 @@
+CREATE INDEX IF NOT EXISTS "activities_timeline_idx" ON "activities" USING btree ("entity_type","entity_id","occurred_at" DESC NULLS FIRST);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "activities_open_follow_up_idx" ON "activities" USING btree ("follow_up_at") WHERE follow_up_at is not null and follow_up_done_at is null and deleted_at is null;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "contacts_live_created_idx" ON "contacts" USING btree ("created_at" DESC NULLS FIRST) WHERE deleted_at is null;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "leads_live_created_idx" ON "leads" USING btree ("created_at" DESC NULLS FIRST) WHERE deleted_at is null;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "properties_live_created_idx" ON "properties" USING btree ("created_at" DESC NULLS FIRST) WHERE deleted_at is null;

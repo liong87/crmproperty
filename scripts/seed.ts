@@ -56,8 +56,8 @@ async function main() {
       { name: "Contacted", sortOrder: 2, isTerminal: false },
       { name: "Viewing Scheduled", sortOrder: 3, isTerminal: false },
       { name: "Negotiation", sortOrder: 4, isTerminal: false },
-      { name: "Closed Won", sortOrder: 5, isTerminal: true },
-      { name: "Closed Lost", sortOrder: 6, isTerminal: true },
+      { name: "Closed Won", sortOrder: 5, isTerminal: true, isWon: true },
+      { name: "Closed Lost", sortOrder: 6, isTerminal: true, isWon: false },
     ])
     .returning({ id: dealStages.id, name: dealStages.name });
 

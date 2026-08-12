@@ -68,14 +68,21 @@ export async function syncCurrentUser(): Promise<User | null> {
   return created ?? null;
 }
 
-/** The current identity's local DB row (with role), or null if unauthenticated. */
+/**
+ * The current identity's local DB row (with role), or null if unauthenticated.
+ *
+ * Soft-deleted users are treated as unauthenticated. deleteUser() intentionally does
+ * NOT revoke the identity at the auth provider, so without this filter an offboarded
+ * member of staff kept a working session - and any route using this helper instead of
+ * requireDbUser (the PDPA export endpoint, for one) still served them client data.
+ */
 export async function getCurrentDbUser(): Promise<User | null> {
   const authUser = await getCurrentUser();
   if (!authUser) return null;
   const [row] = await db
     .select()
     .from(users)
-    .where(eq(users.externalAuthId, authUser.externalAuthId));
+    .where(and(eq(users.externalAuthId, authUser.externalAuthId), isNull(users.deletedAt)));
   return row ?? null;
 }
 

@@ -86,18 +86,41 @@ export async function getReportData(user: User): Promise<ReportData> {
       .where(and(eq(users.active, true), isNull(users.deletedAt)))
       .orderBy(users.name);
 
-    leaderboard = await Promise.all(
-      agentRows.map(async (a) => {
-        const [l] = await db.select({ c: count() }).from(leads).where(and(eq(leads.assignedTo, a.id), isNull(leads.deletedAt)));
-        const [c] = await db.select({ c: count() }).from(contacts).where(and(eq(contacts.assignedTo, a.id), isNull(contacts.deletedAt)));
-        const [w] = await db
-          .select({ v: sum(deals.value) })
-          .from(deals)
-          .innerJoin(dealStages, eq(deals.stageId, dealStages.id))
-          .where(and(eq(deals.assignedTo, a.id), eq(dealStages.name, "Closed Won"), isNull(deals.deletedAt)));
-        return { name: a.name, leads: l?.c ?? 0, contacts: c?.c ?? 0, wonValue: Number(w?.v ?? 0) };
-      }),
-    );
+    // Three GROUP BY queries for the whole leaderboard, not three per agent.
+    // The original ran 3 queries per user - 15 sequential round trips at five staff,
+    // 30 at ten - which is what made /reports slow.
+    const [leadCounts, contactCounts, wonValues] = await Promise.all([
+      db
+        .select({ id: leads.assignedTo, c: count() })
+        .from(leads)
+        .where(isNull(leads.deletedAt))
+        .groupBy(leads.assignedTo),
+      db
+        .select({ id: contacts.assignedTo, c: count() })
+        .from(contacts)
+        .where(isNull(contacts.deletedAt))
+        .groupBy(contacts.assignedTo),
+      db
+        .select({ id: deals.assignedTo, v: sum(deals.value) })
+        .from(deals)
+        .innerJoin(dealStages, eq(deals.stageId, dealStages.id))
+        // Match on the terminal flag, not the stage NAME. deal_stages is editable
+        // without a deploy, so renaming "Closed Won" used to silently zero every
+        // agent's won value with no error anywhere.
+        .where(and(eq(dealStages.isTerminal, true), eq(dealStages.isWon, true), isNull(deals.deletedAt)))
+        .groupBy(deals.assignedTo),
+    ]);
+
+    const leadMap = new Map(leadCounts.map((r) => [r.id, Number(r.c)]));
+    const contactMap = new Map(contactCounts.map((r) => [r.id, Number(r.c)]));
+    const wonMap = new Map(wonValues.map((r) => [r.id, Number(r.v ?? 0)]));
+
+    leaderboard = agentRows.map((a) => ({
+      name: a.name,
+      leads: leadMap.get(a.id) ?? 0,
+      contacts: contactMap.get(a.id) ?? 0,
+      wonValue: wonMap.get(a.id) ?? 0,
+    }));
     leaderboard.sort((x, y) => y.wonValue - x.wonValue);
   }
 

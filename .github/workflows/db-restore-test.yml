@@ -1,0 +1,79 @@
+name: Restore test
+
+# An untested backup is not a backup. This proves the newest file actually restores.
+# First Monday of each month, 19:00 UTC = 03:00 Malaysia.
+on:
+  schedule:
+    - cron: "0 19 1-7 * 1"
+  workflow_dispatch: {}
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: testpass
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - name: Install PostgreSQL 17 client
+        run: |
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
+          sudo sh -c 'echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17
+
+      - name: Fetch the newest backup
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
+        run: |
+          set -euo pipefail
+          LATEST=$(aws s3 ls "s3://${R2_BUCKET}/db/" --endpoint-url "$R2_ENDPOINT" \
+                   | sort | tail -1 | awk '{print $4}')
+          echo "Restoring: $LATEST"
+          aws s3 cp "s3://${R2_BUCKET}/db/${LATEST}" ./backup.dump.gpg \
+            --endpoint-url "$R2_ENDPOINT" --only-show-errors
+
+      - name: Decrypt and restore
+        env:
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          PGPASSWORD: testpass
+        run: |
+          set -euo pipefail
+          printf '%s' "$PASSPHRASE" > /tmp/pp
+          gpg --batch --yes --decrypt --passphrase-file /tmp/pp -o backup.dump backup.dump.gpg
+          shred -u /tmp/pp
+          psql -h localhost -U postgres -c "CREATE DATABASE verify;"
+          # The dump contains its own CREATE SCHEMA public, so remove the one
+          # PostgreSQL creates by default or pg_restore exits non-zero.
+          psql -h localhost -U postgres -d verify -c "DROP SCHEMA IF EXISTS public CASCADE;"
+          pg_restore -h localhost -U postgres -d verify --no-owner --no-privileges --exit-on-error backup.dump
+
+      - name: Assert the data is really there
+        env:
+          PGPASSWORD: testpass
+        run: |
+          set -euo pipefail
+          psql -h localhost -U postgres -d verify -t -A -F' ' -c "
+            SELECT 'properties', count(*) FROM properties
+            UNION ALL SELECT 'contacts', count(*) FROM contacts
+            UNION ALL SELECT 'leads', count(*) FROM leads
+            UNION ALL SELECT 'activities', count(*) FROM activities;"
+          # A restore that succeeds but produces empty tables is still a failed backup.
+          EMPTY=$(psql -h localhost -U postgres -d verify -t -A -c "
+            SELECT count(*) FROM (
+              SELECT 1 FROM contacts LIMIT 1
+            ) x;")
+          if [ "$EMPTY" -eq 0 ]; then
+            echo "::error::Restore produced an empty contacts table - backup is not usable."
+            exit 1
+          fi
+          echo "Restore verified."

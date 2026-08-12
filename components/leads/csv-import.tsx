@@ -40,7 +40,10 @@ export function CsvImport() {
           <code className="mx-1 rounded bg-secondary px-1">preferredAreas</code>
           <code className="mx-1 rounded bg-secondary px-1">budgetMin</code>
           <code className="mx-1 rounded bg-secondary px-1">budgetMax</code>.
-          Phone must be E.164 (e.g. +60123456789). Budgets in Ringgit.
+          <code className="mx-1 rounded bg-secondary px-1">consent</code>.
+          Column names are matched loosely, so exports from Facebook Lead Ads
+          (“Full Name”, “Phone Number”) and Google Ads work without editing the file.
+          Phone accepts 012-345 6789 or +60123456789. Budgets accept 850000, “RM 850,000” or 850k.
         </p>
       </div>
 
@@ -66,10 +69,17 @@ export function CsvImport() {
           <p className="mt-1 text-muted-foreground">
             {summary.total} rows · {summary.created} created · {summary.deduped} merged (duplicates) · {summary.failed} failed
           </p>
+          {summary.missingConsent > 0 && (
+            <p className="text-sm text-amber-700">
+              {summary.missingConsent} of {summary.total} rows had no consent column or value.
+              They were imported, but carry no PDPA consent record — add a “consent” column
+              (yes/no) if the source captured one.
+            </p>
+          )}
           {summary.errors.length > 0 && (
             <ul className="mt-2 space-y-1 text-destructive">
               {summary.errors.slice(0, 10).map((e) => (
-                <li key={e.row}>Row {e.row}: {e.error}</li>
+                <li key={e.line}>Line {e.line}{e.name !== "(no name)" ? ` (${e.name})` : ""}: {e.error}</li>
               ))}
               {summary.errors.length > 10 && <li>…and {summary.errors.length - 10} more</li>}
             </ul>

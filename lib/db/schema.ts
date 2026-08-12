@@ -88,6 +88,11 @@ export const leads = pgTable(
     assignedIdx: index("leads_assigned_idx").on(t.assignedTo),
     sourceIdx: index("leads_source_idx").on(t.source),
     convertedIdx: index("leads_converted_idx").on(t.convertedToContactId),
+    // Every list query is ORDER BY created_at DESC ... WHERE deleted_at IS NULL.
+    // A partial index on the live rows serves the filter and the sort together.
+    liveCreatedIdx: index("leads_live_created_idx")
+      .on(t.createdAt.desc().nullsFirst())
+      .where(sql`deleted_at is null`),
   }),
 );
 
@@ -121,6 +126,9 @@ export const contacts = pgTable(
     emailIdx: index("contacts_email_idx").on(t.email),
     assignedIdx: index("contacts_assigned_idx").on(t.assignedTo),
     sourceLeadIdx: index("contacts_source_lead_idx").on(t.sourceLeadId),
+    liveCreatedIdx: index("contacts_live_created_idx")
+      .on(t.createdAt.desc().nullsFirst())
+      .where(sql`deleted_at is null`),
   }),
 );
 
@@ -159,6 +167,9 @@ export const properties = pgTable(
     listingTypeIdx: index("properties_listing_type_idx").on(t.listingType),
     propertyTypeIdx: index("properties_property_type_idx").on(t.propertyType),
     assignedAgentIdx: index("properties_assigned_agent_idx").on(t.assignedAgent),
+    liveCreatedIdx: index("properties_live_created_idx")
+      .on(t.createdAt.desc().nullsFirst())
+      .where(sql`deleted_at is null`),
   }),
 );
 
@@ -170,6 +181,10 @@ export const dealStages = pgTable(
     name: varchar("name", { length: 100 }).notNull(),
     sortOrder: integer("sort_order").notNull().default(0),
     isTerminal: boolean("is_terminal").notNull().default(false),
+    // Distinguishes a won terminal stage from a lost one. Reporting must never key
+    // off the stage NAME: deal_stages is editable without a deploy, so renaming
+    // "Closed Won" silently zeroed every agent's won value with no error anywhere.
+    isWon: boolean("is_won").notNull().default(false),
     ...timestamps,
   },
   (t) => ({
@@ -222,6 +237,17 @@ export const activities = pgTable(
     entityIdx: index("activities_entity_idx").on(t.entityType, t.entityId),
     followUpIdx: index("activities_follow_up_idx").on(t.followUpAt),
     createdByIdx: index("activities_created_by_idx").on(t.createdBy),
+    // Timeline: the entity lookup AND the ordering in one index.
+    timelineIdx: index("activities_timeline_idx").on(
+      t.entityType,
+      t.entityId,
+      t.occurredAt.desc().nullsFirst(),
+    ),
+    // Open follow-ups only. The existing follow_up_at index cannot serve the
+    // IS NULL test on follow_up_done_at, which every reminders page performs.
+    openFollowUpIdx: index("activities_open_follow_up_idx")
+      .on(t.followUpAt)
+      .where(sql`follow_up_at is not null and follow_up_done_at is null and deleted_at is null`),
   }),
 );
 

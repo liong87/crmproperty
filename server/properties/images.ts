@@ -69,13 +69,29 @@ export async function deletePropertyImage(documentId: string): Promise<ActionRes
   try {
     const me = await requireDbUser();
     z.string().uuid().parse(documentId);
-    const [doc] = await db.select().from(documents).where(eq(documents.id, documentId));
+    const [doc] = await db
+      .select()
+      .from(documents)
+      .where(and(eq(documents.id, documentId), isNull(documents.deletedAt)));
     if (!doc) return fail("Image not found.");
-    const property = await getPropertyById(doc.entityId);
-    if (property) assertCanEdit(me, property.assignedAgent);
 
-    await storage.delete(doc.storageKey);
+    // documents.entity_id is polymorphic, so a document may belong to a contact,
+    // lead or deal. Refuse anything that is not a property image.
+    if (doc.entityType !== "properties") return fail("Image not found.");
+
+    // Previously: `if (property) assertCanEdit(...)`. When the parent property was
+    // soft-deleted getPropertyById returned null, the guard was skipped entirely,
+    // and any authenticated user could permanently destroy the file in R2.
+    // Fail closed instead: no resolvable parent means no permission.
+    const property = await getPropertyById(doc.entityId);
+    if (!property) return fail("Image not found.");
+    assertCanEdit(me, property.assignedAgent);
+
+    // Soft-delete the row FIRST. If storage deletion then fails we have a row
+    // marked deleted and an orphaned object (harmless, cleanable) rather than a
+    // live row pointing at an object that no longer exists (a broken listing).
     await db.update(documents).set({ deletedAt: new Date() }).where(eq(documents.id, documentId));
+    await storage.delete(doc.storageKey);
 
     revalidatePath(`/properties/${doc.entityId}`);
     return ok(undefined);
@@ -84,8 +100,17 @@ export async function deletePropertyImage(documentId: string): Promise<ActionRes
   }
 }
 
-/** List images for a property with fresh signed URLs. */
+/**
+ * List images for a property with fresh signed URLs.
+ *
+ * This file is "use server", so every export is a callable endpoint. Without the
+ * auth check below, anyone able to reach a server action - including an inactive
+ * account still awaiting approval - could mint 1-hour signed URLs for any property.
+ */
 export async function listPropertyImages(propertyId: string): Promise<PropertyImage[]> {
+  await requireDbUser();
+  z.string().uuid().parse(propertyId);
+
   const rows: Document[] = await db
     .select()
     .from(documents)
