@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getCurrentDbUser } from "@/lib/auth";
-import { SignOutButton } from "@/lib/auth/provider-components";
+import { SignOutAction } from "@/components/auth/sign-out-action";
 import { APP_NAME } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 
@@ -29,9 +29,7 @@ export default async function PendingPage() {
         Your account has been created but needs an administrator to activate it before you can access
         the CRM. Please contact your manager — you&apos;ll be in as soon as they approve you.
       </p>
-      <SignOutButton>
-        <Button variant="outline">Sign out</Button>
-      </SignOutButton>
+      <SignOutAction />
     </main>
   );
 }
