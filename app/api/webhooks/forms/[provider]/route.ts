@@ -3,6 +3,7 @@ import { createLeadFromIntake } from "@/server/leads/intake";
 import { INTEREST } from "@/lib/constants";
 import { hmacBase64, providerSecret, timingSafeEqual } from "@/lib/webhooks/verify";
 import { monitoring } from "@/lib/monitoring";
+import { clientIp, withinRateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -166,6 +167,13 @@ function unauthorized(provider: string): NextResponse {
 
 export async function POST(req: Request, { params }: { params: Promise<{ provider: string }> }) {
   const { provider } = await params;
+
+  // Limit before reading the body or verifying the signature: HMAC verification is
+  // real work, and an unauthenticated caller should not be able to make us do it
+  // repeatedly.
+  if (!(await withinRateLimit("RATE_LIMIT_WEBHOOKS", clientIp(req)))) {
+    return tooManyRequests();
+  }
 
   // Read once as text: HMAC must be over the exact bytes, and a Request body
   // can only be consumed a single time.

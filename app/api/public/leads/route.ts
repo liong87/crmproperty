@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createLeadFromIntake } from "@/server/leads/intake";
 import { resolveLandingPage } from "@/lib/public-keys";
+import { clientIp, withinRateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,15 @@ export async function OPTIONS(req: Request) {
 
 export async function POST(req: Request) {
   const CORS = corsHeaders(req.headers.get("origin"));
+
+  // Rate limit BEFORE the API key check, so an attacker cannot use this endpoint to
+  // brute-force keys, and so invalid traffic costs us nothing but a counter
+  // increment. Keyed on IP: the API key is public by design and would be a useless
+  // thing to bucket by.
+  if (!(await withinRateLimit("RATE_LIMIT_LEADS", clientIp(req)))) {
+    return tooManyRequests(CORS);
+  }
+
   // API key from header (x-api-key) or Authorization: Bearer <key>
   const headerKey =
     req.headers.get("x-api-key") ??

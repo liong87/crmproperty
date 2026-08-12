@@ -26,6 +26,29 @@
 		// free tier does not provide.
 		"enabled": true
 	},
+	// Rate limiting for the PUBLIC endpoints. Dashboard rate-limiting rules only
+	// apply to zones (real domains), and this app is served from *.workers.dev, so
+	// the limit is enforced inside the Worker instead. See lib/rate-limit.ts.
+	//
+	// namespace_id is an arbitrary positive integer that identifies the counter;
+	// period must be 10 or 60 seconds.
+	"ratelimits": [
+		{
+			// Lead capture. The API key for this endpoint is embedded in a public
+			// landing page, so the key alone cannot stop a flood. 10/min per IP is
+			// far above genuine human use of a contact form.
+			"name": "RATE_LIMIT_LEADS",
+			"namespace_id": "1001",
+			"simple": { "limit": 10, "period": 60 }
+		},
+		{
+			// Form and ad-platform webhooks. Higher, because a legitimate burst can
+			// arrive when a campaign launches, and these are HMAC-verified already.
+			"name": "RATE_LIMIT_WEBHOOKS",
+			"namespace_id": "1002",
+			"simple": { "limit": 60, "period": 60 }
+		}
+	],
 	// Workers cannot open a TLS socket to Supabase directly — postgres-js hangs in
 	// the handshake and the runtime cancels the request after 30s. Hyperdrive holds
 	// the real pooled connections and exposes a local plaintext endpoint to the
