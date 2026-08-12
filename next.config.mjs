@@ -1,6 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+
+  // Drop the `x-powered-by: Next.js` header. It tells anyone scanning which
+  // framework and therefore which advisories to try. No defence on its own, but
+  // there is no reason to volunteer it.
+  poweredByHeader: false,
   // Deployed to Cloudflare Workers via @opennextjs/cloudflare (Node.js runtime).
   // Keep app code standard Next.js — no Workers-specific APIs in /app or /server.
 
