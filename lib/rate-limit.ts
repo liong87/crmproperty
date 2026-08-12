@@ -49,11 +49,24 @@ export async function withinRateLimit(binding: string, key: string): Promise<boo
   try {
     const env = getCloudflareContext()?.env as Record<string, unknown> | undefined;
     const limiter = env?.[binding] as RateLimitBinding | undefined;
-    // No binding (local dev, tests, another host) — allow.
-    if (!limiter?.limit) return true;
+    if (!limiter?.limit) {
+      // Failing open is deliberate, but it must not be silent: a limiter that
+      // quietly does nothing looks identical to one that is working until the day
+      // someone floods the endpoint. Logged so it is visible in Workers Logs.
+      console.warn(
+        `[rate-limit] binding ${binding} unavailable — request allowed. ` +
+          `env keys: ${env ? Object.keys(env).join(",") : "(no env)"}`,
+      );
+      return true;
+    }
     const { success } = await limiter.limit({ key });
+    if (!success) console.warn(`[rate-limit] ${binding} blocked key=${key}`);
     return success;
-  } catch {
+  } catch (err) {
+    console.warn(
+      `[rate-limit] ${binding} threw, request allowed: ` +
+        (err instanceof Error ? err.message : String(err)),
+    );
     // Never let the limiter itself take the endpoint down.
     return true;
   }
