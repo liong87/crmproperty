@@ -110,13 +110,52 @@ function createDb() {
 }
 
 type DrizzleDb = ReturnType<typeof createDb>;
+
+/** Long-lived singleton — correct for Node (one process, many requests). */
 let _db: DrizzleDb | null = null;
+
+/**
+ * Per-request instances for the Workers runtime.
+ *
+ * Module scope survives BETWEEN requests in a Workers isolate, but Cloudflare
+ * forbids using a socket opened during one request in another — it throws
+ * "Cannot perform I/O on behalf of a different request", surfacing as a 1101
+ * "Worker threw exception". The first request in a fresh isolate succeeded and the
+ * next one reusing it failed, which is why pages worked intermittently.
+ *
+ * Keyed on the per-request context object and held weakly, so entries disappear
+ * when the request does. Creating a client per request is cheap and is what
+ * Cloudflare recommends: Hyperdrive owns the real connection pool.
+ */
+const _requestDbs = new WeakMap<object, DrizzleDb>();
+
+function resolveDb(): DrizzleDb {
+  let requestKey: object | undefined;
+  try {
+    // ctx is a distinct object per request; env/cf are not.
+    requestKey = (getCloudflareContext() as { ctx?: object } | undefined)?.ctx;
+  } catch {
+    requestKey = undefined;
+  }
+
+  if (requestKey) {
+    let scoped = _requestDbs.get(requestKey);
+    if (!scoped) {
+      scoped = createDb();
+      _requestDbs.set(requestKey, scoped);
+    }
+    return scoped;
+  }
+
+  if (!_db) _db = createDb();
+  return _db;
+}
 
 export const db = new Proxy({} as DrizzleDb, {
   get(_target, prop, receiver) {
-    if (!_db) _db = createDb();
-    const value = Reflect.get(_db as object, prop, receiver);
-    return typeof value === "function" ? value.bind(_db) : value;
+    const target = resolveDb();
+    const value = Reflect.get(target as object, prop, receiver);
+    return typeof value === "function" ? value.bind(target) : value;
   },
 });
 
