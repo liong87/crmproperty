@@ -1,0 +1,31 @@
+# Local PostgreSQL for development.
+#
+#   pnpm db:local:up      start it
+#   pnpm db:local:down    stop it (data is kept)
+#   pnpm db:local:reset   destroy it and start clean
+#
+# Nothing here touches Supabase. Local development should not spend the free
+# tier's egress allowance, and a local database is ~1ms per query instead of ~8ms
+# to Singapore, which makes the whole app feel different while you work.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: propertyagent-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: propertyagent
+    ports:
+      # 5433, not 5432, so this cannot collide with any PostgreSQL already
+      # installed on the machine.
+      - "5433:5432"
+    volumes:
+      - propertyagent-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d propertyagent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  propertyagent-pgdata:

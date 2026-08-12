@@ -4,7 +4,7 @@
  *
  * Idempotent-ish: clears core tables first, then inserts.
  */
-import "dotenv/config";
+import { assertLocalDatabase, maskUrl } from "../lib/load-env";
 import { eq } from "drizzle-orm";
 import { db } from "../lib/db/client";
 import {
@@ -20,7 +20,10 @@ import {
 } from "../lib/db/schema";
 
 async function main() {
-  console.log("Seeding PropertyAgent CRM…");
+  // This script DELETES every row before inserting. Guarded so it can never be
+  // run against Supabase (or any remote database) by accident.
+  assertLocalDatabase("pnpm seed");
+  console.log(`Seeding PropertyAgent CRM into ${maskUrl(process.env.DATABASE_URL)}…`);
 
   // --- clear (order respects FKs) ---
   await db.delete(activities);

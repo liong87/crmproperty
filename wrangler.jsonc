@@ -1,37 +1,49 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "main": ".open-next/worker.js",
-  "name": "propertyagent-crm",
-  "compatibility_date": "2026-08-10",
-  // nodejs_compat is required: the app uses Buffer (image upload) and
-  // postgres-js needs Node-style TCP sockets.
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
-  },
-  "services": [
-    {
-      // Self-reference binding used by the cache. Name must match "name" above.
-      "binding": "WORKER_SELF_REFERENCE",
-      "service": "propertyagent-crm"
-    }
-  ],
-  "r2_buckets": [
-    {
-      // Next.js incremental cache. Create this bucket before the first deploy:
-      //   npx wrangler r2 bucket create propertyagent-crm-opennext-cache
-      // This is NOT the property-photos bucket and NOT the backups bucket.
-      "binding": "NEXT_INC_CACHE_R2_BUCKET",
-      "bucket_name": "propertyagent-crm-opennext-cache"
-    }
-  ],
-  "images": {
-    "binding": "IMAGES"
-  },
-  "observability": {
-    // Free on the paid Workers plan - gives you request logs, which the
-    // Supabase free tier does not provide.
-    "enabled": true
-  }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"main": ".open-next/worker.js",
+	"name": "propertyagent-crm",
+	"compatibility_date": "2026-08-10",
+	// nodejs_compat is required: the app uses Buffer (image upload) and
+	// postgres-js needs Node-style TCP sockets.
+	"compatibility_flags": [
+		"nodejs_compat",
+		"global_fetch_strictly_public"
+	],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"services": [
+		{
+			// Self-reference binding used by cache revalidation.
+			// Name must match "name" above.
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "propertyagent-crm"
+		}
+	],
+	"observability": {
+		// Free on the paid Workers plan - gives request logs, which the Supabase
+		// free tier does not provide.
+		"enabled": true
+	},
+	"r2_buckets": [
+		{
+			"bucket_name": "propertyagent-backups",
+			"binding": "propertyagent_backups"
+		},
+		{
+			"bucket_name": "propertyagent-photos",
+			"binding": "propertyagent_photos"
+		}
+	]
+	// Deliberately NOT configured:
+	//
+	//   r2_buckets  - the incremental cache now uses static assets instead. This app
+	//                 has no statically regenerated pages to cache. Property photos
+	//                 and database backups use R2, but through the S3 API with their
+	//                 own credentials, not a Worker binding.
+	//
+	//   images      - the Cloudflare Images binding requires Images to be enabled on
+	//                 the account, and nothing here uses it: property photos are
+	//                 served as signed R2 URLs straight to the browser.
 }

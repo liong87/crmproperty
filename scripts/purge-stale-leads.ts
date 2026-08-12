@@ -10,7 +10,7 @@
  * The retention cutoff is computed in Malaysia time, not the runner's local zone —
  * a GitHub runner is on UTC, which previously moved the boundary by up to a day.
  */
-import "dotenv/config";
+import { maskUrl } from "../lib/load-env";
 import { and, eq, inArray, isNull, lt } from "drizzle-orm";
 import { db } from "../lib/db/client";
 import { leads, activities, documents, messageLog } from "../lib/db/schema";
@@ -35,6 +35,7 @@ function retentionCutoff(): Date {
 
 async function main() {
   const cutoff = retentionCutoff();
+  console.log(`Target: ${maskUrl(process.env.DATABASE_URL)}`);
   console.log(
     `${DRY_RUN ? "[DRY RUN] " : ""}Purging unconverted leads created before ` +
       `${cutoff.toISOString()} (24 months, Malaysia time)…`,

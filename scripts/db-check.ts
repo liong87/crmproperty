@@ -4,7 +4,7 @@
  * Times the things a page actually does, so you can tell a slow database from a
  * slow application. Prints no credentials.
  */
-import "dotenv/config";
+import "../lib/load-env";
 import postgres from "postgres";
 
 function mask(url: string) {

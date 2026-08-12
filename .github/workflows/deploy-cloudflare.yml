@@ -49,20 +49,28 @@ jobs:
         run: pnpm cf:build
 
       - name: Report bundle size
-        # The Workers limit is 10 MB compressed. Worth seeing every build, not
-        # discovering it the day it stops fitting.
+        # The Workers limit is 10 MB COMPRESSED. Note this deliberately does not
+        # measure .open-next/worker.js - that is a ~2 KB entry point, not the
+        # bundle. Only wrangler knows the real upload size, and --dry-run reports
+        # it without needing credentials or deploying anything.
         run: |
-          if [ -f .open-next/worker.js ]; then
-            RAW=$(stat -c%s .open-next/worker.js)
-            GZ=$(gzip -c .open-next/worker.js | wc -c)
-            echo "worker.js: $((RAW/1024)) KiB raw, $((GZ/1024)) KiB gzipped"
-            echo "Workers limit is 10 MB compressed."
-            if [ "$GZ" -gt 10485760 ]; then
-              echo "::error::Worker exceeds the 10 MB compressed limit."
-              exit 1
-            fi
-          else
-            echo "::warning::.open-next/worker.js not found - check the build output above."
+          set -o pipefail
+          npx wrangler deploy --dry-run --outdir=/tmp/wrangler-out 2>&1 | tee /tmp/dryrun.txt
+          SIZE_LINE=$(grep -i "Total Upload" /tmp/dryrun.txt || true)
+          echo "$SIZE_LINE"
+          GZ_KIB=$(echo "$SIZE_LINE" | sed -n 's/.*gzip: *\([0-9.]*\) KiB.*/\1/p')
+          if [ -z "$GZ_KIB" ]; then
+            echo "::warning::Could not read the bundle size from wrangler output."
+            exit 0
+          fi
+          echo "Compressed bundle: ${GZ_KIB} KiB of the 10240 KiB limit"
+          OVER=$(awk -v g="$GZ_KIB" 'BEGIN{print (g > 10240) ? 1 : 0}')
+          WARN=$(awk -v g="$GZ_KIB" 'BEGIN{print (g > 8192) ? 1 : 0}')
+          if [ "$OVER" = "1" ]; then
+            echo "::error::Bundle exceeds the 10 MB compressed Workers limit."
+            exit 1
+          elif [ "$WARN" = "1" ]; then
+            echo "::warning::Bundle is over 8 MB compressed - approaching the 10 MB limit."
           fi
 
       - name: Deploy
