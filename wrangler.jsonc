@@ -34,7 +34,12 @@
 	"hyperdrive": [
 		{
 			"binding": "HYPERDRIVE",
-			"id": "6db9c58c11e5432bafde0b1c292d099f"
+			"id": "6db9c58c11e5432bafde0b1c292d099f",
+			// Used ONLY when emulating locally (wrangler dev, and the Miniflare proxy
+			// that `opennextjs-cloudflare deploy` starts to read bindings). Deployed
+			// Workers ignore it and use the id above. Points at the Docker Postgres
+			// from docker-compose.yml, so it contains no production credentials.
+			"localConnectionString": "postgresql://postgres:localdev@127.0.0.1:5433/propertyagent"
 		}
 	],
 	"r2_buckets": [
