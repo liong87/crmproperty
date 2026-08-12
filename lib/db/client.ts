@@ -14,6 +14,7 @@
  */
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import * as schema from "./schema";
 
 /**
@@ -32,10 +33,48 @@ import * as schema from "./schema";
  * "prepared statement already exists" errors under concurrency — the kind of bug
  * that only appears once two agents are using the system at the same time.
  */
+/**
+ * Cloudflare Workers cannot open a TLS socket to Supabase directly — postgres-js
+ * hangs in the TLS handshake and the runtime cancels the request after 30s.
+ * Hyperdrive is Cloudflare's connection proxy: the Worker talks to a local,
+ * non-TLS endpoint and Hyperdrive holds the real pooled connections to Supabase.
+ *
+ * Returns undefined everywhere except the Workers runtime, so local development,
+ * the CLI scripts and any non-Cloudflare host fall through to DATABASE_URL and this
+ * file stays portable.
+ */
+function hyperdriveConnectionString(): string | undefined {
+  try {
+    // Throws outside the Workers request context (local dev, scripts, tests) —
+    // which is exactly when we want to fall through to DATABASE_URL.
+    const env = getCloudflareContext()?.env as
+      | { HYPERDRIVE?: { connectionString?: string } }
+      | undefined;
+    return env?.HYPERDRIVE?.connectionString;
+  } catch {
+    return undefined;
+  }
+}
+
 function createClient() {
-  const connectionString = process.env.DATABASE_URL;
+  const hyperdrive = hyperdriveConnectionString();
+  const connectionString = hyperdrive ?? process.env.DATABASE_URL;
   if (!connectionString) {
     throw new Error("DATABASE_URL is not set");
+  }
+
+  // Hyperdrive terminates TLS itself and exposes a plaintext local endpoint, so
+  // requiring TLS on this hop would fail. Connection pooling is Hyperdrive's job
+  // too, hence a small per-isolate max.
+  if (hyperdrive) {
+    return postgres(connectionString, {
+      max: 5,
+      // Avoids an extra round-trip on every connection. Safe here: the schema uses
+      // no custom array types.
+      fetch_types: false,
+      ssl: false,
+      onnotice: () => {},
+    });
   }
 
   // Only TRANSACTION mode (port 6543) forbids prepared statements. Session mode on

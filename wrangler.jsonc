@@ -26,6 +26,17 @@
 		// free tier does not provide.
 		"enabled": true
 	},
+	// Workers cannot open a TLS socket to Supabase directly — postgres-js hangs in
+	// the handshake and the runtime cancels the request after 30s. Hyperdrive holds
+	// the real pooled connections and exposes a local plaintext endpoint to the
+	// Worker. See lib/db/client.ts, which falls back to DATABASE_URL when this
+	// binding is absent (local dev, scripts, any non-Cloudflare host).
+	"hyperdrive": [
+		{
+			"binding": "HYPERDRIVE",
+			"id": "6db9c58c11e5432bafde0b1c292d099f"
+		}
+	],
 	"r2_buckets": [
 		{
 			"bucket_name": "propertyagent-backups",
