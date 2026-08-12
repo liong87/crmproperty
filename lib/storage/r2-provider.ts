@@ -55,7 +55,12 @@ export const r2Provider: StorageProvider = {
     );
     return key;
   },
-  async getSignedUrl(key, expiresInSeconds = 3600) {
+  // 15 minutes, not an hour. A signed URL is a bearer token for that file: anyone
+  // holding the link can fetch the photograph, and links get pasted into chats and
+  // captured in screenshots. Pages mint fresh URLs on every load, so a short window
+  // costs nothing — the only limit is how long a page can sit open before its
+  // images stop loading, and 15 minutes is comfortably past a normal visit.
+  async getSignedUrl(key, expiresInSeconds = 900) {
     const { client, bucket } = config();
     return getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: key }), {
       expiresIn: expiresInSeconds,

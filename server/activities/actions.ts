@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { activities, messageLog } from "@/lib/db/schema";
-import { requireDbUser, canView, isManagerOrAbove, AuthorizationError } from "@/lib/auth";
+import { requireDbUser, canEdit, isManagerOrAbove, AuthorizationError } from "@/lib/auth";
 import { messaging } from "@/lib/messaging";
 import { ACTIVITY_TYPE, ENTITY_TYPE } from "@/lib/constants";
 import { ok, fail } from "@/lib/action-result";
@@ -28,7 +28,12 @@ export async function logActivity(input: unknown): Promise<ActionResult<{ id: st
 
     const entity = await resolveEntity(d.entityType, d.entityId);
     if (!entity) return fail("Related record not found.");
-    if (!canView(me, entity.ownerId)) throw new AuthorizationError();
+    // canEdit, not canView: logging an activity WRITES to someone's record and can
+    // put a follow-up in their reminder list. Read permission is broader — a manager
+    // can view every record but should only write to their own team's — and all
+    // three detail pages already gate the logging form on canEdit, so checking
+    // canView here left the server more permissive than the interface implied.
+    if (!canEdit(me, entity.ownerId)) throw new AuthorizationError();
 
     const [row] = await db
       .insert(activities)
@@ -103,7 +108,9 @@ export async function sendWhatsAppAndLog(input: unknown): Promise<ActionResult<{
     const d = waSchema.parse(input);
     const entity = await resolveEntity(d.entityType, d.entityId);
     if (!entity) return fail("Related record not found.");
-    if (!canView(me, entity.ownerId)) throw new AuthorizationError();
+    // Messaging a client is an outbound action taken in the agency's name, so it
+    // needs edit permission on the record, not merely the right to read it.
+    if (!canEdit(me, entity.ownerId)) throw new AuthorizationError();
 
     const result = await messaging.sendFollowUp(d.toPhone, { message: d.message });
 
