@@ -47,6 +47,42 @@ the override is fine. That single check covers the only override with runtime
 consequences — `postcss` and `nanoid` would fail at build time, so a green build is
 sufficient for them.
 
+## A warning you can ignore — for now
+
+Running `pnpm install` prints:
+
+> The "pnpm" field in package.json is no longer read by pnpm. The following keys were
+> ignored: "pnpm.overrides".
+
+That warning comes from a newer pnpm reading the file. The version this project
+actually uses — `pnpm@9.12.0`, pinned in `packageManager` and used by CI — **does**
+read `pnpm.overrides`, and the result is visible in `pnpm-lock.yaml`:
+
+```yaml
+overrides:
+  sharp: ^0.35.0
+  nanoid: ^3.3.17
+  postcss: ^8.5.23
+```
+
+with `sharp@0.35.2`, `nanoid@3.3.18` and `postcss@8.5.26` resolved. The overrides are
+applied.
+
+**But this is a trap waiting for whoever upgrades pnpm.** From pnpm 10 onwards the
+setting moved to `pnpm-workspace.yaml`:
+
+```yaml
+overrides:
+  sharp: ^0.35.0
+  nanoid: ^3.3.17
+  postcss: ^8.5.23
+```
+
+If someone bumps `packageManager` to pnpm 10 or later without moving these, the
+overrides are silently dropped and the vulnerable versions come back — with no error,
+because everything still installs and builds. Move them at the same time as the pnpm
+upgrade, and confirm with `pnpm why sharp` afterwards.
+
 ## When to remove these
 
 Overrides are a workaround, not a fix. Once the packages upstream depend on patched

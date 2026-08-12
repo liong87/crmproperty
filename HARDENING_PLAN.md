@@ -82,27 +82,46 @@ Then check:
 
 ---
 
-## Session 2 — Close the public endpoint (30 min, no code)
+## Session 2 — Close the public endpoint — **IMPLEMENTED, verification deferred**
 
-Everything here is Cloudflare dashboard work.
+### 2.1 Rate limiting — done in code
 
-### 2.1 Rate-limit the lead endpoint
+Dashboard rate-limiting rules only apply to zones (real domains), and this app is
+served from `*.workers.dev`, so the WAF route was unavailable. Implemented instead
+with Cloudflare's **Workers rate-limiting binding**, which runs inside the Worker and
+works on either — see `lib/rate-limit.ts` and the `ratelimits` block in
+`wrangler.jsonc`.
 
-Cloudflare → your account → **Security** → **Rate limiting rules** → Create rule:
+- `/api/public/leads` — 10 requests/minute per IP
+- `/api/webhooks/forms/*` — 60 requests/minute per IP
+- Checked **before** the API key and HMAC checks, so unauthenticated traffic cannot
+  make the Worker do real work or brute-force keys
+- **Fails open**: if the binding is unavailable the request is allowed and a warning
+  is logged. Losing lead capture to a missing binding would cost real business; the
+  API key remains the actual access control
 
-- **Name:** `public-leads`
-- **If incoming requests match:** `URI Path` `equals` `/api/public/leads`
-- **Rate:** 10 requests per 1 minute
-- **Counting characteristic:** IP address
-- **Action:** Block, for 1 minute
+**Verified:** the binding is attached (Workers → Bindings) and reachable from the
+code — responses carry `X-RateLimit-State: ok`, which only appears when `limit()`
+returns a real answer.
 
-Repeat for `/api/webhooks/` using `URI Path` `starts with`, at 30 per minute.
+**Not yet verified:** that it actually blocks. Fifteen requests spread over ten
+seconds did not trip it, which is consistent with Cloudflare documenting the API as
+"permissive, eventually consistent" — it is not evidence of a fault.
 
-☐ Done when a burst of requests returns 429.
+☐ **When the landing page goes live**, run one burst and confirm 429s appear:
 
-> Rate limiting rules on `workers.dev` subdomains are limited. If the option is not
-> available, this becomes another reason to move to a real domain (Session 5) —
-> where these rules apply properly.
+```powershell
+$u = "https://propertyagent-crm.lanthornrealty.workers.dev/api/public/leads"
+$urls = (1..40 | ForEach-Object { $u })
+curl.exe -s -o NUL -w "%{http_code} " -X POST -H "x-api-key: bad" -H "Content-Type: application/json" -d "{}" $urls
+```
+
+If it still does not trip, temporarily set `limit: 3, period: 10` in `wrangler.jsonc`
+to make the behaviour unmistakable, then restore it.
+
+☐ **Before launch:** remove the `X-RateLimit-State` response header from
+`app/api/public/leads/route.ts`. It exists purely for this verification and
+otherwise advertises that rate limiting is present.
 
 ### 2.2 Confirm the new API key took effect
 
@@ -256,25 +275,51 @@ give agents.
 
 ---
 
-## Session 6 — The drizzle upgrade (half a day, on a branch)
+## Session 6 — The drizzle upgrade (1–2 h on a branch, revised down)
 
-`drizzle-orm` 0.36.4 has an open SQL-injection advisory; fixed in 0.45.2. Several
-minor versions apart, so expect breaking changes.
+`drizzle-orm` 0.36.4 has an open SQL-injection advisory; fixed in 0.45.2.
+
+**Originally estimated at half a day. After auditing what the code actually uses,
+1–2 hours is more realistic.** The two things that usually make this upgrade painful
+are both absent here:
+
+- **No relational query builder.** Nothing calls `db.query.*` anywhere — every query
+  uses plain `select()` / `insert()` / `update()`. The RQB rewrite between v1 and v2
+  is where most of the breaking changes live, and it does not touch you.
+- **Nothing inspects driver error codes.** Version 0.44 introduced `DrizzleQueryError`,
+  which wraps errors coming out of the database driver. Code that checks for, say, a
+  unique-violation code would break. Your error handling only matches on
+  `AuthorizationError`, `ZodError` and the `"UNAUTHENTICATED"` message, so it is
+  unaffected.
+
+The API surface in use is the stable core — `eq`, `and`, `or`, `isNull`, `inArray`,
+`sql`, `count`, `min`, `max`, `desc`, `asc`, `ilike`, `exists`. None of it has changed
+shape across these versions.
 
 ```powershell
 git checkout -b upgrade-drizzle
-pnpm add drizzle-orm@latest drizzle-kit@latest
-pnpm typecheck        # expect errors — work through them
+pnpm add drizzle-orm@latest
+pnpm add -D drizzle-kit@latest      # keep kit and orm in step
+pnpm typecheck
 pnpm test
 ```
 
-Then exercise the heavy queries by hand: `/reports`, `/pipeline`, `/dashboard`,
-lead qualification (it runs in a transaction), and the CSV import.
+Then exercise the heavier paths by hand, since the tests do not cover queries:
 
-☐ Typecheck clean, 82 tests pass, those five paths work. Then merge and deploy.
+☐ `/dashboard` (parallel queries)
+☐ `/reports` (aggregates — `count`, `sum`, `min`, `max`, leaderboard)
+☐ `/pipeline` (joins across deals and contacts)
+☐ Qualify a lead — this one runs in a **transaction**, the most likely place for a
+  behavioural change to hide
+☐ CSV import (bulk insert plus dedup)
 
-Do this on a branch precisely because it is the one change here that could break the
-application.
+Then merge and deploy.
+
+> `drizzle.config.ts` points `out` at `./lib/db/migrations`, and that directory does
+> not currently exist — migrations were applied by other means. Do **not** run
+> `pnpm db:generate` as part of this upgrade: a newer drizzle-kit would generate a
+> fresh baseline that does not match the live Supabase schema. The upgrade is a
+> library change only; leave the database alone.
 
 ---
 
