@@ -2,6 +2,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { uploadPropertyImage, deletePropertyImage, type PropertyImage } from "@/server/properties/images";
+import { resizeImageForUpload, formatBytes } from "@/lib/images/resize-client";
 import { Button } from "@/components/ui/button";
 
 export function ImageManager({
@@ -16,18 +17,31 @@ export function ImageManager({
   const router = useRouter();
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [status, setStatus] = React.useState<string | null>(null);
   const [pending, start] = React.useTransition();
 
-  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
+
+    // Shrink before uploading. Agents photograph listings on a phone, where the
+    // originals are 3-5 MB each and the upload is the slow part on mobile data.
+    setStatus("Preparing image…");
+    const outcome = await resizeImageForUpload(file);
+    setStatus(
+      outcome.resized
+        ? `Uploading ${formatBytes(outcome.finalBytes)} (from ${formatBytes(outcome.originalBytes)})…`
+        : `Uploading ${formatBytes(outcome.finalBytes)}…`,
+    );
+
     const fd = new FormData();
     fd.set("propertyId", propertyId);
-    fd.set("file", file);
+    fd.set("file", outcome.file);
     start(async () => {
       const res = await uploadPropertyImage(fd);
       if (!res.success) setError(res.error);
+      setStatus(null);
       if (inputRef.current) inputRef.current.value = "";
       router.refresh();
     });
@@ -74,9 +88,12 @@ export function ImageManager({
             disabled={pending}
             className="block w-full text-sm file:mr-3 file:rounded-md file:border file:bg-secondary file:px-3 file:py-2 file:text-sm"
           />
-          {pending && <p className="text-xs text-muted-foreground">Uploading…</p>}
+          {status && <p className="text-xs text-muted-foreground">{status}</p>}
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <p className="text-xs text-muted-foreground">JPEG, PNG or WebP · max 8 MB.</p>
+          <p className="text-xs text-muted-foreground">
+            JPEG, PNG or WebP · max 8 MB. Large photos are shrunk automatically before
+            uploading.
+          </p>
         </div>
       )}
     </div>

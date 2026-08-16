@@ -126,7 +126,10 @@ export async function listPropertyImages(propertyId: string): Promise<PropertyIm
     rows.map(async (d) => ({
       id: d.id,
       filename: d.filename,
-      url: await storage.getSignedUrl(d.storageKey, 3600),
+      // No explicit expiry: use the provider default (15 minutes). This previously
+      // passed 3600, which quietly overrode the shorter default set for exactly this
+      // kind of URL — a signed link is a bearer token for the photograph.
+      url: await storage.getSignedUrl(d.storageKey),
     })),
   );
   return withUrls;
