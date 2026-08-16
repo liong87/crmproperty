@@ -118,6 +118,15 @@ export function WhatsAppButton({
         </Select>
       )}
 
+      {/* An empty picker is indistinguishable from a broken one, so say why it is
+          missing rather than silently omitting it. */}
+      {templateId !== "" && listings.length === 0 && gaps.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          This template refers to a listing, but there are no active properties to choose
+          from yet. Add one under Properties, or edit the message by hand.
+        </p>
+      )}
+
       {/* Only worth showing once a template is chosen — otherwise it is a dropdown
           with no visible effect. Changing it re-fills the message. */}
       {templateId !== "" && listings.length > 0 && (
