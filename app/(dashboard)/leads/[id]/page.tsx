@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getCurrentDbUser, canEdit, canView } from "@/lib/auth";
+import { getCurrentDbUser, canEdit, canView, isAdmin } from "@/lib/auth";
 import { getLeadById } from "@/server/leads/queries";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { QualifyButton } from "@/components/leads/qualify-button";
+import { DeleteLeadButton } from "@/components/leads/delete-button";
 import { ActivitySection } from "@/components/activities/activity-section";
 import { WhatsAppButton } from "@/components/activities/whatsapp-button";
 import { MatchingListings } from "@/components/matching/match-panels";
@@ -33,7 +34,12 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           <h1 className="text-xl font-semibold">{lead.name}</h1>
           <Badge className={leadStatusTone(lead.status)}>{lead.status}</Badge>
         </div>
-        {editable && <Link href={`/leads/${lead.id}/edit`}><Button size="sm" variant="outline">Edit</Button></Link>}
+        <div className="flex items-center gap-2">
+          {editable && <Link href={`/leads/${lead.id}/edit`}><Button size="sm" variant="outline">Edit</Button></Link>}
+          {/* Admin only: disqualifying already clears a lead from everyday view, so
+              deletion is for junk that should not exist — spam, duplicates, tests. */}
+          {isAdmin(me) && !lead.convertedToContactId && <DeleteLeadButton leadId={lead.id} />}
+        </div>
       </div>
 
       <Card>

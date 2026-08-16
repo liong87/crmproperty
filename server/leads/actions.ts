@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { db } from "@/lib/db/client";
 import { leads, activities, type Lead } from "@/lib/db/schema";
 import { requireDbUser, assertCanEdit, assertRole, AuthorizationError } from "@/lib/auth";
@@ -158,6 +159,44 @@ export async function assignLead(id: string, assignedTo: string): Promise<Action
   } catch (err) {
     return handle(err, "assignLead");
   }
+}
+
+/**
+ * Remove a lead — admin only.
+ *
+ * Soft delete: the row is hidden everywhere (every list query filters on
+ * `deletedAt is null`) but remains in the database, so a mistake is recoverable and
+ * the PDPA purge still hard-deletes it on the normal 24-month schedule.
+ *
+ * Admin rather than manager, deliberately. Disqualifying already removes a lead from
+ * everyday view, so deletion is for junk that should never have existed — spam,
+ * duplicates, test records. Restricting it keeps a client's enquiry history from
+ * being cleared by anyone who happens to find it inconvenient.
+ *
+ * A converted lead cannot be deleted: it is the origin of a live contact, and the
+ * contact page links back to it.
+ */
+export async function deleteLead(id: string): Promise<ActionResult<void>> {
+  try {
+    const me = await requireDbUser();
+    assertRole(me, "admin");
+    z.string().uuid().parse(id);
+
+    const existing = await getLeadById(id);
+    if (!existing) return fail("Lead not found.");
+    if (existing.convertedToContactId) {
+      return fail("This lead became a contact and cannot be deleted. Delete the contact instead.");
+    }
+
+    await db.update(leads).set({ deletedAt: new Date() }).where(eq(leads.id, id));
+    // Bulk removal of a client record should never be silent, even a soft one.
+    monitoring.captureMessage("Lead deleted", { leadId: id, by: me.id });
+
+    revalidatePath("/leads");
+  } catch (err) {
+    return handle(err, "deleteLead");
+  }
+  redirect("/leads");
 }
 
 function handle(err: unknown, where: string): ActionResult<never> {
