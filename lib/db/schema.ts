@@ -318,6 +318,52 @@ export const assignmentCounter = pgTable("assignment_counter", {
   ...timestamps,
 });
 
+/* ---------- viewings (property viewings with clients) ---------- */
+/**
+ * A scheduled property viewing.
+ *
+ * Its own table rather than an `activities` row, because a viewing has structure an
+ * activity does not: it links a CLIENT and a PROPERTY together, it has a future
+ * scheduled time distinct from when it was logged, and it has an outcome that
+ * matters to the pipeline. Activities remain the free-form timeline; this is the
+ * appointment.
+ *
+ * The client is either a lead or a contact — agents show properties to people who
+ * have not been qualified yet, and refusing to schedule until they are would just
+ * push the diary back into WhatsApp. Exactly one of the two is set; enforced by a
+ * CHECK constraint in the migration rather than in application code.
+ */
+export const viewings = pgTable(
+  "viewings",
+  {
+    id: id(),
+    propertyId: uuid("property_id")
+      .notNull()
+      .references(() => properties.id, { onDelete: "cascade" }),
+    // Exactly one of these is set. See the CHECK constraint in the migration.
+    contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "cascade" }),
+    leadId: uuid("lead_id").references(() => leads.id, { onDelete: "cascade" }),
+    assignedTo: uuid("assigned_to").references(() => users.id, { onDelete: "set null" }),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+    // scheduled | completed | no-show | cancelled
+    status: varchar("status", { length: 20 }).notNull().default("scheduled"),
+    // Recorded after the viewing: interested | not-interested | offer-made | undecided
+    outcome: varchar("outcome", { length: 20 }),
+    notes: text("notes"),
+    ...timestamps,
+  },
+  (t) => ({
+    propertyIdx: index("viewings_property_idx").on(t.propertyId),
+    contactIdx: index("viewings_contact_idx").on(t.contactId),
+    leadIdx: index("viewings_lead_idx").on(t.leadId),
+    assignedIdx: index("viewings_assigned_idx").on(t.assignedTo),
+    // Every list query is "upcoming, soonest first, not deleted".
+    scheduledIdx: index("viewings_scheduled_idx")
+      .on(t.scheduledAt)
+      .where(sql`deleted_at is null`),
+  }),
+);
+
 /* ---------- inferred types ---------- */
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -335,3 +381,5 @@ export type NewActivity = typeof activities.$inferInsert;
 export type Document = typeof documents.$inferSelect;
 export type MessageLog = typeof messageLog.$inferSelect;
 export type MessageTemplate = typeof messageTemplates.$inferSelect;
+export type Viewing = typeof viewings.$inferSelect;
+export type NewViewing = typeof viewings.$inferInsert;

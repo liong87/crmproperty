@@ -11,6 +11,8 @@ import { StatusControl } from "@/components/properties/status-control";
 import { DeletePropertyButton } from "@/components/properties/delete-button";
 import { ActivitySection } from "@/components/activities/activity-section";
 import { InterestedBuyers } from "@/components/matching/match-panels";
+import { listViewingsForProperty } from "@/server/viewings/queries";
+import { ViewingList } from "@/components/viewings/viewing-list";
 import { formatMYR, pricePerSqft } from "@/lib/utils";
 import { propertyStatusTone } from "@/lib/status";
 
@@ -70,6 +72,16 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
       {p.address && (
         <Card><CardHeader><CardTitle>Address</CardTitle></CardHeader><CardContent className="text-sm">{p.address}</CardContent></Card>
       )}
+
+      <Card>
+        <CardHeader><CardTitle>Viewings</CardTitle></CardHeader>
+        <CardContent>
+          <ViewingList
+            items={await listViewingsForProperty(me, p.id)}
+            empty="No viewings booked for this listing."
+          />
+        </CardContent>
+      </Card>
 
       {/* Only shown for listings that are actually available — there is no point
           calling clients about a unit that is already sold or withdrawn. */}

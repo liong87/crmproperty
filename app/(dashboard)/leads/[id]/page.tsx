@@ -12,6 +12,9 @@ import { WhatsAppButton } from "@/components/activities/whatsapp-button";
 import { MatchingListings } from "@/components/matching/match-panels";
 import { listActiveTemplates } from "@/server/templates/actions";
 import { listPickableListings } from "@/server/matching/queries";
+import { listViewingsForClient } from "@/server/viewings/queries";
+import { ScheduleViewing } from "@/components/viewings/schedule-viewing";
+import { ViewingList } from "@/components/viewings/viewing-list";
 import { APP_NAME } from "@/lib/constants";
 import { formatMYR } from "@/lib/utils";
 import { leadStatusTone } from "@/lib/status";
@@ -84,6 +87,19 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             area: lead.preferredAreas,
           }}
         />
+      )}
+
+      {editable && (
+        <Card>
+          <CardHeader><CardTitle>Viewings</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <ViewingList
+              items={await listViewingsForClient(me, { leadId: lead.id })}
+              empty="No viewings yet."
+            />
+            <ScheduleViewing leadId={lead.id} listings={await listPickableListings()} />
+          </CardContent>
+        </Card>
       )}
 
       {/* Listings this enquiry could be shown. A concrete match is the strongest

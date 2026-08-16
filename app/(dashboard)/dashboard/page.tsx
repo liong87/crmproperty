@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { Inbox, UserCheck, Wallet, BellRing, Activity } from "lucide-react";
+import { Inbox, UserCheck, Wallet, BellRing, Activity, CalendarCheck } from "lucide-react";
 import { getCurrentDbUser } from "@/lib/auth";
 import { listFollowUps } from "@/server/activities/queries";
+import { listUpcomingViewings, countViewingsNeedingOutcome } from "@/server/viewings/queries";
+import { ViewingList } from "@/components/viewings/viewing-list";
 import { getReportData } from "@/server/reports/queries";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/reports/stat-tile";
@@ -13,7 +15,12 @@ export default async function DashboardPage() {
   if (!user) return null;
 
   // Ask for 5, not "all of them then slice to 5".
-  const [followUps, report] = await Promise.all([listFollowUps(user, 5), getReportData(user)]);
+  const [followUps, report, viewings, toWriteUp] = await Promise.all([
+    listFollowUps(user, 5),
+    getReportData(user),
+    listUpcomingViewings(user, 5),
+    countViewingsNeedingOutcome(user),
+  ]);
   const overdue = followUps.filter((f) => f.overdue).length;
   const firstName = user.name.split(" ")[0] ?? user.name;
 
@@ -31,7 +38,9 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* Five tiles now, so the desktop row is 5 wide rather than leaving one orphaned
+          on a second line. */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {/* openLeads, not totalLeads: a disqualified lead is finished work, and
             showing it here made the tile useless as a "do I have anything to chase"
             signal. */}
@@ -46,6 +55,12 @@ export default async function DashboardPage() {
         <StatTile label="Open pipeline" value={formatMYR(report.openPipelineValue)} icon={Wallet} accent />
         <StatTile label="Follow-ups due" value={String(followUps.length)} icon={BellRing}
           hint={overdue > 0 ? `${overdue} overdue` : "on track"} />
+        <StatTile
+          label="Viewings ahead"
+          value={String(viewings.length)}
+          icon={CalendarCheck}
+          hint={toWriteUp > 0 ? `${toWriteUp} to write up` : undefined}
+        />
       </div>
 
       <Card>
@@ -55,6 +70,16 @@ export default async function DashboardPage() {
         </CardHeader>
         <CardContent>
           <FollowUpList items={followUps} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle>Upcoming viewings</CardTitle>
+          <Link href="/viewings" className="text-sm text-primary underline-offset-2 hover:underline">View all</Link>
+        </CardHeader>
+        <CardContent>
+          <ViewingList items={viewings} empty="No viewings scheduled." />
         </CardContent>
       </Card>
 

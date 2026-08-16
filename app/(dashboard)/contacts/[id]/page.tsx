@@ -10,6 +10,9 @@ import { WhatsAppButton } from "@/components/activities/whatsapp-button";
 import { MatchingListings } from "@/components/matching/match-panels";
 import { listActiveTemplates } from "@/server/templates/actions";
 import { listPickableListings } from "@/server/matching/queries";
+import { listViewingsForClient } from "@/server/viewings/queries";
+import { ScheduleViewing } from "@/components/viewings/schedule-viewing";
+import { ViewingList } from "@/components/viewings/viewing-list";
 import { APP_NAME } from "@/lib/constants";
 import { PdpaPanel } from "@/components/pdpa/pdpa-panel";
 import { isAdmin } from "@/lib/auth";
@@ -50,6 +53,19 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
         <Card><CardHeader><CardTitle>Notes</CardTitle></CardHeader><CardContent className="text-sm whitespace-pre-wrap">{contact.notes}</CardContent></Card>
       )}
       {editable && <CreateDealButton contactId={contact.id} />}
+
+      {editable && (
+        <Card>
+          <CardHeader><CardTitle>Viewings</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <ViewingList
+              items={await listViewingsForClient(me, { contactId: contact.id })}
+              empty="No viewings yet."
+            />
+            <ScheduleViewing contactId={contact.id} listings={await listPickableListings()} />
+          </CardContent>
+        </Card>
+      )}
 
       {editable && (
         <WhatsAppButton
