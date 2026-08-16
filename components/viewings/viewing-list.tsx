@@ -2,7 +2,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { recordViewingOutcome, VIEWING_OUTCOME } from "@/server/viewings/actions";
+import { recordViewingOutcome } from "@/server/viewings/actions";
+import { VIEWING_OUTCOME } from "@/lib/constants";
 import type { ViewingRow } from "@/server/viewings/queries";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";

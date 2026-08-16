@@ -16,6 +16,12 @@ export const PROPERTY_STATUS = ["active", "pending", "sold", "rented", "withdraw
 export const ACTIVITY_TYPE = ["call", "email", "viewing", "note", "whatsapp"] as const;
 export const ENTITY_TYPE = ["leads", "contacts", "deals", "properties"] as const;
 
+// Viewings. These live here rather than in server/viewings/actions.ts because a
+// "use server" module may only export async functions — exporting a const array from
+// one breaks the page that imports it, at runtime rather than at build.
+export const VIEWING_STATUS = ["scheduled", "completed", "no-show", "cancelled"] as const;
+export const VIEWING_OUTCOME = ["interested", "not-interested", "offer-made", "undecided"] as const;
+
 export const DEFAULT_PAGE_SIZE = 25;
 
 export const UI_STRINGS = {

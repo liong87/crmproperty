@@ -12,12 +12,10 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { viewings, contacts, leads, activities } from "@/lib/db/schema";
 import { requireDbUser, canEdit, isManagerOrAbove, AuthorizationError } from "@/lib/auth";
+import { VIEWING_STATUS, VIEWING_OUTCOME } from "@/lib/constants";
 import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
-
-export const VIEWING_STATUS = ["scheduled", "completed", "no-show", "cancelled"] as const;
-export const VIEWING_OUTCOME = ["interested", "not-interested", "offer-made", "undecided"] as const;
 
 const scheduleSchema = z
   .object({
