@@ -10,6 +10,7 @@ import { ActivitySection } from "@/components/activities/activity-section";
 import { WhatsAppButton } from "@/components/activities/whatsapp-button";
 import { MatchingListings } from "@/components/matching/match-panels";
 import { listActiveTemplates } from "@/server/templates/actions";
+import { listPickableListings } from "@/server/matching/queries";
 import { APP_NAME } from "@/lib/constants";
 import { formatMYR } from "@/lib/utils";
 import { leadStatusTone } from "@/lib/status";
@@ -68,6 +69,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           toPhone={lead.phone}
           defaultMessage={`Hi ${lead.name.split(" ")[0] ?? lead.name}, `}
           templates={await listActiveTemplates("whatsapp")}
+          listings={await listPickableListings()}
           values={{
             name: lead.name.split(" ")[0] ?? lead.name,
             fullName: lead.name,

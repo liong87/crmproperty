@@ -1,4 +1,4 @@
-import { and, eq, gte, isNull, lte, ne, or, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte, ne, or, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { leads, contacts, properties } from "@/lib/db/schema";
 import type { User } from "@/lib/db/schema";
@@ -174,4 +174,36 @@ export async function findBuyersForListing(
   }
 
   return scored.sort(byScoreDesc).slice(0, MAX_RESULTS);
+}
+
+export interface PickableListing {
+  id: string;
+  title: string;
+  area: string;
+  askingPrice: number;
+}
+
+/**
+ * Active listings an agent can reference in a message.
+ *
+ * Templates like "here are the details for {{property}}" need a listing, and a lead
+ * has none attached — which is why picking that template produced a sentence ending
+ * in a colon. This supplies the choices.
+ *
+ * Not ownership-scoped, for the same reason as findListingsForBuyer: stock is shared
+ * across the agency. Ordered newest first, since a message about a listing is usually
+ * about a recent one.
+ */
+export async function listPickableListings(limit = 50): Promise<PickableListing[]> {
+  return db
+    .select({
+      id: properties.id,
+      title: properties.title,
+      area: properties.area,
+      askingPrice: properties.askingPrice,
+    })
+    .from(properties)
+    .where(and(isNull(properties.deletedAt), eq(properties.status, "active")))
+    .orderBy(desc(properties.createdAt))
+    .limit(limit);
 }

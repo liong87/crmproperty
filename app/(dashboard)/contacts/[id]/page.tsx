@@ -9,6 +9,7 @@ import { ActivitySection } from "@/components/activities/activity-section";
 import { WhatsAppButton } from "@/components/activities/whatsapp-button";
 import { MatchingListings } from "@/components/matching/match-panels";
 import { listActiveTemplates } from "@/server/templates/actions";
+import { listPickableListings } from "@/server/matching/queries";
 import { APP_NAME } from "@/lib/constants";
 import { PdpaPanel } from "@/components/pdpa/pdpa-panel";
 import { isAdmin } from "@/lib/auth";
@@ -57,6 +58,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
           toPhone={contact.phone}
           defaultMessage={`Hi ${contact.name.split(" ")[0] ?? contact.name}, `}
           templates={await listActiveTemplates("whatsapp")}
+          listings={await listPickableListings()}
           values={{
             name: contact.name.split(" ")[0] ?? contact.name,
             fullName: contact.name,

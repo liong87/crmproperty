@@ -11,7 +11,17 @@ export interface AgentRow { name: string; leads: number; contacts: number; wonVa
 export interface ReportData {
   scope: "own" | "team";
   leadsByStatus: Count[];
+  /** Every lead ever received, whatever its status. The conversion denominator. */
   totalLeads: number;
+  /**
+   * Leads still worth working: `new` and `contacted`.
+   *
+   * Distinct from totalLeads, which includes qualified and disqualified ones. The
+   * dashboard tile is labelled "Open leads" and used to show totalLeads, so a lead
+   * that had just been disqualified still appeared as open — the one number an agent
+   * checks to decide whether they have anything to chase.
+   */
+  openLeads: number;
   qualifiedLeads: number;
   conversionRate: number; // 0..1
   dealsByStage: StageStat[];
@@ -36,7 +46,11 @@ export async function getReportData(user: User): Promise<ReportData> {
     .groupBy(leads.status);
   const leadsByStatus = leadStatusRows.map((r) => ({ label: r.status, value: r.c }));
   const totalLeads = leadsByStatus.reduce((s, r) => s + r.value, 0);
-  const qualifiedLeads = leadsByStatus.find((r) => r.label === "qualified")?.value ?? 0;
+  const byStatus = (s: string) => leadsByStatus.find((r) => r.label === s)?.value ?? 0;
+  const openLeads = byStatus("new") + byStatus("contacted");
+  const qualifiedLeads = byStatus("qualified");
+  // Conversion is measured against EVERY lead received, including disqualified ones —
+  // rejecting a poor lead is part of the funnel, not something to exclude from it.
   const conversionRate = totalLeads > 0 ? qualifiedLeads / totalLeads : 0;
 
   // Deals by stage (count + value)
@@ -128,6 +142,7 @@ export async function getReportData(user: User): Promise<ReportData> {
     scope: mgr ? "team" : "own",
     leadsByStatus,
     totalLeads,
+    openLeads,
     qualifiedLeads,
     conversionRate,
     dealsByStage,

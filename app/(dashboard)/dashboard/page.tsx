@@ -32,7 +32,15 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile label="Open leads" value={String(report.totalLeads)} icon={Inbox} />
+        {/* openLeads, not totalLeads: a disqualified lead is finished work, and
+            showing it here made the tile useless as a "do I have anything to chase"
+            signal. */}
+        <StatTile
+          label="Open leads"
+          value={String(report.openLeads)}
+          icon={Inbox}
+          hint={report.totalLeads !== report.openLeads ? `${report.totalLeads} total` : undefined}
+        />
         <StatTile label="Qualified" value={String(report.qualifiedLeads)} icon={UserCheck}
           hint={`${Math.round(report.conversionRate * 100)}% conversion`} />
         <StatTile label="Open pipeline" value={formatMYR(report.openPipelineValue)} icon={Wallet} accent />

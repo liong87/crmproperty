@@ -4,9 +4,11 @@ import { useRouter } from "next/navigation";
 import { sendWhatsAppAndLog } from "@/server/activities/actions";
 import { renderTemplate, missingValues, type TemplateValues } from "@/server/templates/render";
 import type { TemplateRow } from "@/server/templates/actions";
+import type { PickableListing } from "@/server/matching/queries";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { formatMYR } from "@/lib/utils";
 
 /**
  * "viewing_confirmation" and "sendPropertyDetails" both read better in a dropdown as
@@ -33,6 +35,7 @@ export function WhatsAppButton({
   defaultMessage,
   templates = [],
   values = {},
+  listings = [],
 }: {
   entityType: string;
   entityId: string;
@@ -42,24 +45,44 @@ export function WhatsAppButton({
   templates?: TemplateRow[];
   /** Values available for substitution on this record. */
   values?: TemplateValues;
+  /**
+   * Listings the agent can reference. A lead has no property attached, so templates
+   * mentioning one need somewhere to get it from.
+   */
+  listings?: PickableListing[];
 }) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [msg, setMsg] = React.useState(defaultMessage ?? "");
   const [error, setError] = React.useState<string | null>(null);
   const [gaps, setGaps] = React.useState<string[]>([]);
+  const [templateId, setTemplateId] = React.useState("");
+  const [listingId, setListingId] = React.useState("");
   const [pending, start] = React.useTransition();
 
-  function applyTemplate(id: string) {
-    const t = templates.find((x) => x.id === id);
+  /** Record values, plus the chosen listing's details when one is selected. */
+  function valuesWith(listing: PickableListing | undefined): TemplateValues {
+    if (!listing) return values;
+    return {
+      ...values,
+      property: listing.title,
+      price: formatMYR(listing.askingPrice),
+      // Prefer the listing's area over the client's stated preference: the message is
+      // about this property, so "in Mont Kiara" should describe where it actually is.
+      area: listing.area,
+    };
+  }
+
+  function apply(tId: string, lId: string) {
+    const t = templates.find((x) => x.id === tId);
     if (!t) return;
+    const merged = valuesWith(listings.find((l) => l.id === lId));
     // Replace rather than append: the box holds a greeting stub, and an agent picking
     // a template means "use this", not "add this to what is there".
-    setMsg(renderTemplate(t.body, values));
-    // Warn about anything the record could not fill. Without this the agent gets a
-    // sentence that simply stops — "here are the details for:" — and may not notice
-    // before sending it to a client.
-    setGaps(missingValues(t.body, values));
+    setMsg(renderTemplate(t.body, merged));
+    // Warn about anything still unfilled. Without this the agent gets a sentence that
+    // simply stops — "here are the details for:" — and may not notice before sending.
+    setGaps(missingValues(t.body, merged));
   }
 
   if (!open) return <Button variant="outline" onClick={() => setOpen(true)}>WhatsApp</Button>;
@@ -78,23 +101,41 @@ export function WhatsAppButton({
   return (
     <div className="space-y-2 rounded-lg border p-3">
       {templates.length > 0 && (
-        <div className="space-y-1">
-          <Select
-            aria-label="Use a template"
-            defaultValue=""
-            onChange={(e) => {
-              applyTemplate(e.target.value);
-              e.target.value = ""; // reset, so the same template can be picked twice
-            }}
-          >
-            <option value="">Use a template…</option>
-            {templates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {humanise(t.key)}
-              </option>
-            ))}
-          </Select>
-        </div>
+        <Select
+          aria-label="Use a template"
+          value={templateId}
+          onChange={(e) => {
+            setTemplateId(e.target.value);
+            apply(e.target.value, listingId);
+          }}
+        >
+          <option value="">Use a template…</option>
+          {templates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {humanise(t.key)}
+            </option>
+          ))}
+        </Select>
+      )}
+
+      {/* Only worth showing once a template is chosen — otherwise it is a dropdown
+          with no visible effect. Changing it re-fills the message. */}
+      {templateId !== "" && listings.length > 0 && (
+        <Select
+          aria-label="About which listing"
+          value={listingId}
+          onChange={(e) => {
+            setListingId(e.target.value);
+            apply(templateId, e.target.value);
+          }}
+        >
+          <option value="">About a listing… (optional)</option>
+          {listings.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.title} — {l.area} · {formatMYR(l.askingPrice)}
+            </option>
+          ))}
+        </Select>
       )}
 
       <Textarea
