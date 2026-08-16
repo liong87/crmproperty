@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { DuplicateWarning } from "@/components/leads/duplicate-warning";
 import { Textarea } from "@/components/ui/textarea";
 
 interface Values {
@@ -20,7 +21,7 @@ export function ContactForm({ contactId, defaults }: { contactId: string; defaul
   const router = useRouter();
   const [error, setError] = React.useState<string | null>(null);
   const [pending, start] = React.useTransition();
-  const { register, handleSubmit } = useForm<Values>({ defaultValues: defaults });
+  const { register, handleSubmit, watch } = useForm<Values>({ defaultValues: defaults });
 
   const onSubmit = handleSubmit((v) => {
     setError(null);
@@ -56,6 +57,13 @@ export function ContactForm({ contactId, defaults }: { contactId: string; defaul
         <div className="space-y-1.5"><Label htmlFor="phone">Phone</Label><Input id="phone" {...register("phone", { required: true })} /></div>
         <div className="space-y-1.5"><Label htmlFor="email">Email</Label><Input id="email" type="email" {...register("email")} /></div>
       </div>
+
+      {/* Same check as on leads: another agent may already hold this client. */}
+      <DuplicateWarning
+        phone={watch("phone") ?? ""}
+        email={watch("email") ?? ""}
+        excludeContactId={contactId}
+      />
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-1.5">
           <Label htmlFor="interest">Interest</Label>

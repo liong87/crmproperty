@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { DuplicateWarning } from "@/components/leads/duplicate-warning";
 
 type Interest = (typeof INTEREST)[number];
 
@@ -39,7 +40,7 @@ export function LeadForm({
   const router = useRouter();
   const [error, setError] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
-  const { register, handleSubmit } = useForm<LeadFormValues>({
+  const { register, handleSubmit, watch } = useForm<LeadFormValues>({
     defaultValues: {
       name: "", phone: "", email: "", interest: "", budgetMinRM: "", budgetMaxRM: "",
       preferredAreas: "", assignedTo: "", consentGiven: false, ...defaults,
@@ -90,6 +91,9 @@ export function LeadForm({
           <Input id="email" type="email" {...register("email")} />
         </div>
       </div>
+      {/* Flags a client another agent is already working. Warns; never blocks. */}
+      <DuplicateWarning phone={watch("phone") ?? ""} email={watch("email") ?? ""} excludeLeadId={leadId} />
+
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-1.5">
           <Label htmlFor="interest">Interest</Label>
