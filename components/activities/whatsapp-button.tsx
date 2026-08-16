@@ -2,16 +2,28 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { sendWhatsAppAndLog } from "@/server/activities/actions";
-import { renderTemplate, type TemplateValues } from "@/server/templates/render";
+import { renderTemplate, missingValues, type TemplateValues } from "@/server/templates/render";
 import type { TemplateRow } from "@/server/templates/actions";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-/** "viewing_confirmation" reads better in a dropdown as "Viewing confirmation". */
+/**
+ * "viewing_confirmation" and "sendPropertyDetails" both read better in a dropdown as
+ * plain words. Seeded templates use camelCase, hand-written ones use underscores.
+ */
 function humanise(key: string): string {
-  const s = key.replace(/_/g, " ");
+  const s = key
+    .replace(/_/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .trim();
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** "propertyTitle" → "property title", for a warning an agent can act on. */
+function readablePlaceholder(raw: string): string {
+  return raw.replace(/_/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
 }
 
 export function WhatsAppButton({
@@ -35,6 +47,7 @@ export function WhatsAppButton({
   const [open, setOpen] = React.useState(false);
   const [msg, setMsg] = React.useState(defaultMessage ?? "");
   const [error, setError] = React.useState<string | null>(null);
+  const [gaps, setGaps] = React.useState<string[]>([]);
   const [pending, start] = React.useTransition();
 
   function applyTemplate(id: string) {
@@ -43,6 +56,10 @@ export function WhatsAppButton({
     // Replace rather than append: the box holds a greeting stub, and an agent picking
     // a template means "use this", not "add this to what is there".
     setMsg(renderTemplate(t.body, values));
+    // Warn about anything the record could not fill. Without this the agent gets a
+    // sentence that simply stops — "here are the details for:" — and may not notice
+    // before sending it to a client.
+    setGaps(missingValues(t.body, values));
   }
 
   if (!open) return <Button variant="outline" onClick={() => setOpen(true)}>WhatsApp</Button>;
@@ -80,7 +97,23 @@ export function WhatsAppButton({
         </div>
       )}
 
-      <Textarea value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Message…" />
+      <Textarea
+        value={msg}
+        onChange={(e) => {
+          setMsg(e.target.value);
+          // Once the agent edits it themselves, the warning is stale.
+          if (gaps.length > 0) setGaps([]);
+        }}
+        placeholder="Message…"
+      />
+
+      {gaps.length > 0 && (
+        <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-800">
+          This template expects {gaps.map(readablePlaceholder).join(", ")}, which this
+          record does not have. Check the message before sending.
+        </p>
+      )}
+
       <p className="text-xs text-muted-foreground">
         Opens WhatsApp with this message ready — you still press send there.
       </p>

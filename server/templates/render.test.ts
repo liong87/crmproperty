@@ -86,3 +86,35 @@ describe("missingValues", () => {
     expect(missingValues("Hi {{name}}", { name: "" })).toEqual(["name"]);
   });
 });
+
+describe("alias handling — templates written by different hands", () => {
+  it("accepts propertyTitle as property", () => {
+    expect(renderTemplate("Details for {{propertyTitle}}", { property: "Vista Kiara" })).toBe(
+      "Details for Vista Kiara",
+    );
+  });
+
+  it("accepts snake_case variants", () => {
+    expect(renderTemplate("Details for {{property_title}}", { property: "Vista Kiara" })).toBe(
+      "Details for Vista Kiara",
+    );
+  });
+
+  it("accepts clientName and agentName", () => {
+    expect(renderTemplate("{{clientName}} / {{agentName}}", { name: "Ali", agent: "Rodney" })).toBe(
+      "Ali / Rodney",
+    );
+  });
+
+  it("reports an unfillable placeholder rather than dropping it silently", () => {
+    // The bug this covers: a seeded template using {{url}} rendered as
+    // "here are the details for:" with nothing after the colon, and no warning.
+    const body = "Hi {{name}}, here are the details for {{propertyTitle}}: {{url}}";
+    expect(missingValues(body, { name: "Ali" })).toEqual(["propertyTitle", "url"]);
+  });
+
+  it("reports nothing once the values exist", () => {
+    const body = "Details for {{propertyTitle}}";
+    expect(missingValues(body, { property: "Vista Kiara" })).toEqual([]);
+  });
+});

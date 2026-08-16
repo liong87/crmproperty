@@ -39,6 +39,31 @@ export const PLACEHOLDERS = [
 export type Placeholder = (typeof PLACEHOLDERS)[number];
 
 /**
+ * Alternative spellings for the same value.
+ *
+ * Templates get written by hand and seeded from older code, so `{{propertyTitle}}`,
+ * `{{property_title}}` and `{{property}}` all turn up meaning the same thing.
+ * Accepting the variants is cheaper than expecting everyone to remember one form.
+ */
+const ALIASES: Record<string, Placeholder> = {
+  propertytitle: "property",
+  property_title: "property",
+  listing: "property",
+  clientname: "name",
+  client: "name",
+  firstname: "name",
+  agentname: "agent",
+  askingprice: "price",
+  location: "area",
+};
+
+function canonical(rawKey: string): Placeholder | null {
+  const k = rawKey.toLowerCase();
+  if ((PLACEHOLDERS as readonly string[]).includes(k)) return k as Placeholder;
+  return ALIASES[k] ?? null;
+}
+
+/**
  * Fill `{{placeholders}}` in `body` from `values`.
  *
  * Tolerant of how people actually type: `{{name}}`, `{{ name }}` and `{{Name}}` all
@@ -56,8 +81,9 @@ export function renderTemplate(body: string, values: TemplateValues): string {
     if (v != null && String(v).trim() !== "") lookup.set(key.toLowerCase(), String(v).trim());
   }
 
-  const filled = body.replace(/\{\{\s*([a-zA-Z]+)\s*\}\}/g, (_m, rawKey: string) => {
-    return lookup.get(rawKey.toLowerCase()) ?? "";
+  const filled = body.replace(/\{\{\s*([a-zA-Z_]+)\s*\}\}/g, (_m, rawKey: string) => {
+    const key = canonical(rawKey);
+    return key ? (lookup.get(key) ?? "") : "";
   });
 
   return tidy(filled);
@@ -80,10 +106,10 @@ function tidy(s: string): string {
     .trim();
 }
 
-/** Placeholders used by a template, in order of first appearance, deduplicated. */
+/** Placeholders used by a template, as written, in order and deduplicated. */
 export function placeholdersUsed(body: string): string[] {
-  const found = body.match(/\{\{\s*([a-zA-Z]+)\s*\}\}/g) ?? [];
-  const keys = found.map((m) => m.replace(/[{}\s]/g, "").toLowerCase());
+  const found = body.match(/\{\{\s*([a-zA-Z_]+)\s*\}\}/g) ?? [];
+  const keys = found.map((m) => m.replace(/[{}\s]/g, ""));
   return [...new Set(keys)];
 }
 
@@ -99,7 +125,13 @@ export function missingValues(body: string, values: TemplateValues): string[] {
     PLACEHOLDERS.filter((k) => {
       const v = values[k];
       return v != null && String(v).trim() !== "";
-    }).map((k) => k.toLowerCase()),
+    }),
   );
-  return placeholdersUsed(body).filter((k) => !available.has(k));
+  // Unrecognised names count as missing too — `{{url}}` in a seeded template has no
+  // value anywhere, and silently dropping it is how "here are the details for:"
+  // reached an agent's screen with nothing after the colon.
+  return placeholdersUsed(body).filter((raw) => {
+    const key = canonical(raw);
+    return !key || !available.has(key);
+  });
 }
