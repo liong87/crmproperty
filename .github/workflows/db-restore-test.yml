@@ -72,23 +72,54 @@ jobs:
           psql -h localhost -U postgres -d verify -c "DROP SCHEMA IF EXISTS public CASCADE;"
           pg_restore -h localhost -U postgres -d verify --no-owner --no-privileges --exit-on-error backup.dump
 
-      - name: Assert the data is really there
+      - name: Assert the restore is usable
         env:
           PGPASSWORD: testpass
         run: |
           set -euo pipefail
+          Q() { psql -h localhost -U postgres -d verify -t -A -c "$1"; }
+
+          echo "Row counts after restore:"
           psql -h localhost -U postgres -d verify -t -A -F' ' -c "
-            SELECT 'properties', count(*) FROM properties
+            SELECT 'users', count(*) FROM users
+            UNION ALL SELECT 'properties', count(*) FROM properties
             UNION ALL SELECT 'contacts', count(*) FROM contacts
             UNION ALL SELECT 'leads', count(*) FROM leads
+            UNION ALL SELECT 'deals', count(*) FROM deals
             UNION ALL SELECT 'activities', count(*) FROM activities;"
-          # A restore that succeeds but produces empty tables is still a failed backup.
-          EMPTY=$(psql -h localhost -U postgres -d verify -t -A -c "
-            SELECT count(*) FROM (
-              SELECT 1 FROM contacts LIMIT 1
-            ) x;")
-          if [ "$EMPTY" -eq 0 ]; then
-            echo "::error::Restore produced an empty contacts table - backup is not usable."
+
+          # 1. STRUCTURE — every table the application needs must exist.
+          #
+          # This replaces an earlier check that demanded a non-empty contacts table.
+          # That assumed a populated CRM and failed the first time it ran against a
+          # real, correct backup of a database with no clients in it yet. Structure is
+          # what a restore must reproduce; row counts are a property of the source.
+          MISSING=""
+          for t in users leads contacts properties deals activities documents; do
+            EXISTS=$(Q "SELECT count(*) FROM information_schema.tables
+                        WHERE table_schema='public' AND table_name='$t';")
+            [ "$EXISTS" = "1" ] || MISSING="$MISSING $t"
+          done
+          if [ -n "$MISSING" ]; then
+            echo "::error::Restored database is missing tables:$MISSING"
             exit 1
           fi
-          echo "Restore verified."
+
+          # 2. DATA — users is the one table that is never legitimately empty: an
+          #    installation with no accounts cannot be signed into. A restore that
+          #    rebuilt the schema but dropped every row would pass the check above and
+          #    fail this one, which is the failure this job exists to catch.
+          USERS=$(Q "SELECT count(*) FROM users;")
+          if [ "$USERS" -lt 1 ]; then
+            echo "::error::Restore produced an empty users table - backup is not usable."
+            exit 1
+          fi
+
+          # 3. Informational: flag an empty client book without failing. Correct today,
+          #    suspicious once the agency is trading — worth seeing in the log either way.
+          CLIENTS=$(Q "SELECT (SELECT count(*) FROM contacts) + (SELECT count(*) FROM leads);")
+          if [ "$CLIENTS" -eq 0 ]; then
+            echo "::warning::Restore contains no leads or contacts. Expected while testing; investigate once the CRM is in real use."
+          fi
+
+          echo "Restore verified. $USERS user(s), $CLIENTS lead/contact record(s)."
