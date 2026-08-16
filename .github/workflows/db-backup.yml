@@ -12,14 +12,32 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Install PostgreSQL 17 client
-        # pg_dump must be the same major version as the server or newer.
+        # pg_dump must be the same major version as the server or newer. Supabase is
+        # on 17.x, so 16 aborts with "server version mismatch".
+        #
+        # Installing postgresql-client-17 is not enough on its own: GitHub's Ubuntu
+        # runners ship PostgreSQL 16, and /usr/bin/pg_dump keeps pointing at it. The
+        # 17 binaries land in /usr/lib/postgresql/17/bin, so that directory has to go
+        # to the FRONT of PATH — hence the $GITHUB_PATH line, which applies to every
+        # later step in the job.
         run: |
-          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          set -euo pipefail
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
           sudo sh -c 'echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Verify the client version
+        # Fail here, loudly, rather than three steps later inside pg_dump.
+        run: |
+          set -euo pipefail
           pg_dump --version
+          MAJOR=$(pg_dump --version | grep -oE '[0-9]+' | head -1)
+          if [ "$MAJOR" -lt 17 ]; then
+            echo "::error::pg_dump is version $MAJOR; 17 or newer is required for this server."
+            exit 1
+          fi
 
       - name: Dump the database
         env:
