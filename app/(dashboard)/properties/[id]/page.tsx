@@ -10,6 +10,7 @@ import { ImageManager } from "@/components/properties/image-manager";
 import { StatusControl } from "@/components/properties/status-control";
 import { DeletePropertyButton } from "@/components/properties/delete-button";
 import { ActivitySection } from "@/components/activities/activity-section";
+import { InterestedBuyers } from "@/components/matching/match-panels";
 import { formatMYR, pricePerSqft } from "@/lib/utils";
 import { propertyStatusTone } from "@/lib/status";
 
@@ -68,6 +69,20 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
       </Card>
       {p.address && (
         <Card><CardHeader><CardTitle>Address</CardTitle></CardHeader><CardContent className="text-sm">{p.address}</CardContent></Card>
+      )}
+
+      {/* Only shown for listings that are actually available — there is no point
+          calling clients about a unit that is already sold or withdrawn. */}
+      {p.status === "active" && (
+        <InterestedBuyers
+          user={me}
+          listing={{
+            listingType: p.listingType,
+            askingPrice: p.askingPrice,
+            state: p.state,
+            area: p.area,
+          }}
+        />
       )}
 
       <ActivitySection entityType="properties" entityId={p.id} canLog={editable} />

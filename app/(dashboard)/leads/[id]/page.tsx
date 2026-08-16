@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { QualifyButton } from "@/components/leads/qualify-button";
 import { ActivitySection } from "@/components/activities/activity-section";
 import { WhatsAppButton } from "@/components/activities/whatsapp-button";
+import { MatchingListings } from "@/components/matching/match-panels";
 import { formatMYR } from "@/lib/utils";
 import { leadStatusTone } from "@/lib/status";
 
@@ -59,6 +60,18 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       ) : null}
 
       {editable && <WhatsAppButton entityType="leads" entityId={lead.id} toPhone={lead.phone} defaultMessage={`Hi ${lead.name}, `} />}
+
+      {/* Listings this enquiry could be shown. A concrete match is the strongest
+          reason to call a lead back, so it sits above the activity log. */}
+      <MatchingListings
+        criteria={{
+          interest: lead.interest,
+          budgetMin: lead.budgetMin,
+          budgetMax: lead.budgetMax,
+          preferredAreas: lead.preferredAreas,
+        }}
+        who={lead.name.split(" ")[0] ?? "this lead"}
+      />
 
       <ActivitySection entityType="leads" entityId={lead.id} canLog={canEdit(me, lead.assignedTo)} />
     </div>

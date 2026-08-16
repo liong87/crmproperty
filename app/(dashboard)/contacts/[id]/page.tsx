@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { CreateDealButton } from "@/components/deals/create-deal-button";
 import { ActivitySection } from "@/components/activities/activity-section";
 import { WhatsAppButton } from "@/components/activities/whatsapp-button";
+import { MatchingListings } from "@/components/matching/match-panels";
 import { PdpaPanel } from "@/components/pdpa/pdpa-panel";
 import { isAdmin } from "@/lib/auth";
 import { formatMYR } from "@/lib/utils";
@@ -48,6 +49,16 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       {editable && <CreateDealButton contactId={contact.id} />}
 
       {editable && <WhatsAppButton entityType="contacts" entityId={contact.id} toPhone={contact.phone} defaultMessage={`Hi ${contact.name}, `} />}
+
+      <MatchingListings
+        criteria={{
+          interest: contact.interest,
+          budgetMin: contact.budgetMin,
+          budgetMax: contact.budgetMax,
+          preferredAreas: contact.preferredAreas,
+        }}
+        who={contact.name.split(" ")[0] ?? "this client"}
+      />
 
       <ActivitySection entityType="contacts" entityId={contact.id} canLog={editable} />
 
