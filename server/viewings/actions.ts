@@ -78,15 +78,25 @@ export async function scheduleViewing(input: unknown): Promise<ActionResult<{ id
       })
       .returning({ id: viewings.id });
 
-    // Also logged on the client's timeline, so the record of "what happened with this
-    // person" stays in one place rather than being split across two features.
+    // Logged on the client's timeline, and doubling as the agent's reminder.
+    //
+    // followUpAt makes it appear on /reminders and the dashboard, so an agent has one
+    // to-do list rather than having to remember to check a separate diary.
+    //
+    // createdBy is the ASSIGNED AGENT, not whoever booked it: listFollowUps() scopes
+    // by created_by, so a manager scheduling on an agent's behalf would otherwise put
+    // the reminder in the manager's list and the agent would never see it. Who booked
+    // it is recorded in the text instead.
+    const attendee = owner ?? me.id;
+    const bookedByOther = attendee !== me.id ? ` (booked by ${me.name})` : "";
     await db.insert(activities).values({
       entityType: d.contactId ? "contacts" : "leads",
       entityId: (d.contactId ?? d.leadId)!,
       type: "viewing",
-      body: `Viewing scheduled for ${new Date(d.scheduledAt).toISOString()}.`,
+      body: `Viewing scheduled${bookedByOther}.${d.notes ? ` ${d.notes}` : ""}`,
       occurredAt: new Date(),
-      createdBy: me.id,
+      followUpAt: new Date(d.scheduledAt),
+      createdBy: attendee,
     });
 
     revalidateAll(d.contactId, d.leadId, d.propertyId);
@@ -137,6 +147,10 @@ export async function recordViewingOutcome(input: unknown): Promise<ActionResult
       });
     }
 
+    // Whatever the outcome — happened, no-show or cancelled — the appointment is
+    // dealt with, so it should leave the agent's reminder list.
+    await closeViewingReminder(existing);
+
     revalidateAll(existing.contactId, existing.leadId, existing.propertyId);
     return ok(undefined);
   } catch (err) {
@@ -168,6 +182,18 @@ export async function rescheduleViewing(input: unknown): Promise<ActionResult<vo
       .set({ scheduledAt: new Date(d.scheduledAt), status: "scheduled", outcome: null })
       .where(eq(viewings.id, d.id));
 
+    // The old reminder points at a time that no longer applies; replace it.
+    await closeViewingReminder(existing);
+    await db.insert(activities).values({
+      entityType: existing.contactId ? "contacts" : "leads",
+      entityId: (existing.contactId ?? existing.leadId)!,
+      type: "viewing",
+      body: "Viewing rescheduled.",
+      occurredAt: new Date(),
+      followUpAt: new Date(d.scheduledAt),
+      createdBy: existing.assignedTo ?? me.id,
+    });
+
     revalidateAll(existing.contactId, existing.leadId, existing.propertyId);
     return ok(undefined);
   } catch (err) {
@@ -192,11 +218,42 @@ export async function deleteViewing(id: string): Promise<ActionResult<void>> {
     if (!existing) return fail("Viewing not found.");
 
     await db.update(viewings).set({ deletedAt: new Date() }).where(eq(viewings.id, id));
+    await closeViewingReminder(existing);
     revalidateAll(existing.contactId, existing.leadId, existing.propertyId);
     return ok(undefined);
   } catch (err) {
     return handle(err, "deleteViewing");
   }
+}
+
+/**
+ * Close the reminder created when the viewing was scheduled.
+ *
+ * Without this, a viewing that has been written up or cancelled still sits in the
+ * agent's Reminders as outstanding — and a to-do list containing things already done
+ * is one agents stop trusting, which costs more than the reminder was worth.
+ *
+ * Matched on entity + type + the exact scheduled time, which is precise enough to
+ * avoid closing an unrelated follow-up the agent set by hand.
+ */
+async function closeViewingReminder(v: {
+  contactId: string | null;
+  leadId: string | null;
+  scheduledAt: Date;
+}) {
+  await db
+    .update(activities)
+    .set({ followUpDoneAt: new Date() })
+    .where(
+      and(
+        eq(activities.entityType, v.contactId ? "contacts" : "leads"),
+        eq(activities.entityId, (v.contactId ?? v.leadId)!),
+        eq(activities.type, "viewing"),
+        eq(activities.followUpAt, v.scheduledAt),
+        isNull(activities.followUpDoneAt),
+        isNull(activities.deletedAt),
+      ),
+    );
 }
 
 function revalidateAll(contactId: string | null | undefined, leadId: string | null | undefined, propertyId: string) {
