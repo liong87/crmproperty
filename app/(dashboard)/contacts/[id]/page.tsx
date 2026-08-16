@@ -8,6 +8,8 @@ import { CreateDealButton } from "@/components/deals/create-deal-button";
 import { ActivitySection } from "@/components/activities/activity-section";
 import { WhatsAppButton } from "@/components/activities/whatsapp-button";
 import { MatchingListings } from "@/components/matching/match-panels";
+import { listActiveTemplates } from "@/server/templates/actions";
+import { APP_NAME } from "@/lib/constants";
 import { PdpaPanel } from "@/components/pdpa/pdpa-panel";
 import { isAdmin } from "@/lib/auth";
 import { formatMYR } from "@/lib/utils";
@@ -48,7 +50,22 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       )}
       {editable && <CreateDealButton contactId={contact.id} />}
 
-      {editable && <WhatsAppButton entityType="contacts" entityId={contact.id} toPhone={contact.phone} defaultMessage={`Hi ${contact.name}, `} />}
+      {editable && (
+        <WhatsAppButton
+          entityType="contacts"
+          entityId={contact.id}
+          toPhone={contact.phone}
+          defaultMessage={`Hi ${contact.name.split(" ")[0] ?? contact.name}, `}
+          templates={await listActiveTemplates("whatsapp")}
+          values={{
+            name: contact.name.split(" ")[0] ?? contact.name,
+            fullName: contact.name,
+            agent: me.name,
+            agency: APP_NAME,
+            area: contact.preferredAreas,
+          }}
+        />
+      )}
 
       <MatchingListings
         criteria={{
