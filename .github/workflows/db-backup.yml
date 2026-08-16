@@ -55,15 +55,47 @@ jobs:
             --file="crm-$STAMP.dump"
           ls -lh "crm-$STAMP.dump"
 
-      - name: Fail if the dump looks empty
-        # A 'successful' 2 KB dump is the classic silent backup failure.
+      - name: Fail if the dump looks wrong
+        # A 'successful' but empty dump is the classic silent backup failure.
+        #
+        # This used to be a raw size floor of 50 KB, which assumed a populated CRM and
+        # failed the day it was first run against a nearly empty database — a 35 KB
+        # dump of a real, correct, mostly-empty schema. Size is a poor proxy: it is
+        # wrong early on, and later it would pass even if half the tables vanished.
+        #
+        # Instead, inspect the dump's table of contents and insist the tables that
+        # matter are actually in there. That catches the failure this guard is for —
+        # a dump that ran but captured nothing — at any database size.
         run: |
+          set -euo pipefail
           SIZE=$(stat -c%s "crm-${STAMP}.dump")
           echo "Dump size: $SIZE bytes"
-          if [ "$SIZE" -lt 51200 ]; then
-            echo "::error::Dump is only $SIZE bytes - refusing to treat this as a valid backup."
+
+          # A valid custom-format dump has a header and a TOC; anything this small is
+          # truncated or empty regardless of how little data exists.
+          if [ "$SIZE" -lt 4096 ]; then
+            echo "::error::Dump is only $SIZE bytes - truncated or empty."
             exit 1
           fi
+
+          # Readable by pg_restore at all?
+          if ! pg_restore --list "crm-${STAMP}.dump" > /tmp/toc.txt 2>/tmp/toc.err; then
+            echo "::error::pg_restore cannot read the dump - it is corrupt."
+            cat /tmp/toc.err
+            exit 1
+          fi
+
+          # Every table the application cannot function without.
+          MISSING=""
+          for t in users leads contacts properties deals activities documents; do
+            grep -qE "TABLE (DATA )?public $t( |$)" /tmp/toc.txt || MISSING="$MISSING $t"
+          done
+          if [ -n "$MISSING" ]; then
+            echo "::error::Dump is missing expected tables:$MISSING"
+            exit 1
+          fi
+
+          echo "Dump contains all expected tables."
 
       - name: Encrypt
         # Client data includes NRIC and passport numbers - it must not sit unencrypted in a bucket.
