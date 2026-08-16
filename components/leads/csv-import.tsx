@@ -4,9 +4,10 @@ import { useRouter } from "next/navigation";
 import { importLeadsFromCsv, type ImportSummary } from "@/server/leads/import";
 import { Button } from "@/components/ui/button";
 
-export function CsvImport() {
+export function CsvImport({ canDistribute = false }: { canDistribute?: boolean }) {
   const router = useRouter();
   const [text, setText] = React.useState("");
+  const [distribute, setDistribute] = React.useState(false);
   const [summary, setSummary] = React.useState<ImportSummary | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [pending, start] = React.useTransition();
@@ -20,7 +21,7 @@ export function CsvImport() {
   function run() {
     setError(null); setSummary(null);
     start(async () => {
-      const res = await importLeadsFromCsv(text);
+      const res = await importLeadsFromCsv(text, distribute);
       if (!res.success) return setError(res.error);
       setSummary(res.data);
       router.refresh();
@@ -56,6 +57,28 @@ export function CsvImport() {
         placeholder={"name,phone,email,interest,preferredAreas,budgetMin,budgetMax\nAli,+60123456789,ali@mail.com,buy,Mont Kiara,800000,1200000"}
         className="h-40 w-full rounded-md border border-input bg-background p-3 font-mono text-xs"
       />
+
+      {canDistribute ? (
+        <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={distribute}
+            onChange={(e) => setDistribute(e.target.checked)}
+          />
+          <span>
+            <span className="font-medium">Distribute evenly across agents</span>
+            <span className="mt-0.5 block text-muted-foreground">
+              For company-wide lists. Leave unticked to keep these leads yourself — which
+              is what you want for a list you sourced.
+            </span>
+          </span>
+        </label>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Imported leads are assigned to you.
+        </p>
+      )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 

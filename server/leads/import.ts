@@ -16,7 +16,7 @@
  * Budgets are read as whole Ringgit and stored as integer cents. "1,200,000",
  * "RM 850000" and "850k" all work — previously any of those rejected the whole row.
  */
-import { requireDbUser } from "@/lib/auth";
+import { requireDbUser, isManagerOrAbove } from "@/lib/auth";
 import { createLeadFromIntake } from "./intake";
 import { ok, fail } from "@/lib/action-result";
 import type { ActionResult } from "@/types";
@@ -35,9 +35,28 @@ export interface ImportSummary {
   missingConsent: number;
 }
 
-export async function importLeadsFromCsv(csvText: unknown): Promise<ActionResult<ImportSummary>> {
+/**
+ * @param distribute  Managers and admins only: spread the imported leads across the
+ *                    team by round-robin instead of keeping them.
+ *
+ * Default is to assign every imported lead to the person importing. An agent
+ * importing their own Facebook Lead Ads export has sourced and usually paid for that
+ * list; round-robin would scatter it across the team and leave them able to see only
+ * a fraction of it. A manager importing a company-wide list wants the opposite, hence
+ * the flag — which is ignored for agents, who can only ever assign to themselves.
+ */
+export async function importLeadsFromCsv(
+  csvText: unknown,
+  distribute = false,
+): Promise<ActionResult<ImportSummary>> {
   try {
-    await requireDbUser(); // any authenticated staff may import
+    // Any authenticated staff member may import, because imported leads now belong to
+    // the importer. Restricting this to managers would leave an agent with their own
+    // ad campaign no way to get their leads into the CRM.
+    const me = await requireDbUser();
+    const spreadAcrossTeam = distribute && isManagerOrAbove(me);
+    // undefined = let intake round-robin; otherwise pin to the importer.
+    const assignTo = spreadAcrossTeam ? undefined : me.id;
 
     if (typeof csvText !== "string") return fail("No CSV content provided.");
     if (csvText.length > 5_000_000) return fail("File is too large. Please split it up.");
@@ -84,7 +103,7 @@ export async function importLeadsFromCsv(csvText: unknown): Promise<ActionResult
         sourceDetail: "csv-import",
       };
 
-      const res = await createLeadFromIntake(payload, "import");
+      const res = await createLeadFromIntake(payload, "import", assignTo);
       if (!res.success) {
         summary.failed++;
         summary.errors.push({ line, name: name || "(no name)", error: res.error });

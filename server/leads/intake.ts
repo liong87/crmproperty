@@ -82,9 +82,19 @@ async function pickAssignee(): Promise<string | null> {
   return agents[ticket % agents.length]?.id ?? null;
 }
 
+/**
+ * @param assignTo  Force the assignee instead of using round-robin.
+ *
+ * Used by CSV import, where the leads belong to whoever uploaded them: an agent
+ * importing their own Facebook Lead Ads export would otherwise watch most of that
+ * list scatter across the team by round-robin, and lose sight of leads they sourced
+ * and paid for. Website and webhook leads keep round-robin — nobody owns those, and
+ * waiting for a manual assignment costs conversions.
+ */
 export async function createLeadFromIntake(
   rawPayload: unknown,
   source: LeadSource,
+  assignTo?: string | null,
 ): Promise<ActionResult<{ leadId: string; deduped: boolean }>> {
   const parsed = intakeSchema.safeParse(rawPayload);
   if (!parsed.success) {
@@ -136,7 +146,8 @@ export async function createLeadFromIntake(
       return ok({ leadId: existing.id, deduped: true });
     }
 
-    const assignedTo = await pickAssignee();
+    // undefined means "decide for me" (round-robin); an explicit id or null is honoured.
+    const assignedTo = assignTo === undefined ? await pickAssignee() : assignTo;
 
     const [inserted] = await db
       .insert(leads)
