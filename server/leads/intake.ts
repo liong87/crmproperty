@@ -33,6 +33,8 @@ export const intakeSchema = z.object({
   budgetMax: z.number().int().nonnegative().optional().nullable(),
   preferredAreas: z.string().max(1000).optional().nullable(),
   sourceDetail: z.string().max(255).optional().nullable(),
+  // The new-launch project this enquiry is for, when the source knows it.
+  projectId: z.string().uuid().optional().nullable(),
   utmSource: z.string().max(255).optional().nullable(),
   utmMedium: z.string().max(255).optional().nullable(),
   utmCampaign: z.string().max(255).optional().nullable(),
@@ -165,6 +167,7 @@ export async function createLeadFromIntake(
         budgetMin: p.budgetMin ?? null,
         budgetMax: p.budgetMax ?? null,
         preferredAreas: p.preferredAreas ?? null,
+        projectId: p.projectId ?? null,
         status: "new",
         assignedTo,
         consentGivenAt: p.consentGiven ? new Date() : null,

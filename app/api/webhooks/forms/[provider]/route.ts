@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { createLeadFromIntake } from "@/server/leads/intake";
 import { INTEREST } from "@/lib/constants";
-import { hmacBase64, providerSecret, timingSafeEqual } from "@/lib/webhooks/verify";
+import { hmacBase64, hmacHex, providerSecret, timingSafeEqual } from "@/lib/webhooks/verify";
+import { extractLeadgenChanges, ingestMetaLeadgen } from "@/server/leads/meta";
+import { LeadAdsTransientError } from "@/lib/leadads";
 import { monitoring } from "@/lib/monitoring";
 import { clientIp, withinRateLimit, tooManyRequests } from "@/lib/rate-limit";
 
@@ -13,6 +15,7 @@ export const dynamic = "force-dynamic";
  *   POST /api/webhooks/forms/tally
  *   POST /api/webhooks/forms/typeform
  *   POST /api/webhooks/forms/googleads
+ *   POST /api/webhooks/forms/meta
  *   POST /api/webhooks/forms/generic
  *
  * Every provider is mapped onto our intake schema and funnelled through the same
@@ -25,6 +28,9 @@ export const dynamic = "force-dynamic";
  *   tally      HMAC-SHA256(base64) of the raw body in `tally-signature`
  *   typeform   HMAC-SHA256(base64) of the raw body in `typeform-signature` (sha256=...)
  *   googleads  shared `google_key` inside the JSON body (Google's own scheme)
+ *   meta       HMAC-SHA256(hex) of the raw body in `x-hub-signature-256` (sha256=...),
+ *              keyed by the Meta APP SECRET. Meta also requires a GET handshake — see
+ *              the GET handler below.
  *   generic    shared secret in the `x-webhook-secret` header
  */
 
@@ -156,8 +162,56 @@ async function authorize(
     return timingSafeEqual(key, secret) ? null : unauthorized(provider);
   }
 
+  if (provider === "meta") {
+    // Meta signs with the APP SECRET, hex-encoded, prefixed "sha256=".
+    const header = req.headers.get("x-hub-signature-256") ?? "";
+    const sig = header.startsWith("sha256=") ? header.slice("sha256=".length) : header;
+    const expected = await hmacHex(secret, rawBody);
+    return timingSafeEqual(sig.toLowerCase(), expected) ? null : unauthorized(provider);
+  }
+
   const provided = req.headers.get("x-webhook-secret") ?? "";
   return timingSafeEqual(provided, secret) ? null : unauthorized(provider);
+}
+
+/**
+ * Meta's subscription handshake.
+ *
+ * Before it will send anything, Meta calls this endpoint with GET and expects the
+ * `hub.challenge` echoed back verbatim — as plain text, not JSON — but only when
+ * `hub.verify_token` matches the token configured in the App dashboard. Comparison is
+ * constant-time and an unset token fails closed, exactly as the POST path does.
+ */
+export async function GET(req: Request, { params }: { params: Promise<{ provider: string }> }) {
+  const { provider } = await params;
+  if (provider !== "meta") {
+    return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+  }
+
+  if (!(await withinRateLimit("RATE_LIMIT_WEBHOOKS", clientIp(req)))) {
+    return tooManyRequests();
+  }
+
+  const url = new URL(req.url);
+  const mode = url.searchParams.get("hub.mode");
+  const token = url.searchParams.get("hub.verify_token") ?? "";
+  const challenge = url.searchParams.get("hub.challenge") ?? "";
+
+  const expected = process.env.META_VERIFY_TOKEN;
+  if (!expected) {
+    monitoring.captureMessage("Meta verification rejected: META_VERIFY_TOKEN not set", {});
+    return NextResponse.json({ ok: false, error: "Not configured" }, { status: 403 });
+  }
+
+  if (mode !== "subscribe" || !timingSafeEqual(token, expected)) {
+    monitoring.captureMessage("Meta verification rejected: bad token or mode", { mode: mode ?? "" });
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 403 });
+  }
+
+  return new NextResponse(challenge, {
+    status: 200,
+    headers: { "content-type": "text/plain; charset=utf-8" },
+  });
 }
 
 function unauthorized(provider: string): NextResponse {
@@ -187,6 +241,31 @@ export async function POST(req: Request, { params }: { params: Promise<{ provide
     body = JSON.parse(rawBody);
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
+  }
+
+  // Meta is handled separately and returns early: its webhook carries a receipt, not a
+  // lead, so there is nothing for the field mappers below to map. See server/leads/meta.ts.
+  if (provider === "meta") {
+    const changes = extractLeadgenChanges(body);
+    if (changes.length === 0) {
+      // A subscription test ping, or a field we do not handle. Acknowledge it —
+      // answering with an error would make Meta retry something that will never change.
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      const summary = await ingestMetaLeadgen(changes);
+      // Nothing about individual leads is returned; see the note at the end of POST.
+      return NextResponse.json({ ok: true, received: summary.received });
+    } catch (err) {
+      if (err instanceof LeadAdsTransientError) {
+        // 5xx on purpose: Meta retries for up to 36 hours, which is long enough for an
+        // expired token to be replaced without losing a single paid lead.
+        monitoring.captureException(err, { where: "webhook.meta" });
+        return NextResponse.json({ ok: false, error: "Temporarily unavailable" }, { status: 503 });
+      }
+      monitoring.captureException(err, { where: "webhook.meta" });
+      return NextResponse.json({ ok: false, error: "Failed" }, { status: 500 });
+    }
   }
 
   let mapped: Mapped;

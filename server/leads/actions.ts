@@ -23,6 +23,8 @@ const createSchema = z.object({
   budgetMin: z.coerce.number().int().nonnegative().optional().nullable(),
   budgetMax: z.coerce.number().int().nonnegative().optional().nullable(),
   preferredAreas: z.string().max(1000).optional().nullable(),
+  // The new-launch project this enquiry is for. Null for resale and general enquiries.
+  projectId: z.string().uuid().optional().nullable(),
   assignedTo: z.string().uuid().optional().nullable(),
   consentGiven: z.boolean().optional(),
 });
@@ -57,6 +59,7 @@ export async function createLead(input: unknown): Promise<ActionResult<Lead>> {
         budgetMin: d.budgetMin ?? null,
         budgetMax: d.budgetMax ?? null,
         preferredAreas: d.preferredAreas ?? null,
+        projectId: d.projectId ?? null,
         status: "new",
         assignedTo,
         consentGivenAt: d.consentGiven ? new Date() : null,
@@ -102,6 +105,7 @@ export async function updateLead(input: unknown): Promise<ActionResult<Lead>> {
         budgetMin: d.budgetMin !== undefined ? d.budgetMin : lead.budgetMin,
         budgetMax: d.budgetMax !== undefined ? d.budgetMax : lead.budgetMax,
         preferredAreas: d.preferredAreas !== undefined ? d.preferredAreas : lead.preferredAreas,
+        projectId: d.projectId !== undefined ? d.projectId : lead.projectId,
         status: d.status ?? lead.status,
         assignedTo,
       })

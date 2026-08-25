@@ -63,6 +63,11 @@ const featureSchema = z.object({
   // Email
   RESEND_API_KEY: optionalStr,
   EMAIL_FROM: optionalStr,
+  // Meta (Facebook / Instagram) Lead Ads
+  WEBHOOK_SECRET_META: optionalStr,
+  META_VERIFY_TOKEN: optionalStr,
+  META_PAGE_ACCESS_TOKEN: optionalStr,
+  META_GRAPH_VERSION: optionalStr,
   // Migrations only
   DIRECT_DATABASE_URL: optionalStr,
 });
@@ -146,6 +151,29 @@ export function checkEnv(): { fatal: EnvProblem[]; warnings: EnvProblem[] } {
       problem: "No landing-page API keys configured.",
       impact: "The public lead endpoint will reject every submission.",
     });
+  }
+
+  /**
+   * Meta Lead Ads needs all three or none. Two out of three is the dangerous state:
+   * the handshake succeeds, Meta starts delivering, and every paid lead is dropped at
+   * a stage nobody is watching. Partial configuration is therefore fatal, matching how
+   * object storage is handled above.
+   */
+  const metaVars = ["WEBHOOK_SECRET_META", "META_VERIFY_TOKEN", "META_PAGE_ACCESS_TOKEN"];
+  const metaSet = metaVars.filter(isSet);
+  if (metaSet.length > 0 && metaSet.length < metaVars.length) {
+    for (const k of metaVars.filter((v) => !isSet(v))) {
+      fatal.push({
+        variable: k,
+        problem: "Partially configured Meta Lead Ads — some variables are set but not this one.",
+        impact:
+          k === "META_PAGE_ACCESS_TOKEN"
+            ? "Meta will deliver leads and every one will be dropped: the lead data cannot be fetched."
+            : k === "WEBHOOK_SECRET_META"
+              ? "Every Meta delivery will be rejected as unsigned."
+              : "Meta cannot complete the subscription handshake, so no leads will arrive.",
+      });
+    }
   }
 
   if (!isSet("DIRECT_DATABASE_URL") && /:6543\//.test(process.env.DATABASE_URL ?? "")) {

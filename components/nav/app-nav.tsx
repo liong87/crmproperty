@@ -3,7 +3,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   LayoutDashboard, Inbox, Contact, Building2, Columns3, Bell, BarChart3, UserCog,
-  MessageSquareText, CalendarCheck,
+  MessageSquareText, CalendarCheck, Landmark, Radio,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -12,11 +12,13 @@ const ICONS: Record<string, LucideIcon> = {
   "/dashboard": LayoutDashboard,
   "/leads": Inbox,
   "/contacts": Contact,
+  "/projects": Landmark,
   "/properties": Building2,
   "/pipeline": Columns3,
-  "/viewings": CalendarCheck,
+  "/appointments": CalendarCheck,
   "/reminders": Bell,
   "/reports": BarChart3,
+  "/lead-sources": Radio,
   "/templates": MessageSquareText,
   "/users": UserCog,
 };

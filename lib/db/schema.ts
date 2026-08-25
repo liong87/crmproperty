@@ -79,6 +79,13 @@ export const leads = pgTable(
     consentGivenAt: timestamp("consent_given_at", { withTimezone: true }),
     consentSource: varchar("consent_source", { length: 255 }),
     convertedToContactId: uuid("converted_to_contact_id"), // FK added in relations to avoid cycle
+    /**
+     * The new-launch project this enquiry came in for, when it came in for one.
+     * Null for resale and general enquiries. This is the top of the project funnel:
+     * without it, leads cannot be counted per launch or per campaign.
+     * FK declared in migration 0007; `projects` is defined later in this file.
+     */
+    projectId: uuid("project_id"),
     ...timestamps,
   },
   (t) => ({
@@ -88,6 +95,7 @@ export const leads = pgTable(
     assignedIdx: index("leads_assigned_idx").on(t.assignedTo),
     sourceIdx: index("leads_source_idx").on(t.source),
     convertedIdx: index("leads_converted_idx").on(t.convertedToContactId),
+    projectIdx: index("leads_project_idx").on(t.projectId),
     // Every list query is ORDER BY created_at DESC ... WHERE deleted_at IS NULL.
     // A partial index on the live rows serves the filter and the sort together.
     liveCreatedIdx: index("leads_live_created_idx")
@@ -318,7 +326,132 @@ export const assignmentCounter = pgTable("assignment_counter", {
   ...timestamps,
 });
 
-/* ---------- viewings (property viewings with clients) ---------- */
+/* ---------- new launch / project sales ---------- */
+
+/**
+ * A developer project sold off-plan (new launch).
+ *
+ * Deliberately NOT modelled as a `properties` row. A resale listing has one owner,
+ * one unit and one asking price; a project has none of those. It has unit TYPES with
+ * indicative prices, and the specific unit is only pinned down at booking.
+ *
+ * We do not mirror the developer's unit availability. It changes hourly and they are
+ * the source of truth — a stale copy is worse than none. See ROADMAP.md,
+ * "Inventory depth", for the reasoning and for what would change that.
+ */
+export const projects = pgTable(
+  "projects",
+  {
+    id: id(),
+    name: varchar("name", { length: 255 }).notNull(),
+    developer: varchar("developer", { length: 255 }),
+    propertyType: varchar("property_type", { length: 30 }), // condo | serviced-apartment | ...
+    state: varchar("state", { length: 100 }).notNull(),
+    area: varchar("area", { length: 255 }).notNull(),
+    address: text("address"),
+    /** Sales gallery — where appointments happen. Used by the scheduler in phase 1.2. */
+    galleryAddress: text("gallery_address"),
+    tenure: varchar("tenure", { length: 20 }), // freehold | leasehold
+    titleType: varchar("title_type", { length: 20 }), // individual | strata | master
+    launchAt: timestamp("launch_at", { withTimezone: true }),
+    /** Expected vacant possession. */
+    expectedVpAt: timestamp("expected_vp_at", { withTimezone: true }),
+    totalUnits: integer("total_units"),
+    /** Bumi allocation as a whole percentage of units (0-100). */
+    bumiQuotaPct: integer("bumi_quota_pct"),
+    /** Bumi discount in basis points (700 = 7.00%) — integer, like every other rate. */
+    bumiDiscountBp: integer("bumi_discount_bp"),
+    /** Free text: "10% early bird, free legal fees, free S&P". */
+    rebatePackage: text("rebate_package"),
+    /** What the developer pays us, in basis points (250 = 2.50%). Drives phase 3.1. */
+    developerCommissionBp: integer("developer_commission_bp"),
+    /** upcoming | open | closing | closed */
+    status: varchar("status", { length: 20 }).notNull().default("open"),
+    notes: text("notes"),
+    ...timestamps,
+  },
+  (t) => ({
+    statusIdx: index("projects_status_idx").on(t.status),
+    stateAreaIdx: index("projects_state_area_idx").on(t.state, t.area),
+    // Every list query is ORDER BY created_at DESC ... WHERE deleted_at IS NULL.
+    liveCreatedIdx: index("projects_live_created_idx")
+      .on(t.createdAt.desc().nullsFirst())
+      .where(sql`deleted_at is null`),
+  }),
+);
+
+/**
+ * A unit type within a project — "Type B, 1,050 sqft, 3R2B, from RM 620k".
+ *
+ * This is what an agent actually quotes, and what a lead's budget is matched
+ * against. Prices are MYR integer cents like everywhere else.
+ */
+export const projectUnitTypes = pgTable(
+  "project_unit_types",
+  {
+    id: id(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    label: varchar("label", { length: 100 }).notNull(), // "Type A"
+    description: text("description"),
+    builtUpSqft: integer("built_up_sqft"),
+    bedrooms: integer("bedrooms"),
+    bathrooms: integer("bathrooms"),
+    carParks: integer("car_parks"),
+    /** Developer list price, MYR integer cents. */
+    listPrice: bigint("list_price", { mode: "number" }).notNull(),
+    /** Typical price after the rebate package, MYR integer cents. Nullable. */
+    nettPrice: bigint("nett_price", { mode: "number" }),
+    totalUnits: integer("total_units"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => ({
+    projectIdx: index("project_unit_types_project_idx").on(t.projectId),
+    sortIdx: index("project_unit_types_sort_idx").on(t.projectId, t.sortOrder),
+  }),
+);
+
+/* ---------- lead form sources (ad platform → project mapping) ---------- */
+
+/**
+ * Maps an external lead form to what it means to us.
+ *
+ * A Meta lead form knows its own id and nothing about our business. Somebody has to
+ * say "form 8123… is the Skyline Residence campaign", and that somebody should be an
+ * admin in a screen, not a developer in a deploy — new campaigns launch weekly and a
+ * code change per campaign is how a CRM stops being used.
+ *
+ * `projectId` is the payload: it is what puts an inbound Meta lead into the right
+ * funnel. Unmapped forms still create leads — dropping a paid lead because nobody
+ * filled in a mapping would be far worse — they just arrive without a project.
+ */
+export const leadFormSources = pgTable(
+  "lead_form_sources",
+  {
+    id: id(),
+    /** meta | tally | typeform | googleads | generic */
+    provider: varchar("provider", { length: 20 }).notNull(),
+    /** The provider's own form id. Unique per provider. */
+    externalFormId: varchar("external_form_id", { length: 255 }).notNull(),
+    /** What a human calls it: "Skyline Residence — August launch". */
+    label: varchar("label", { length: 255 }).notNull(),
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+    /** Applied when the form itself does not ask. */
+    defaultInterest: varchar("default_interest", { length: 20 }),
+    /** Off means leads still arrive, but this mapping is not applied. */
+    active: boolean("active").notNull().default(true),
+    notes: text("notes"),
+    ...timestamps,
+  },
+  (t) => ({
+    lookupIdx: index("lead_form_sources_lookup_idx").on(t.provider, t.externalFormId),
+    projectIdx: index("lead_form_sources_project_idx").on(t.projectId),
+  }),
+);
+
+/* ---------- appointments (gallery visits and property viewings) ---------- */
 /**
  * A scheduled property viewing.
  *
@@ -333,37 +466,54 @@ export const assignmentCounter = pgTable("assignment_counter", {
  * push the diary back into WhatsApp. Exactly one of the two is set; enforced by a
  * CHECK constraint in the migration rather than in application code.
  */
-export const viewings = pgTable(
-  "viewings",
+export const appointments = pgTable(
+  "appointments",
   {
     id: id(),
-    propertyId: uuid("property_id")
-      .notNull()
-      .references(() => properties.id, { onDelete: "cascade" }),
-    // Exactly one of these is set. See the CHECK constraint in the migration.
+    // Exactly one SUBJECT: a resale property, or a new-launch project whose sales
+    // gallery the client is visiting. CHECK constraint in migration 0006.
+    propertyId: uuid("property_id").references(() => properties.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }),
+    // Exactly one CLIENT. CHECK constraint in migration 0005.
     contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "cascade" }),
     leadId: uuid("lead_id").references(() => leads.id, { onDelete: "cascade" }),
+    /**
+     * The SETTER — the agent who owns the client and booked this. Ownership filters
+     * key on this column, which is why it keeps its original name.
+     */
     assignedTo: uuid("assigned_to").references(() => users.id, { onDelete: "set null" }),
+    /**
+     * The CLOSER — who runs the presentation. Often the setter, frequently not.
+     * Recorded at the time rather than inferred later, because commission splits on it.
+     */
+    closerId: uuid("closer_id").references(() => users.id, { onDelete: "set null" }),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
-    // scheduled | completed | no-show | cancelled
+    // scheduled | showed-up | no-show | cancelled
     status: varchar("status", { length: 20 }).notNull().default("scheduled"),
-    // Recorded after the viewing: interested | not-interested | offer-made | undecided
+    // Recorded afterwards: booked | interested | not-interested | undecided
     outcome: varchar("outcome", { length: 20 }),
+    /** One line shown in list and board views: "Rang out, will retry." */
+    remark: varchar("remark", { length: 500 }),
     notes: text("notes"),
     ...timestamps,
   },
   (t) => ({
-    propertyIdx: index("viewings_property_idx").on(t.propertyId),
-    contactIdx: index("viewings_contact_idx").on(t.contactId),
-    leadIdx: index("viewings_lead_idx").on(t.leadId),
-    assignedIdx: index("viewings_assigned_idx").on(t.assignedTo),
+    propertyIdx: index("appointments_property_idx").on(t.propertyId),
+    projectIdx: index("appointments_project_idx").on(t.projectId),
+    contactIdx: index("appointments_contact_idx").on(t.contactId),
+    leadIdx: index("appointments_lead_idx").on(t.leadId),
+    assignedIdx: index("appointments_assigned_idx").on(t.assignedTo),
+    closerIdx: index("appointments_closer_idx").on(t.closerId),
     // Every list query is "upcoming, soonest first, not deleted".
-    scheduledIdx: index("viewings_scheduled_idx")
+    scheduledIdx: index("appointments_scheduled_idx")
       .on(t.scheduledAt)
+      .where(sql`deleted_at is null`),
+    // The board reads "everything not yet resolved, soonest first".
+    boardIdx: index("appointments_board_idx")
+      .on(t.status, t.scheduledAt)
       .where(sql`deleted_at is null`),
   }),
 );
-
 /* ---------- inferred types ---------- */
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -381,5 +531,11 @@ export type NewActivity = typeof activities.$inferInsert;
 export type Document = typeof documents.$inferSelect;
 export type MessageLog = typeof messageLog.$inferSelect;
 export type MessageTemplate = typeof messageTemplates.$inferSelect;
-export type Viewing = typeof viewings.$inferSelect;
-export type NewViewing = typeof viewings.$inferInsert;
+export type LeadFormSource = typeof leadFormSources.$inferSelect;
+export type NewLeadFormSource = typeof leadFormSources.$inferInsert;
+export type Appointment = typeof appointments.$inferSelect;
+export type NewAppointment = typeof appointments.$inferInsert;
+export type Project = typeof projects.$inferSelect;
+export type NewProject = typeof projects.$inferInsert;
+export type ProjectUnitType = typeof projectUnitTypes.$inferSelect;
+export type NewProjectUnitType = typeof projectUnitTypes.$inferInsert;

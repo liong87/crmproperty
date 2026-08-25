@@ -2,9 +2,11 @@ import Link from "next/link";
 import { Inbox, UserCheck, Wallet, BellRing, Activity, CalendarCheck } from "lucide-react";
 import { getCurrentDbUser } from "@/lib/auth";
 import { listFollowUps } from "@/server/activities/queries";
-import { listUpcomingViewings, countViewingsNeedingOutcome } from "@/server/viewings/queries";
-import { ViewingList } from "@/components/viewings/viewing-list";
+import { listUpcomingAppointments, countAppointmentsNeedingOutcome } from "@/server/appointments/queries";
+import { AppointmentList } from "@/components/appointments/appointment-list";
 import { getReportData } from "@/server/reports/queries";
+import { getFunnel, getFunnelTrend } from "@/server/reports/funnel";
+import { STATUS } from "@/lib/chart-colors";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/reports/stat-tile";
 import { FollowUpList } from "@/components/activities/follow-up-list";
@@ -15,13 +17,23 @@ export default async function DashboardPage() {
   if (!user) return null;
 
   // Ask for 5, not "all of them then slice to 5".
-  const [followUps, report, viewings, toWriteUp] = await Promise.all([
+  const [followUps, report, appts, toWriteUp, funnel, trend] = await Promise.all([
     listFollowUps(user, 5),
     getReportData(user),
-    listUpcomingViewings(user, 5),
-    countViewingsNeedingOutcome(user),
+    listUpcomingAppointments(user, 5),
+    countAppointmentsNeedingOutcome(user),
+    getFunnel(user),
+    getFunnelTrend(user, 8),
   ]);
   const overdue = followUps.filter((f) => f.overdue).length;
+  const booked = funnel.stages.find((s) => s.key === "booked")?.count ?? 0;
+  // No-show rate is the one tile here that means good or bad, so it is the only one
+  // that earns a status colour.
+  const noShowTone =
+    funnel.noShowRate == null ? undefined
+      : funnel.noShowRate > 0.3 ? STATUS.critical
+      : funnel.noShowRate > 0.15 ? STATUS.warning
+      : STATUS.good;
   const firstName = user.name.split(" ")[0] ?? user.name;
 
   return (
@@ -38,9 +50,9 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* Five tiles now, so the desktop row is 5 wide rather than leaving one orphaned
-          on a second line. */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      {/* Six tiles: the row divides evenly at 2 (mobile), 3 and 6, so none is orphaned
+          on a second line at any breakpoint. */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         {/* openLeads, not totalLeads: a disqualified lead is finished work, and
             showing it here made the tile useless as a "do I have anything to chase"
             signal. */}
@@ -52,14 +64,29 @@ export default async function DashboardPage() {
         />
         <StatTile label="Qualified" value={String(report.qualifiedLeads)} icon={UserCheck}
           hint={`${Math.round(report.conversionRate * 100)}% conversion`} />
-        <StatTile label="Open pipeline" value={formatMYR(report.openPipelineValue)} icon={Wallet} accent />
+        <StatTile
+          label="Booked"
+          value={String(booked)}
+          icon={Wallet}
+          accent
+          hint={`last ${funnel.sinceDays} days`}
+          spark={trend.map((t) => t.booked)}
+        />
+        <StatTile
+          label="No-show rate"
+          value={funnel.noShowRate == null ? "—" : `${Math.round(funnel.noShowRate * 100)}%`}
+          icon={Activity}
+          tone={noShowTone}
+          hint="kept or missed"
+        />
         <StatTile label="Follow-ups due" value={String(followUps.length)} icon={BellRing}
           hint={overdue > 0 ? `${overdue} overdue` : "on track"} />
         <StatTile
-          label="Viewings ahead"
-          value={String(viewings.length)}
+          label="Appointments ahead"
+          value={String(appts.length)}
           icon={CalendarCheck}
           hint={toWriteUp > 0 ? `${toWriteUp} to write up` : undefined}
+          spark={trend.map((t) => t.appointments)}
         />
       </div>
 
@@ -75,11 +102,11 @@ export default async function DashboardPage() {
 
       <Card>
         <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Upcoming viewings</CardTitle>
-          <Link href="/viewings" className="text-sm text-primary underline-offset-2 hover:underline">View all</Link>
+          <CardTitle>Upcoming appointments</CardTitle>
+          <Link href="/appointments" className="text-sm text-primary underline-offset-2 hover:underline">View all</Link>
         </CardHeader>
         <CardContent>
-          <ViewingList items={viewings} empty="No viewings scheduled." />
+          <AppointmentList items={appts} empty="No appointments scheduled." />
         </CardContent>
       </Card>
 

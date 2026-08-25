@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
 import { listAssignableAgents } from "@/server/leads/queries";
+import { listProjectOptions } from "@/server/projects/queries";
 import { LeadForm } from "@/components/leads/lead-form";
 
 export default async function NewLeadPage() {
@@ -8,11 +9,12 @@ export default async function NewLeadPage() {
   if (!me) redirect("/sign-in");
   const canAssign = isManagerOrAbove(me);
   const agents = canAssign ? await listAssignableAgents() : [];
+  const projects = await listProjectOptions();
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <h1 className="text-xl font-semibold">New Lead</h1>
-      <LeadForm mode="create" agents={agents} canAssign={canAssign} />
+      <LeadForm mode="create" agents={agents} canAssign={canAssign} projects={projects} />
     </div>
   );
 }

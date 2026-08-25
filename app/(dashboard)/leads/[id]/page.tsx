@@ -12,9 +12,11 @@ import { WhatsAppButton } from "@/components/activities/whatsapp-button";
 import { MatchingListings } from "@/components/matching/match-panels";
 import { listActiveTemplates } from "@/server/templates/actions";
 import { listPickableListings } from "@/server/matching/queries";
-import { listViewingsForClient } from "@/server/viewings/queries";
-import { ScheduleViewing } from "@/components/viewings/schedule-viewing";
-import { ViewingList } from "@/components/viewings/viewing-list";
+import { listProjectOptions } from "@/server/projects/queries";
+import { listAssignableAgents } from "@/server/leads/queries";
+import { listAppointmentsForClient } from "@/server/appointments/queries";
+import { ScheduleAppointment } from "@/components/appointments/schedule-appointment";
+import { AppointmentList } from "@/components/appointments/appointment-list";
 import { APP_NAME } from "@/lib/constants";
 import { formatMYR } from "@/lib/utils";
 import { leadStatusTone } from "@/lib/status";
@@ -91,13 +93,18 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
       {editable && (
         <Card>
-          <CardHeader><CardTitle>Viewings</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Appointments</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <ViewingList
-              items={await listViewingsForClient(me, { leadId: lead.id })}
-              empty="No viewings yet."
+            <AppointmentList
+              items={await listAppointmentsForClient(me, { leadId: lead.id })}
+              empty="No appointments yet."
             />
-            <ScheduleViewing leadId={lead.id} listings={await listPickableListings()} />
+            <ScheduleAppointment
+              leadId={lead.id}
+              listings={await listPickableListings()}
+              projects={await listProjectOptions()}
+              agents={(await listAssignableAgents()).filter((a) => a.id !== me.id)}
+            />
           </CardContent>
         </Card>
       )}

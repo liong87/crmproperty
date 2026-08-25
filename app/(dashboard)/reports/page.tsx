@@ -1,15 +1,19 @@
 import { redirect } from "next/navigation";
 import { getCurrentDbUser } from "@/lib/auth";
 import { getReportData } from "@/server/reports/queries";
+import { getFunnel, getFunnelTrend } from "@/server/reports/funnel";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { StatCard, BarList } from "@/components/reports/charts";
+import { FunnelChart, FunnelBreakdown } from "@/components/reports/funnel";
+import { TrendChart } from "@/components/reports/trend";
+import { STATUS } from "@/lib/chart-colors";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { formatMYR } from "@/lib/utils";
 
 export default async function ReportsPage() {
   const me = await getCurrentDbUser();
   if (!me) redirect("/sign-in");
-  const r = await getReportData(me);
+  const [r, funnel, trend] = await Promise.all([getReportData(me), getFunnel(me), getFunnelTrend(me)]);
 
   return (
     <div className="space-y-4">
@@ -24,6 +28,25 @@ export default async function ReportsPage() {
         <StatCard label="Conversion" value={`${Math.round(r.conversionRate * 100)}%`} />
         <StatCard label="Open pipeline" value={formatMYR(r.openPipelineValue)} />
       </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <FunnelChart data={funnel} />
+        <TrendChart points={trend} />
+      </div>
+
+      <FunnelBreakdown
+        title="By project"
+        rows={funnel.byProject}
+        emptyHint="No leads or appointments in this window yet."
+      />
+
+      {funnel.byAgent.length > 0 && (
+        <FunnelBreakdown
+          title="By agent"
+          rows={funnel.byAgent}
+          emptyHint="No activity in this window yet."
+        />
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Card>

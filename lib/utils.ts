@@ -57,3 +57,43 @@ export function isoToLocalInput(iso: string | Date | null | undefined): string {
   const my = new Date(d.getTime() + 8 * 60 * 60 * 1000);
   return my.toISOString().slice(0, 16);
 }
+
+/* ---------- rates and price ranges (new launch / project sales) ---------- */
+
+/**
+ * Rates are stored as integer BASIS POINTS, never as floats: 250 = 2.50%.
+ *
+ * Same reasoning as money-as-cents. A developer commission of 2.75% held as 0.0275
+ * cannot be compared or summed exactly, and commission is arithmetic someone gets
+ * paid on. These two helpers are the only place the conversion happens.
+ */
+export function percentToBp(percent: number | string | null | undefined): number | null {
+  if (percent === "" || percent == null) return null;
+  const n = Number(percent);
+  return Number.isFinite(n) ? Math.round(n * 100) : null;
+}
+
+export function bpToPercent(bp: number | null | undefined): number | null {
+  return bp == null ? null : bp / 100;
+}
+
+/** Basis points as a readable percentage: 250 -> "2.5%", 275 -> "2.75%", null -> "—". */
+export function formatBp(bp: number | null | undefined): string {
+  if (bp == null) return "—";
+  const pct = bp / 100;
+  // Trim trailing zeros so 2.50 reads as 2.5 and 3.00 as 3.
+  return `${pct.toFixed(2).replace(/\.?0+$/, "")}%`;
+}
+
+/**
+ * A project's indicative price span, from the cheapest and dearest unit type.
+ *
+ * Both figures are MYR integer cents. A project with no unit types priced yet has no
+ * range to show, and one where every type costs the same shows a single figure
+ * rather than "RM 620,000 – RM 620,000".
+ */
+export function formatPriceRange(from: number | null, to: number | null): string {
+  if (from == null) return "Price on request";
+  if (to == null || to === from) return formatMYR(from);
+  return `${formatMYR(from)} – ${formatMYR(to)}`;
+}

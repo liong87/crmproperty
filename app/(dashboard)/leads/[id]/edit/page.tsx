@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getCurrentDbUser, canEdit, isManagerOrAbove } from "@/lib/auth";
 import { getLeadById, listAssignableAgents } from "@/server/leads/queries";
+import { listProjectOptions } from "@/server/projects/queries";
 import { LeadForm } from "@/components/leads/lead-form";
 
 export default async function EditLeadPage({ params }: { params: Promise<{ id: string }> }) {
@@ -13,6 +14,7 @@ export default async function EditLeadPage({ params }: { params: Promise<{ id: s
 
   const canAssign = isManagerOrAbove(me);
   const agents = canAssign ? await listAssignableAgents() : [];
+  const projects = await listProjectOptions();
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -22,6 +24,7 @@ export default async function EditLeadPage({ params }: { params: Promise<{ id: s
         leadId={lead.id}
         canAssign={canAssign}
         agents={agents}
+        projects={projects}
         defaults={{
           name: lead.name,
           phone: lead.phone,
@@ -30,6 +33,7 @@ export default async function EditLeadPage({ params }: { params: Promise<{ id: s
           budgetMinRM: lead.budgetMin != null ? String(lead.budgetMin / 100) : "",
           budgetMaxRM: lead.budgetMax != null ? String(lead.budgetMax / 100) : "",
           preferredAreas: lead.preferredAreas ?? "",
+          projectId: lead.projectId ?? "",
           assignedTo: lead.assignedTo ?? "",
         }}
       />

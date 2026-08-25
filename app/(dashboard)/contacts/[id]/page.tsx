@@ -10,9 +10,11 @@ import { WhatsAppButton } from "@/components/activities/whatsapp-button";
 import { MatchingListings } from "@/components/matching/match-panels";
 import { listActiveTemplates } from "@/server/templates/actions";
 import { listPickableListings } from "@/server/matching/queries";
-import { listViewingsForClient } from "@/server/viewings/queries";
-import { ScheduleViewing } from "@/components/viewings/schedule-viewing";
-import { ViewingList } from "@/components/viewings/viewing-list";
+import { listProjectOptions } from "@/server/projects/queries";
+import { listAssignableAgents } from "@/server/leads/queries";
+import { listAppointmentsForClient } from "@/server/appointments/queries";
+import { ScheduleAppointment } from "@/components/appointments/schedule-appointment";
+import { AppointmentList } from "@/components/appointments/appointment-list";
 import { APP_NAME } from "@/lib/constants";
 import { PdpaPanel } from "@/components/pdpa/pdpa-panel";
 import { isAdmin } from "@/lib/auth";
@@ -56,13 +58,18 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
 
       {editable && (
         <Card>
-          <CardHeader><CardTitle>Viewings</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Appointments</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <ViewingList
-              items={await listViewingsForClient(me, { contactId: contact.id })}
-              empty="No viewings yet."
+            <AppointmentList
+              items={await listAppointmentsForClient(me, { contactId: contact.id })}
+              empty="No appointments yet."
             />
-            <ScheduleViewing contactId={contact.id} listings={await listPickableListings()} />
+            <ScheduleAppointment
+              contactId={contact.id}
+              listings={await listPickableListings()}
+              projects={await listProjectOptions()}
+              agents={(await listAssignableAgents()).filter((a) => a.id !== me.id)}
+            />
           </CardContent>
         </Card>
       )}

@@ -13,14 +13,19 @@ export const TENURE = ["freehold", "leasehold"] as const;
 export const TITLE_TYPE = ["individual", "strata", "master"] as const;
 export const FURNISHING = ["unfurnished", "partial", "full"] as const;
 export const PROPERTY_STATUS = ["active", "pending", "sold", "rented", "withdrawn"] as const;
-export const ACTIVITY_TYPE = ["call", "email", "viewing", "note", "whatsapp"] as const;
+// "viewing" is retained for rows written before appointments existed.
+export const ACTIVITY_TYPE = ["call", "email", "viewing", "appointment", "note", "whatsapp"] as const;
 export const ENTITY_TYPE = ["leads", "contacts", "deals", "properties"] as const;
 
-// Viewings. These live here rather than in server/viewings/actions.ts because a
-// "use server" module may only export async functions — exporting a const array from
+// Appointments. These live here rather than in server/appointments/actions.ts because
+// a "use server" module may only export async functions — exporting a const array from
 // one breaks the page that imports it, at runtime rather than at build.
-export const VIEWING_STATUS = ["scheduled", "completed", "no-show", "cancelled"] as const;
-export const VIEWING_OUTCOME = ["interested", "not-interested", "offer-made", "undecided"] as const;
+//
+// The vocabulary is project sales, and it is the same vocabulary for a resale viewing:
+// somebody either turned up or they did not, and either booked or did not.
+// "showed-up" replaced "completed" and "booked" replaced "offer-made" in migration 0006.
+export const APPOINTMENT_STATUS = ["scheduled", "showed-up", "no-show", "cancelled"] as const;
+export const APPOINTMENT_OUTCOME = ["booked", "interested", "not-interested", "undecided"] as const;
 
 export const DEFAULT_PAGE_SIZE = 25;
 
@@ -35,3 +40,8 @@ export const MALAYSIAN_STATES = [
   "Perak", "Perlis", "Pulau Pinang", "Sabah", "Sarawak", "Selangor",
   "Terengganu", "Kuala Lumpur", "Labuan", "Putrajaya",
 ] as const;
+
+/* ---------- new launch / project sales ---------- */
+// upcoming = not open for booking yet; open = selling; closing = last units;
+// closed = fully sold or the agency's appointment with the developer has ended.
+export const PROJECT_STATUS = ["upcoming", "open", "closing", "closed"] as const;

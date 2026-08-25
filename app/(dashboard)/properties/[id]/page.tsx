@@ -11,8 +11,8 @@ import { StatusControl } from "@/components/properties/status-control";
 import { DeletePropertyButton } from "@/components/properties/delete-button";
 import { ActivitySection } from "@/components/activities/activity-section";
 import { InterestedBuyers } from "@/components/matching/match-panels";
-import { listViewingsForProperty } from "@/server/viewings/queries";
-import { ViewingList } from "@/components/viewings/viewing-list";
+import { listAppointmentsForProperty } from "@/server/appointments/queries";
+import { AppointmentList } from "@/components/appointments/appointment-list";
 import { formatMYR, pricePerSqft } from "@/lib/utils";
 import { propertyStatusTone } from "@/lib/status";
 
@@ -74,11 +74,11 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
       )}
 
       <Card>
-        <CardHeader><CardTitle>Viewings</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Appointments</CardTitle></CardHeader>
         <CardContent>
-          <ViewingList
-            items={await listViewingsForProperty(me, p.id)}
-            empty="No viewings booked for this listing."
+          <AppointmentList
+            items={await listAppointmentsForProperty(me, p.id)}
+            empty="No appointments booked for this listing."
           />
         </CardContent>
       </Card>

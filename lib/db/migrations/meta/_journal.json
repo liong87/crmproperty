@@ -29,6 +29,41 @@
       "when": 1786377001569,
       "tag": "0003_add_deal_stage_is_won",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787637203046,
+      "tag": "0004_add_projects",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787638456877,
+      "tag": "0005_reconcile_viewings",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787638456878,
+      "tag": "0006_appointments",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787638943986,
+      "tag": "0007_lead_project",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787639528219,
+      "tag": "0008_lead_form_sources",
+      "breakpoints": true
     }
   ]
 }

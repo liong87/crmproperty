@@ -20,6 +20,7 @@ export interface LeadFormValues {
   budgetMinRM: string;
   budgetMaxRM: string;
   preferredAreas: string;
+  projectId: string;
   assignedTo: string;
   consentGiven: boolean;
 }
@@ -30,12 +31,15 @@ export function LeadForm({
   defaults,
   agents,
   canAssign,
+  projects = [],
 }: {
   mode: "create" | "edit";
   leadId?: string;
   defaults?: Partial<LeadFormValues>;
   agents: { id: string; name: string }[];
   canAssign: boolean;
+  /** Open projects. Empty hides the picker, so a resale-only agency never sees it. */
+  projects?: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const [error, setError] = React.useState<string | null>(null);
@@ -43,7 +47,7 @@ export function LeadForm({
   const { register, handleSubmit, watch } = useForm<LeadFormValues>({
     defaultValues: {
       name: "", phone: "", email: "", interest: "", budgetMinRM: "", budgetMaxRM: "",
-      preferredAreas: "", assignedTo: "", consentGiven: false, ...defaults,
+      preferredAreas: "", projectId: "", assignedTo: "", consentGiven: false, ...defaults,
     },
   });
 
@@ -57,6 +61,7 @@ export function LeadForm({
       budgetMin: v.budgetMinRM ? Math.round(Number(v.budgetMinRM) * 100) : null,
       budgetMax: v.budgetMaxRM ? Math.round(Number(v.budgetMaxRM) * 100) : null,
       preferredAreas: v.preferredAreas || null,
+      projectId: v.projectId || null,
       assignedTo: canAssign && v.assignedTo ? v.assignedTo : undefined,
       consentGiven: v.consentGiven,
     };
@@ -115,6 +120,18 @@ export function LeadForm({
         <Label htmlFor="preferredAreas">Preferred areas</Label>
         <Input id="preferredAreas" placeholder="Mont Kiara, Bangsar" {...register("preferredAreas")} />
       </div>
+      {projects.length > 0 && (
+        <div className="space-y-1.5">
+          <Label htmlFor="projectId">Project</Label>
+          <Select id="projectId" {...register("projectId")}>
+            <option value="">Not a project enquiry</option>
+            {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Which launch this enquiry came in for. Drives the funnel and cost-per-lead.
+          </p>
+        </div>
+      )}
       {canAssign && (
         <div className="space-y-1.5">
           <Label htmlFor="assignedTo">Assign to</Label>

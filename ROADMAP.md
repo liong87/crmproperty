@@ -1,278 +1,458 @@
-# PropertyAgent CRM — product roadmap
+# PropertyAgent CRM — roadmap
 
-Written from the agency's point of view: what makes agents faster, what makes the
-principal money, and what keeps the firm out of trouble. Every item is checked
-against what the code already does, so nothing here proposes rebuilding something
-that exists.
+Rewritten 25 Aug 2026. Supersedes the previous version, which planned a resale and
+rental agency CRM.
 
-Effort estimates assume the current stack (Next.js, Drizzle, Supabase, Cloudflare
-Workers) and one developer.
+**The product direction has changed.** The primary business is now **new launch /
+project sales of developer units**. Resale and rental stay in the system, but they
+are the secondary mode. This document re-plans around that, using the existing code
+where it fits and replacing it where it does not.
+
+Effort estimates assume the current stack and one developer.
 
 ---
 
-## Already built — don't rebuild
+## Part 1 — What the pivot costs, honestly
 
-Worth stating plainly, because these come up as feature requests:
+### The good news
 
-| Asked for | Status |
+The harder half of what is already built carries over untouched. None of this is
+resale-specific:
+
+| Carries over as-is | Why it survives |
 |---|---|
-| Agent leaderboard | Exists on `/reports`. Managers and admins only; returns empty for agents |
-| Agents see only their own records | Enforced in the data layer via `ownershipFilter`, not just hidden in the UI |
-| Managers see the whole team | Yes — reports, reminders and lists all switch scope by role |
-| Duplicate lead merging | Lead intake dedupes by phone or email, including CSV import |
-| Round-robin lead assignment | Implemented, in a transaction |
-| WhatsApp from a record | Click-to-chat, logged automatically as an activity |
-| PDPA export and erasure | Admin-only panel on each contact |
-| 24-month retention purge | `scripts/purge-stale-leads.ts`, scheduled monthly |
+| Clerk auth, user sync, RBAC enforced in the data layer | Nothing about it assumes resale |
+| Lead intake pipeline — signed webhooks, dedupe by phone/email, round-robin, UTM capture, consent, CSV import | Project sales needs exactly this, only harder |
+| Contacts, activities, follow-up reminders | Unchanged |
+| Documents + R2 storage, signed URLs, browser-side image resize | Booking forms and SPAs need it more than photos did |
+| Messaging adapter, WhatsApp templates with placeholders | Unchanged |
+| PDPA export, erasure, retention purge | Still a legal requirement, still an asset |
+| Configurable deal stages, kanban pipeline | Needs grouping (below), but the engine is right |
+| Rate limiting, webhook signature verification, security headers | Unchanged |
+
+The intake pipeline in particular is worth more now than it was before. Project
+sales is fed by high-volume paid social, and dedupe plus assignment plus consent
+capture on every path is the part most people get wrong.
+
+### What has to be built or replaced
+
+| Needs work | Current state |
+|---|---|
+| `projects` and unit types | Does not exist. `properties` is a resale listing — owner name and phone, single unit, sale/rent |
+| Appointments with a setter/closer split | `viewings` is close, but `propertyId` is `NOT NULL` and there is one `assignedTo` |
+| Separate pipelines for project vs resale | `deal_stages` is one flat global list |
+| Ownership across two roles | `ownershipFilter(user, ownerColumn)` takes a single column; an agent now needs to see leads they set **or** appointments they close |
+| Project commission — developer-paid, staged, split | `deals.commissionPct` is a lone basis-point field |
+| Meta Lead Ads intake | Webhooks cover Tally, Typeform, Google Ads, generic. No Meta |
+| Funnel reporting by project, campaign and closer | Reports are point-in-time counts plus a leaderboard on won value |
+
+Buyer ↔ listing matching stays, but demoted. Matching a lead to a **project** by
+budget, area and unit type is still useful; "interested buyers for this specific
+unit" mostly stops mattering when the developer owns the stock.
+
+**Rough total for the project sales core: 3–4 weeks.** Not a rebuild.
 
 ---
 
-## Phase 0 — Finish the launch (before agents are onboarded)
+## Part 2 — Design decisions
 
-Not features. The things standing between "deployed" and "in use".
+### Inventory depth — recommendation: project + unit types
 
-| Item | Why | Effort |
-|---|---|---|
-| Restore test green | An untested backup is not a backup | 15 min |
-| Rotate credentials | Several were shared in chat during setup | 45 min |
-| Real domain + Clerk production keys | Dev keys are not for real users; agents need a proper URL | 2–3 h |
-| Image resize on upload | 3–5 MB phone photos × 8 per listing is slow on mobile data and expensive to store | 2 h |
-| Screenshots in the user guide | The guide is written; figures are placeholders | 1 h |
-| Drizzle upgrade | Open SQL-injection advisory in 0.36.4 | 1–2 h |
+You asked for a recommendation. **Track projects and their unit types, not
+individual units** — with the specific unit captured on the booking record.
 
----
+The reasoning:
 
-## Phase 1 — The daily loop (highest value per hour spent)
+- **The developer owns the availability list, and it moves hourly.** Mirroring their
+  stock into your CRM means maintaining a copy that goes stale. A stale availability
+  list is worse than no list: you tell a client A-12-03 is free, and it was taken by
+  another agency an hour ago. You lose the client's trust to save them a phone call.
+- **What an agent actually quotes is a unit type**, not a unit. "Type B, 1,050 sqft,
+  3R2B, from RM 620k after rebate" is the conversation. Unit types give you that,
+  and they give budget matching something real to match against.
+- **What a booking needs is the specific unit**, and only at the moment of booking.
+  So capture block, floor, unit number, type and nett price *on the booking*, where
+  it is entered once and is correct.
 
-These make an agent's day measurably faster. Ordered by value.
+This is roughly a third of the schema of full unit inventory, and it is **additive
+later**: if you take an exclusive or a block allocation on one project, a `units`
+table can be added and turned on per project, with existing bookings backfilled from
+the unit details they already carry. Nothing has to be undone.
 
-### 1.1 Buyer ↔ listing matching — **the biggest win available**
+The condition that would flip this recommendation: if you regularly hold allocated
+stock that only your agency can sell, you need real unit-level availability for
+those projects. Tell me if that is the case and I will plan it per-project.
 
-Every lead already carries `interest`, `budgetMin`, `budgetMax` and
-`preferredAreas`. Every property carries `askingPrice`, `state`, `area`,
-`propertyType` and `status`. Nothing joins them.
+### Team model — setter and closer
 
-Add:
+You confirmed the split: one person books the appointment, another may close it.
+This is the single biggest structural change, because it breaks the assumption
+underneath the current access control.
 
-- **On a contact:** "Matching listings" — active properties inside the budget range,
-  in a preferred area, of a matching type.
-- **On a property:** "Interested buyers" — the reverse.
-- **On a new listing:** a list of contacts to call today.
+- A **lead** has a setter — `leads.assignedTo`, unchanged.
+- An **appointment** has both a setter and a closer. Often the same person.
+- Commission splits between them, so both must be recorded at the time, not inferred later.
+- `ownershipFilter` needs a two-column variant: an agent sees a record if they are
+  the setter **or** the closer. Getting this wrong either hides an agent's own work
+  from them or leaks the team's pipeline to everyone, so it is worth doing carefully
+  and testing.
 
-This is the work agents currently do from memory or a spreadsheet, and every input
-already exists. Start crude — budget ±10%, area string match — because even a rough
-match beats recall.
+### Keeping resale alongside
 
-*Effort: 1–2 days. No schema change.*
+Resale is not touched. The two modes coexist by discriminator rather than by making
+everything polymorphic:
 
-### 1.2 Viewing scheduler
+- `properties` stays exactly as it is, for resale and rental listings.
+- `projects` and `project_unit_types` are new, for new launch.
+- `appointments` references **either** a property or a project — two nullable FKs
+  with a CHECK constraint. This is the pattern `viewings` already uses for
+  `contactId` / `leadId`, so it is consistent with the existing code.
+- `deals` gains a nullable `projectId` beside its existing nullable `propertyId`,
+  plus a `dealType` of `project | resale | rental`.
+- `deal_stages` gains a `pipeline` column so each mode has its own stage set.
 
-`viewing` is already an activity type, but there is no calendar. Viewings are the
-unit an agent's week is built from.
+The cost of keeping both is that every list, board and report needs a mode filter.
+That is real but small, and it is much cheaper than migrating resale data out and
+discovering in six months that you still need it.
 
-- Schedule a viewing against a contact and a property together
-- Day and week views, with the agent's own viewings
-- Automatic WhatsApp reminder to the client the day before
-- Outcome recorded afterwards: interested / not / offer made
+### Scope
 
-*Effort: 3–4 days. Needs a `viewings` table, or an extension of `activities`.*
-
-### 1.3 WhatsApp templates
-
-The plumbing exists; every message is still typed from scratch. Saved templates with
-placeholders — `{name}`, `{property}`, `{price}` — for viewing confirmations,
-follow-ups and new-listing alerts.
-
-`message_templates` **already exists in the schema and is unused.**
-
-*Effort: 1 day.*
-
-### 1.4 Duplicate client detection across agents
-
-Two agents unknowingly working the same buyer is a commission dispute waiting to
-happen — and the most common source of internal conflict in an agency.
-
-Lead intake already dedupes by phone and email. Surface the same check when an agent
-creates a contact: "This person is already assigned to Siew Ling." Show the owner's
-name only, not their client's details.
-
-*Effort: half a day.*
+Single tenant — your agency only. No org key on tables, no billing, no tenant
+isolation. If selling this to other agencies ever becomes the plan, say so **before**
+Phase 2 starts; retrofitting tenancy across a grown schema is the one thing on this
+list that genuinely hurts.
 
 ---
 
-## Phase 2 — What the principal cares about
+## Part 3 — The plan
 
-Phase 1 helps agents. This phase is about running the business.
+### Phase 0 — Launch blockers (unchanged, ~4 hours)
 
-### 2.1 Commission tracking and co-broke splits — **the number that matters**
+- Rotate the credentials shared in chat during setup
+- Real domain and Clerk **production** keys
+- Screenshots in the user guide
 
-Deals carry a value, but nobody is paid the transaction price. Missing:
+Do these regardless. They are not affected by the pivot.
 
-- Gross commission (percentage or fixed)
-- Agency / agent split
-- Co-broke share with an outside agency, and which side you are on
+---
+
+### Phase 1 — The project sales core (~2 weeks)
+
+Nothing downstream is worth building until the funnel can represent the business.
+
+**1.1 Projects and unit types** — *done, 25 Aug 2026*
+
+New `projects`: name, developer, state, area, address, tenure, title type,
+completion (expected VP) date, bumi quota and discount, rebate/package notes,
+developer commission rate in basis points, status (`upcoming | open | closing |
+closed`), gallery address, assigned lead pool.
+
+New `project_unit_types`: project, label (Type A), built-up sqft, bedrooms,
+bathrooms, car parks, list price, typical nett price after rebate, total units,
+notes.
+
+CRUD screens modelled on the existing properties pages.
+
+Built as described, with two deliberate deviations:
+
+- **No lead pool on the project.** It was listed here, but a pool means nothing until
+  the routing in 2.2 exists, and a field nothing reads is a field that goes stale.
+  It lands with 2.2.
+- **Price range is derived, not stored.** `listProjectsPaginated` computes it from the
+  unit types with one grouped query per page, so it cannot drift from the prices it
+  summarises.
+
+RBAC differs from properties on purpose: a listing belongs to the agent who won it, a
+project belongs to the agency. Every agent views projects; only managers and admins
+create, edit or delete them.
+
+Verified: `tsc --noEmit` clean, 144 tests pass, `next build` succeeds with all four
+`/projects` routes, and `0004_add_projects.sql` applies cleanly to a fresh PostgreSQL 16
+followed by a live insert-and-read check of the derived price range.
+
+**1.2 Appointments** — *done, 25 Aug 2026*
+
+Extend `viewings` rather than replacing it, so nothing is lost:
+
+- `propertyId` becomes nullable; add nullable `projectId`; CHECK exactly one
+- Add `closerId` beside `assignedTo` (which becomes the setter)
+- New status set: `scheduled | showed-up | no-show | cancelled`
+- New outcome set: `booked | interested | not-interested | undecided`
+- Keep `notes`, add a `remark` shown in list views
+
+Rename to `appointments` in the same migration. `VIEWING_STATUS` and
+`VIEWING_OUTCOME` in `lib/constants.ts` become the new sets.
+
+**1.3 Pipelines** — *1–2 days*
+
+Add `pipeline` to `deal_stages`. Seed the project pipeline:
+
+> Lead → Appointment Set → Showed Up → Booked → SPA Signed → Loan Approved → Completed
+
+Keep the existing resale stages under a `resale` pipeline. `deals` gains `dealType`
+and `projectId`. The kanban board filters by pipeline.
+
+**1.4 Appointment board** — *done, 25 Aug 2026*
+
+Re-cut the viewings page as a board by outcome, mirroring the pipeline board that
+already exists. Add **no-show rate** to reports, per closer and overall — the data
+is being captured today and nobody is looking at it. This is the most useful
+operational number in project sales.
+
+**1.5 Ownership across setter and closer** — *1 day*
+
+A two-column `ownershipFilter`, applied to appointments and to project deals, with
+unit tests. Managers and admins are unaffected.
+
+**1.6 Lead → project interest** — *done, 25 Aug 2026*
+
+Add `projectId` to leads so an inbound lead carries the project it came from. This
+is what makes 2.1 worth anything — and it is the top of the funnel, without which the
+only thing countable per launch is appointments.
+
+Set on the lead form; the picker hides itself when no projects exist, so a resale-only
+workflow never sees it. Migration 0007.
+
+---
+
+### Phase 2 — Acquisition (~1.5 weeks)
+
+Project sales lives or dies on paid social and speed of response.
+
+**2.1 Meta Lead Ads intake** — *done, 25 Aug 2026*
+
+Meta is structurally unlike every other webhook here, and that shaped the design:
+**its webhook carries a receipt, not a lead.** It sends a `leadgen_id`, and the answers
+have to be fetched back from the Graph API with a Page token. So this needed an adapter
+(`lib/leadads/`) rather than another field mapper.
+
+What was built:
+
+- `POST /api/webhooks/forms/meta`, verified against `x-hub-signature-256` (HMAC-SHA256
+  hex, keyed by the App Secret), plus the `GET` handshake Meta requires before it will
+  send anything.
+- `lib/leadads/` — interface + Meta provider, using `fetch` rather than the Facebook
+  SDK so it still runs on Cloudflare Workers. Requests campaign and ad **names** in the
+  same call, so cost-per-lead reporting does not need a second round trip.
+- `lib/phone.ts` — E.164 normalisation. Meta returns whatever the user typed
+  (`012-345 6789`), intake demands `+60123456789`. Without this, paid leads are binned
+  by validation. It refuses to guess rather than storing a wrong number: an agent
+  burning a call on a bad number is worse than a rejected one.
+- `lead_form_sources` (migration 0008) and `/lead-sources` — an admin maps
+  "form 8123… is the Skyline August launch" without a deploy. Campaigns launch weekly;
+  a code change per campaign is how a CRM stops being used.
+- Everything funnels through the existing `createLeadFromIntake`, so dedup, round-robin,
+  consent and agent notification behave identically to every other source.
+
+Decisions worth knowing:
+
+- **An unmapped form still creates the lead.** Dropping a lead the agency paid for
+  because nobody filled in a mapping would be far worse than filing it without a project.
+- **Graph API failures return 503, not 200.** Meta retries for up to 36 hours, which is
+  long enough to replace an expired token without losing a single paid lead. A lead that
+  can never be valid (no usable phone) is skipped instead, so it does not block the batch.
+- **Partial Meta configuration is fatal at boot.** Two of the three env vars set is the
+  dangerous state: the handshake succeeds, Meta starts delivering, and every lead is
+  dropped at a stage nobody is watching.
+- **PDPA consent.** If the form asks a consent question, the answer is honoured — the
+  only firmly defensible basis. If it does not, consent falls back to true with
+  `consentSource` recording exactly what the claim rests on (`meta:form-privacy-policy:<form>`),
+  mirroring the existing Google Ads decision. **Adding a consent checkbox to the Meta
+  form puts this on firmer ground, and the mapper will use it automatically.**
+
+**2.2 Project lead pools and pass-on** — *2 days*
+
+Round-robin becomes per-project: each project has a pool of setters, and a lead
+routes into that pool. If a setter logs no activity within N days, the lead passes
+to the next person and both are notified. Exclude anything with an appointment, a
+booking or a qualified status — a lead being actively worked is never yanked away.
+
+N configurable per project. This is a response-time SLA in disguise, and it is the
+cheapest change on this list that moves conversion.
+
+**2.3 Speed-to-lead auto-reply** — *blocked on WhatsApp access, not on code*
+
+**The agency currently uses the free WhatsApp Business app, which has no API.** No
+software can send from it — not this CRM, not any competitor's. That is a property of
+the app, not a gap in the build. The existing click-to-chat adapter is the correct
+architecture for it.
+
+**What is available today, at no cost:** the WhatsApp Business app has a built-in
+*Greeting message* (fires on a first message, or after 14 days quiet) and an *Away
+message* (outside set hours), under Settings → Business tools. That captures most of the
+speed-to-lead value immediately. Limits worth knowing: one message for all enquiries —
+it cannot vary by project — and nothing is recorded in the CRM.
+
+**To automate from the CRM** needs the WhatsApp Cloud API:
+
+- Meta Business verification, then template approval for business-initiated messages
+- A phone number **dedicated to the API**. Once a number moves to Cloud API it can no
+  longer be used in the WhatsApp Business app on a phone — so the sensible pattern is
+  one agency number on Cloud API for automation, with agents keeping their own numbers
+  on the app for human conversation and click-to-chat
+- Per-conversation charges
+- Typically one to three weeks of waiting before a single message can be sent
+
+Once that access exists, the code is roughly 3–5 days: swap `wa-link-provider` for a
+Cloud API provider behind the existing `MessagingProvider` interface, and fire an
+approved template the moment a Meta lead lands — the hook point already exists, since 2.1.
+
+**On the competitor's visual flow builder:** the value is the auto-reply, not the canvas.
+A node-graph editor is weeks of frontend work for something a per-project reply template
+achieves. Build the reply first and see whether the canvas is ever missed.
+
+---
+
+### Phase 3 — The money layer (~2 weeks)
+
+Build this once real bookings exist. Designing a commission model against three test
+deals means designing it twice.
+
+**3.1 Project commission** — *4–5 days*
+
+Genuinely different from resale commission and worth modelling properly:
+
+- Developer commission rate, per project, sometimes per phase
+- **Staged release** — typically part on SPA signing, part on loan documentation or
+  completion. Each stage with its own expected and actual date, and amount.
+- Split across agency, setter, closer and any co-broke party
 - Override to a team leader, if the agency works that way
-- Invoiced / received / outstanding
+- Invoiced / received / outstanding, per stage
 
-`/reports` currently shows "won value", which no one takes home. Commission earned,
-paid and outstanding is what a principal actually wants on a Monday morning.
+A principal's Monday morning question is "what is billed, what is collected, what is
+stuck" — and with staged developer commission, "stuck" is where the money hides.
 
-*Effort: 3–4 days. New `commissions` table linked to deals.*
+**3.2 Booking document checklist** — *2–3 days*
 
-### 2.2 Lead source ROI
+Attach documents to a **deal**, not just a property. A checklist per stage — booking
+form, IC, income documents, SPA, loan offer — with deadline dates and reminders.
+Expiring loan approval is the classic deal-killer and it is entirely preventable.
 
-Every lead already records `utmSource`, `utmMedium` and `utmCampaign`. Add monthly ad
-spend per campaign and you can report:
+**3.3 Funnel and cost reporting** — *funnel done 25 Aug 2026; cost still open*
 
-- Cost per lead by channel
-- Cost per **closed deal** by channel — the number that decides budgets
-- Conversion rate by source
+The funnel itself is built and live on `/reports`:
 
-This answers "should we keep paying for Facebook?" with evidence. The lead-side data
-is already being captured; only spend is missing.
+> Leads → Appointments Set → Showed Up → Booked → SPA → Completed
 
-*Effort: 2 days.*
+with conversion at each step and no-show rate, broken down by project and by agent,
+over a 90-day window. It is built from leads and appointments rather than from deal
+stages on purpose: a deal is created late, once something is worth calling a deal, but
+the funnel has to describe what happened to every enquiry — including the many that
+never became one.
 
-### 2.3 Transaction document management
+Still open, and needing 2.1 first so campaign names arrive automatically:
 
-`documents` and R2 storage exist, used only for property photos. The paperwork that
-actually stalls deals — booking form, SPA, loan approval, tenancy agreement — has
-nowhere to live.
-
-- Attach documents to a **deal**, not just a property
-- A checklist per deal type, so nothing is forgotten
-- Deadline dates with reminders (loan approval expiring is the classic)
-
-*Effort: 2–3 days. Mostly reuse.*
-
-### 2.4 Better reporting
-
-Current reports are point-in-time counts. Add:
-
-- Month-on-month trends, not just today's totals
-- Time-to-conversion: lead → contact → closed
-- Pipeline velocity: how long deals sit in each stage
-- Individual agent detail views for one-to-one reviews
-
-*Effort: 2–3 days.*
+- Monthly ad spend per campaign, for cost per lead, cost per appointment and **cost per
+  booking** — the number that decides next month's budget. UTM data is already captured
+  on every lead; only spend is missing.
+- The same funnel cut by campaign and by closer.
+- Time-to-first-contact per setter, which is what 2.2 exists to improve.
 
 ---
 
-## Phase 3 — Scale and differentiation
+### Later, driven by need
 
-Worth it once the agency is genuinely running on the system.
-
-### 3.1 Portal syndication (PropertyGuru, iProperty, Mudah)
-
-Agents currently enter every listing twice or more. Even a formatted export per
-portal saves hours a week; a proper API integration saves more but costs
-correspondingly.
-
-Start with export. Measure the time saved before committing to integrations.
-
-*Effort: 2 days for export; weeks for real integrations.*
-
-### 3.2 Client portal
-
-A link a client can open to see shortlisted properties, upcoming viewings and their
-transaction status. Reduces "any update?" messages, and looks professional.
-
-*Effort: 1–2 weeks. Needs its own authentication model — a client must never touch
-agent accounts.*
-
-### 3.3 Teams
-
-`teamId` is already in the schema and `canEdit` already honours it, but nothing sets
-it. If the agency grows past one working group, teams are closer than they look.
-
-*Effort: 2–3 days to finish what is started.*
-
-### 3.4 Bahasa Malaysia / Chinese
-
-`lib/constants.ts` notes this as an intention: *"All user-facing strings live here
-for future i18n (BM / 中文)."* The groundwork is partly there.
-
-Decide early. Retrofitting i18n across a grown application is painful, and the
-decision gets harder every month.
-
-*Effort: 3–4 days if done soon; considerably more later.*
+- **Portal syndication / project microsites** — a formatted export per portal before paying for integrations
+- **Interface density pass, part two** — the same treatment for list and board screens. Charts, dashboard and reports were done on 25 Aug (see below)
+- **Teams** — `teamId` is in the schema and `canEdit` honours it, but nothing sets it
+- **Bahasa Malaysia / Chinese** — `lib/constants.ts` was written for this. Decide early; retrofitting i18n gets worse monthly
+- **Client portal** — shortlisted units, appointment times, booking status. Needs its own auth model; a client must never touch agent accounts
+- **Learning hub** — onboarding and training videos on `documents` + R2. Genuinely good for retention when you are hiring regularly. Not at five people
 
 ---
 
-## On leaderboards — a considered view
+## Charts, dashboard and reports — design pass (done, 25 Aug 2026)
 
-You already have one. Before making it more prominent, some things worth weighing,
-because leaderboards are the classic example of a feature that works right up until
-it doesn't.
+The competitor's screens genuinely read faster. Their palette, though, is a brand
+choice for a product being sold; the teal and amber here is distinctive and was kept.
+What changed is form and rigour, not identity.
 
-**What they do well.** Sales is lonely work with slow feedback. A visible scoreboard
-gives it rhythm and makes effort feel recognised. Strong performers like being seen.
+**Colour is computed, not chosen.** `lib/chart-colors.ts` is the single documented
+palette, derived by stepping the existing brand tokens until they passed a validator —
+never eyeballed. Recorded there with its results:
 
-**What goes wrong.**
+- **Funnel ramp** — one teal hue, four monotone lightness steps. Funnel stages are
+  *ordered* (swapping them changes the meaning), so they take a single-hue ramp rather
+  than categorical hues, and the reader sees the sequence in the colour itself.
+- **Series** — teal / amber / plum for leads, appointments, bookings. Worst colour-blind
+  separation ΔE 14.0 (protanopia), 20.0 for normal vision; all three clear 3:1 against
+  the card. Slots are fixed: a reader who learns "bookings are plum" is never retaught.
+- **Status** — reserved for numbers that *mean* good or bad, never reused as a series
+  colour, and always beside a label rather than standing alone. On white, 5.3:1 to 7.1:1.
 
-- **Ranking on closed value alone rewards luck and seniority.** One bungalow sale can
-  outweigh a quarter of solid work on RM 400k condos. New agents see an unreachable
-  gap and disengage — the people the board is meant to motivate are the ones it
-  demoralises.
-- **It encourages lead hoarding.** If rank depends on closings, sharing a lead with a
-  better-suited colleague costs you. That's the opposite of what an agency wants.
-- **Perpetual bottom placement is corrosive.** Someone is always last. If that is the
-  same person every month, the board is not motivating them; it is a weekly public
-  notice of their failure.
+**The funnel is bars, not a tapered trapezoid.** The usual funnel shape encodes
+magnitude as area, which the eye reads poorly and which flatters the top. Bar length is
+read accurately, and since each stage is shorter than the one above it, the shape still
+narrows and still reads as a funnel. Bars are measured against the top of the funnel,
+so cumulative drop-off is visible rather than every stage looking full.
+
+**A trend line was added, because counts cannot answer the real question.** Weekly leads,
+appointments and bookings on one axis — never two, which would invent a correlation that
+is not in the data. Weeks are cut in Malaysia time: a lead at 07:00 Monday in KL is
+23:00 Sunday UTC and would otherwise land in the previous week, an off-by-one nobody
+notices and everybody acts on.
+
+**Values are never trapped in a hover.** Every funnel stage is direct-labelled, the trend
+direct-labels each series endpoint, and the trend carries a table view for everything in
+between. Sparklines on the dashboard tiles are shape only — the figure above carries the
+number.
+
+Smaller corrections along the way: hero figures moved to proportional digits and the body
+sans (tabular figures make a large number look loose; a display serif reads as
+decoration), bar lists stopped colouring nominal categories by their value, and gridlines
+became solid hairlines rather than dashes.
+
+---
+
+## On leaderboards, revisited for the setter/closer model
+
+The existing leaderboard ranks on won value, managers and admins only. Under a
+setter/closer split it needs rethinking before it is made more prominent, because
+the failure modes get sharper:
+
+- **Ranking on closings punishes setters.** A setter who books excellent
+  appointments and hands them over has nothing to show on a closed-value board. That
+  is precisely the person you least want to demoralise.
+- **It fights the pass-on rule in 2.2.** If rank depends on closings, letting a lead
+  pass to a better-placed colleague costs you personally. The board would be
+  actively working against the routing.
+- **Perpetual bottom placement is corrosive.** Someone is always last, and if it is
+  the same person monthly it is a public notice of failure, not a motivator.
 - **Earnings visibility is sensitive.** Won value is close to disclosing colleagues'
-  income to one another.
+  income to each other.
 
-**How to do it well, if you want it front and centre:**
-
-1. **Rank on activity as well as outcomes.** Viewings conducted, follow-ups made on
-   time, response speed to new leads. These are within an agent's control, reward the
-   behaviour that produces sales, and give a newcomer a way to place well in month
-   one.
-2. **Show improvement, not just absolutes.** "Most improved this month" alongside
-   "most closed" gives everyone a reachable target.
-3. **Consider showing each agent their own rank privately**, with only aggregate
-   team performance shown publicly. Most of the motivational benefit, little of the
-   humiliation.
-4. **Keep the current role restriction.** Managers and admins see the full board;
-   agents see their own numbers. That is already how it works, and it is a reasonable
-   default.
-5. **Watch what it does to behaviour.** If agents start guarding leads or disputing
-   assignments after it becomes prominent, that is the board talking — turn it down.
-
-My honest recommendation: keep it as a **management tool** where it is today, and add
-an agent-facing view of *their own* trend — this month against last, activity against
-their own average. Same motivational effect, none of the side effects. If the
-principal specifically wants public rankings, use activity metrics rather than closed
-value, and revisit after a quarter.
+**Recommendation:** rank setters and closers on their own metrics — appointments set
+and show-up rate for setters, close rate for closers — never on a single combined
+board. Keep it a management tool where it is today, and give each agent a private
+view of their own trend: this month against last, their activity against their own
+average. Most of the motivational effect, none of the side effects. Revisit after a
+quarter of real use.
 
 ---
 
 ## Suggested sequence
 
-**Next 2 weeks** — Phase 0. Get it safely live and in agents' hands.
+**This week** — Phase 0, then 1.1. Projects and unit types unblock everything else.
 
-**Month 1–2** — Phase 1.1 (matching) and 1.3 (templates). Both are quick, both are
-felt daily, and both use data you already hold. Let agents use the system properly
-before building more.
+**Weeks 2–3** — the rest of Phase 1: 1.3 (separate pipelines) and 1.5 (ownership across
+setter and closer). At the end of it the system represents your actual business, and
+agents can be onboarded onto it.
 
-**Month 3** — Phase 1.2 (viewings) and 1.4 (duplicate detection), once real usage has
-shown how agents actually work. Some of this roadmap will look wrong by then, which
-is the point of waiting.
+**Week 4–5** — Phase 2. Meta intake first, then pass-on. Hold WhatsApp Cloud API
+until the Meta business verification is started, since the lead time is out of your
+hands.
 
-**Month 4+** — Phase 2, starting with commission tracking. By then there is real deal
-data to model against, which makes the design much easier to get right.
+**Month 2–3** — Phase 3, once there are real bookings to model commission against.
 
-**Later** — Phase 3, driven by what the agency is actually struggling with rather
-than by this document.
-
----
+**After that** — driven by what the agency is struggling with, not by this document.
 
 ## A note on sequencing
 
-The temptation is to build Phase 2 first, because commission and ROI reporting are
-what the principal asks for. Resist it slightly. Those features need real data to be
-worth anything — a commission report over three test deals tells you nothing, and
-designing it before you have seen real transactions means designing it twice.
+The temptation from a competitor demo is to start with the WhatsApp flow builder,
+because it is the most impressive thing on screen. Resist it. It is the most
+expensive item here, it carries approval risk you do not control, and it needs a
+funnel underneath it to be worth anything.
 
-Phase 1 generates that data by making the system worth using daily. Get agents living
-in it first.
+The temptation from a principal is to start with commission reporting. Resist that
+too, slightly. It needs real transactions to design against, and Phase 1 is what
+produces them.
