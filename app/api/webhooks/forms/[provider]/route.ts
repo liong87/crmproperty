@@ -109,6 +109,11 @@ function fromGoogleAds(body: any): Mapped {
     utmSource: "google",
     utmMedium: "cpc",
     utmCampaign: body?.campaign_id ? String(body.campaign_id) : null,
+    // Ids, not names — Google's lead-form webhook sends no names, unlike Meta's Graph
+    // API. Reporting shows them as-is rather than inventing a label; whoever reads the
+    // spend report can match an ad group id against Google Ads if they need to.
+    utmContent: body?.adgroup_id ? String(body.adgroup_id) : null,
+    utmTerm: body?.creative_id ? String(body.creative_id) : null,
     // Google lead forms include their own consent/disclosure step.
     consentGiven: true,
     externalLeadId: body?.lead_id ? String(body.lead_id) : null,

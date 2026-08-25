@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { getCurrentDbUser } from "@/lib/auth";
+import Link from "next/link";
+import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
 import { getReportData } from "@/server/reports/queries";
 import { getFunnel, getFunnelTrend } from "@/server/reports/funnel";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -17,9 +18,17 @@ export default async function ReportsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold">Reports</h1>
-        <p className="text-sm text-muted-foreground">{r.scope === "team" ? "Team-wide metrics." : "Your book of business."}</p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold">Reports</h1>
+          <p className="text-sm text-muted-foreground">{r.scope === "team" ? "Team-wide metrics." : "Your book of business."}</p>
+        </div>
+        {/* Spend is the agency's cost base, not an agent's business. */}
+        {isManagerOrAbove(me) && (
+          <Link href="/reports/spend" className="text-sm font-medium underline underline-offset-4">
+            Advertising spend →
+          </Link>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

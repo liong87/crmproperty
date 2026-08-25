@@ -101,6 +101,21 @@ export async function importLeadsFromCsv(
         consentGiven,
         consentSource: "csv-import",
         sourceDetail: "csv-import",
+        // Ad-platform exports carry the attribution the spend report needs, and it was
+        // being dropped on the floor. Facebook's Lead Ads export uses campaign_name /
+        // adset_name / ad_name; Google's uses campaign / ad group; a hand-built sheet
+        // usually uses the utm_ spellings. Accept all three rather than asking anyone
+        // to rename columns before importing.
+        utmSource: pick(values, "utm source", "utmsource", "source", "platform") || null,
+        utmMedium: pick(values, "utm medium", "utmmedium", "medium") || null,
+        utmCampaign:
+          pick(values, "campaign name", "campaignname", "campaign", "utm campaign", "utmcampaign") ||
+          null,
+        utmContent:
+          pick(values, "adset name", "adsetname", "ad set name", "ad set", "adset", "ad group", "adgroup", "utm content", "utmcontent") ||
+          null,
+        utmTerm:
+          pick(values, "ad name", "adname", "ad", "creative", "utm term", "utmterm") || null,
       };
 
       const res = await createLeadFromIntake(payload, "import", assignTo);

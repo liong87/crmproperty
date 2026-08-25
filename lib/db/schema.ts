@@ -19,7 +19,9 @@ import {
   boolean,
   timestamp,
   index,
+  uniqueIndex,
   bigint,
+  date,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -69,6 +71,16 @@ export const leads = pgTable(
     utmSource: varchar("utm_source", { length: 255 }),
     utmMedium: varchar("utm_medium", { length: 255 }),
     utmCampaign: varchar("utm_campaign", { length: 255 }),
+    /**
+     * The level below campaign, in standard UTM terms so every channel fits:
+     *   utmContent = ad set   (Meta adset_name, Google ad group)
+     *   utmTerm    = ad       (Meta ad_name, Google creative)
+     *
+     * Campaign alone cannot answer "which ad set do we pause", which is the decision
+     * the spend report exists to inform.
+     */
+    utmContent: varchar("utm_content", { length: 255 }),
+    utmTerm: varchar("utm_term", { length: 255 }),
     referrer: text("referrer"),
     interest: varchar("interest", { length: 20 }), // buy | rent | sell | invest
     budgetMin: bigint("budget_min", { mode: "number" }), // MYR integer cents
@@ -514,6 +526,51 @@ export const appointments = pgTable(
       .where(sql`deleted_at is null`),
   }),
 );
+/* ---------- campaign_spend (what the agency paid, per campaign per month) ---------- */
+/**
+ * Monthly advertising spend, entered by hand.
+ *
+ * There is no API integration here on purpose. Pulling spend from Meta and Google
+ * means OAuth against two ad accounts, token refresh, and a mapping from ad-account
+ * to agency — weeks of work whose output is a number the principal already knows and
+ * can type in sixty seconds a month. If the agency ever runs enough campaigns for
+ * typing to hurt, that is the moment to automate it, not before.
+ *
+ * `campaign` is the campaign NAME, matched against `leads.utm_campaign`. That makes
+ * the join fragile in one specific way worth stating plainly: renaming a campaign in
+ * Ads Manager mid-month splits its leads across two names, and the spend row will
+ * only match one of them. The report surfaces campaigns with leads but no spend, and
+ * spend with no leads, precisely so that split is visible rather than silent.
+ *
+ * `utmSource` scopes the name, because "August Launch" can exist on both Meta and
+ * Google and they are different budgets.
+ */
+export const campaignSpend = pgTable(
+  "campaign_spend",
+  {
+    id: id(),
+    campaign: varchar("campaign", { length: 255 }).notNull(),
+    /** meta | google | tiktok | ... — matched against leads.utm_source. */
+    utmSource: varchar("utm_source", { length: 255 }).notNull(),
+    /** First day of the month the spend belongs to. A calendar month, not an instant. */
+    month: date("month").notNull(),
+    /** MYR integer cents, like every other money column here. */
+    amount: bigint("amount", { mode: "number" }).notNull(),
+    notes: text("notes"),
+    recordedBy: uuid("recorded_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => ({
+    monthIdx: index("campaign_spend_month_idx").on(t.month),
+    // One figure per campaign per channel per month. Without this, a double-submitted
+    // form silently doubles the reported cost per lead — the failure mode is a wrong
+    // number that looks right, which is the worst kind.
+    uniqueEntry: uniqueIndex("campaign_spend_unique_idx")
+      .on(t.campaign, t.utmSource, t.month)
+      .where(sql`deleted_at is null`),
+  }),
+);
+
 /* ---------- inferred types ---------- */
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -539,3 +596,5 @@ export type Project = typeof projects.$inferSelect;
 export type NewProject = typeof projects.$inferInsert;
 export type ProjectUnitType = typeof projectUnitTypes.$inferSelect;
 export type NewProjectUnitType = typeof projectUnitTypes.$inferInsert;
+export type CampaignSpend = typeof campaignSpend.$inferSelect;
+export type NewCampaignSpend = typeof campaignSpend.$inferInsert;

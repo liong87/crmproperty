@@ -119,9 +119,14 @@ curl.exe -s -o NUL -w "%{http_code} " -X POST -H "x-api-key: bad" -H "Content-Ty
 If it still does not trip, temporarily set `limit: 3, period: 10` in `wrangler.jsonc`
 to make the behaviour unmistakable, then restore it.
 
-☐ **Before launch:** remove the `X-RateLimit-State` response header from
-`app/api/public/leads/route.ts`. It exists purely for this verification and
-otherwise advertises that rate limiting is present.
+☑ **Done (25 Aug 2026).** The `X-RateLimit-State` response header has been removed
+from `app/api/public/leads/route.ts`. The fail-open states are now recorded through
+`monitoring` instead, so a limiter that has quietly stopped working is still visible
+to you and no longer announced to whoever is probing the endpoint.
+
+That changes how the burst test above reads: judge it by **429 status codes**, not by
+the header. If you need the header back temporarily while testing, add it, test, and
+remove it again before the landing page is public.
 
 ### 2.2 Confirm the new API key took effect
 

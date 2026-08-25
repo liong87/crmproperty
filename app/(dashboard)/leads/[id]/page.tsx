@@ -18,7 +18,7 @@ import { listAppointmentsForClient } from "@/server/appointments/queries";
 import { ScheduleAppointment } from "@/components/appointments/schedule-appointment";
 import { AppointmentList } from "@/components/appointments/appointment-list";
 import { APP_NAME } from "@/lib/constants";
-import { formatMYR } from "@/lib/utils";
+import { formatMYR, formatCampaignTrail } from "@/lib/utils";
 import { leadStatusTone } from "@/lib/status";
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -31,6 +31,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   if (!canView(me, lead.assignedTo)) notFound();
 
   const editable = canEdit(me, lead.assignedTo) && !lead.convertedToContactId;
+  // Null when the lead came from a source with no ad behind it — walk-ins, referrals,
+  // a hand-typed enquiry — in which case the field is not rendered at all.
+  const campaignTrail = formatCampaignTrail(lead.utmCampaign, lead.utmContent, lead.utmTerm);
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -56,6 +59,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           <Field label="Budget" value={`${formatMYR(lead.budgetMin)}${lead.budgetMax ? ` – ${formatMYR(lead.budgetMax)}` : ""}`} />
           <Field label="Preferred areas" value={lead.preferredAreas ?? "—"} />
           <Field label="Source" value={`${lead.source}${lead.sourceDetail ? ` (${lead.sourceDetail})` : ""}`} />
+          {campaignTrail && <Field label="Campaign" value={campaignTrail} />}
           <Field label="Consent" value={lead.consentGivenAt ? `Given (${lead.consentSource ?? "n/a"})` : "Not recorded"} />
         </CardContent>
       </Card>

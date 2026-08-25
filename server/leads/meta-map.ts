@@ -27,6 +27,10 @@ export interface MappedMetaLead {
   utmSource: string;
   utmMedium: string;
   utmCampaign: string | null;
+  /** Ad set name — the level the agency actually turns on and off. */
+  utmContent: string | null;
+  /** Ad name — which creative produced this lead. */
+  utmTerm: string | null;
   consentGiven: boolean;
   consentSource: string;
   /** Answers we did not map to a column, kept so custom questions are not lost. */
@@ -108,6 +112,12 @@ export function mapMetaLead(record: LeadAdRecord, mapping: MetaMapping | null): 
     utmMedium: "paid-social",
     // Campaign NAME, not id — this is what cost-per-lead reporting is grouped by.
     utmCampaign: (record.campaignName ?? record.campaignId)?.slice(0, 255) ?? null,
+    // The provider already asks Meta for adset_name and ad_name; until now they were
+    // fetched and thrown away. Ad set has no id fallback because the Graph fields we
+    // request carry no adset_id — a name or nothing. Ad falls back to its id, matching
+    // how campaign behaves above.
+    utmContent: record.adsetName?.slice(0, 255) ?? null,
+    utmTerm: (record.adName ?? record.adId)?.slice(0, 255) ?? null,
     /**
      * PDPA. If the form asks a consent question we honour the answer, which is the
      * only genuinely defensible basis. If it does not, we fall back to true and record

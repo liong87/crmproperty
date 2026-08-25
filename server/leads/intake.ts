@@ -38,6 +38,9 @@ export const intakeSchema = z.object({
   utmSource: z.string().max(255).optional().nullable(),
   utmMedium: z.string().max(255).optional().nullable(),
   utmCampaign: z.string().max(255).optional().nullable(),
+  // Ad set and ad. See the note on the columns in lib/db/schema.ts.
+  utmContent: z.string().max(255).optional().nullable(),
+  utmTerm: z.string().max(255).optional().nullable(),
   referrer: z.string().optional().nullable(),
   // PDPA: public intake MUST record consent.
   consentGiven: z.boolean().optional(),
@@ -162,6 +165,8 @@ export async function createLeadFromIntake(
         utmSource: p.utmSource ?? null,
         utmMedium: p.utmMedium ?? null,
         utmCampaign: p.utmCampaign ?? null,
+        utmContent: p.utmContent ?? null,
+        utmTerm: p.utmTerm ?? null,
         referrer: p.referrer ?? null,
         interest: p.interest ?? null,
         budgetMin: p.budgetMin ?? null,

@@ -64,6 +64,20 @@
       "when": 1787639528219,
       "tag": "0008_lead_form_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787664438153,
+      "tag": "0009_lead_ad_attribution",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787664705546,
+      "tag": "0010_campaign_spend",
+      "breakpoints": true
     }
   ]
 }

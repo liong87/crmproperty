@@ -5,7 +5,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db/client";
-import { leads, activities, type Lead } from "@/lib/db/schema";
+import { leads, activities, users, type Lead } from "@/lib/db/schema";
 import { requireDbUser, assertCanEdit, assertRole, AuthorizationError } from "@/lib/auth";
 import { INTEREST, LEAD_STATUS } from "@/lib/constants";
 import { ok, fail } from "@/lib/action-result";
@@ -147,18 +147,69 @@ export async function disqualifyLead(id: string): Promise<ActionResult<Lead>> {
   }
 }
 
-export async function assignLead(id: string, assignedTo: string): Promise<ActionResult<Lead>> {
+/**
+ * Move a lead to another agent.
+ *
+ * @param reason optional, and recorded on the timeline when given.
+ *
+ * Reassignment is the one lead operation with a loser. Moving a lead moves the
+ * commission that might come from it, so an unexplained transfer discovered later is
+ * how an agent concludes the system is being used against them. Writing the reason to
+ * the timeline costs one insert and makes the decision reviewable — including by the
+ * agent it was taken from, who can see it on the lead.
+ *
+ * Never automatic. Nothing in this application reassigns a lead on a timer; see the
+ * note in server/leads/stale.ts for why.
+ */
+export async function assignLead(
+  id: string,
+  assignedTo: string,
+  reason?: string,
+): Promise<ActionResult<Lead>> {
   try {
     const me = await requireDbUser();
     assertRole(me, "admin", "manager");
     const parsed = z.string().uuid().parse(assignedTo);
+
+    // Read the previous owner before the update, so the note can name both ends of
+    // the move. "Reassigned to Siew Ling" alone does not say who lost it.
+    const before = await getLeadById(id);
+    if (!before) return fail("Lead not found.");
+    if (before.assignedTo === parsed) return ok(before);
+
     const [row] = await db
       .update(leads)
       .set({ assignedTo: parsed })
       .where(and(eq(leads.id, id), isNull(leads.deletedAt)))
       .returning();
     if (!row) return fail("Lead not found.");
+
+    const [[from], [to]] = await Promise.all([
+      before.assignedTo
+        ? db.select({ name: users.name }).from(users).where(eq(users.id, before.assignedTo))
+        : Promise.resolve([{ name: "Unassigned" }]),
+      db.select({ name: users.name }).from(users).where(eq(users.id, parsed)),
+    ]);
+
+    const trimmed = reason?.trim();
+    try {
+      await db.insert(activities).values({
+        entityType: "leads",
+        entityId: id,
+        type: "note",
+        body:
+          `Reassigned from ${from?.name ?? "Unassigned"} to ${to?.name ?? "another agent"}` +
+          ` by ${me.name}.${trimmed ? ` Reason: ${trimmed}` : ""}`,
+        createdBy: me.id,
+      });
+    } catch (noteErr) {
+      // The reassignment itself succeeded. Losing the note is worth reporting but not
+      // worth telling the manager the move failed when it did not.
+      monitoring.captureException(noteErr, { where: "assignLead.note" });
+    }
+
     revalidatePath("/leads");
+    revalidatePath("/leads/stale");
     return ok(row);
   } catch (err) {
     return handle(err, "assignLead");

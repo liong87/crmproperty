@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createLeadFromIntake } from "@/server/leads/intake";
+import { monitoring } from "@/lib/monitoring";
 import { resolveLandingPage } from "@/lib/public-keys";
 import { clientIp, checkRateLimit, tooManyRequests } from "@/lib/rate-limit";
 
@@ -43,10 +44,21 @@ export async function POST(req: Request) {
   // increment. Keyed on IP: the API key is public by design and would be a useless
   // thing to bucket by.
   const rl = await checkRateLimit("RATE_LIMIT_LEADS", clientIp(req));
-  // The limiter fails open by design, which makes a broken limiter invisible.
-  // Reporting its state on every response makes it verifiable from outside with a
-  // single curl, rather than by reading logs and inferring.
-  const headers = { ...CORS, "X-RateLimit-State": rl.state };
+  /*
+   * The limiter fails open by design, which makes a broken limiter invisible.
+   * Its state used to be reported in an `X-RateLimit-State` response header so it
+   * could be verified from outside with one curl — useful while building, and a gift
+   * to anyone probing the endpoint once it is public: it tells an attacker whether
+   * the limiter is even running before they decide how hard to push.
+   *
+   * The state is still recorded, now in the logs, where checking it costs the agency
+   * nothing and tells an outsider nothing.
+   */
+  // "blocked" is the limiter working; only the fail-open states are worth reporting.
+  if (rl.state === "unavailable" || rl.state === "error") {
+    monitoring.captureMessage("Lead intake rate limiter is failing open", { state: rl.state });
+  }
+  const headers = CORS;
   if (!rl.allowed) return tooManyRequests(headers);
 
   // API key from header (x-api-key) or Authorization: Bearer <key>

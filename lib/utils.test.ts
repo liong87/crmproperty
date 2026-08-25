@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   formatMYR, pricePerSqft, localInputToIso, isoToLocalInput,
-  percentToBp, bpToPercent, formatBp, formatPriceRange,
+  percentToBp, bpToPercent, formatBp, formatPriceRange, formatCampaignTrail,
 } from "./utils";
 
 describe("formatMYR", () => {
@@ -141,5 +141,24 @@ describe("formatPriceRange", () => {
   });
   it("says so when nothing is priced yet", () => {
     expect(formatPriceRange(null, null)).toBe("Price on request");
+  });
+});
+
+describe("formatCampaignTrail", () => {
+  it("joins the three levels in order", () => {
+    expect(formatCampaignTrail("Skyline August", "Investors KL", "Carousel A")).toBe(
+      "Skyline August › Investors KL › Carousel A",
+    );
+  });
+
+  it("omits missing levels instead of leaving gaps", () => {
+    // Google's webhook sends an ad group id but no creative id on some payloads.
+    expect(formatCampaignTrail("camp-1", "adgroup-9", null)).toBe("camp-1 › adgroup-9");
+    expect(formatCampaignTrail("camp-1", null, "creative-3")).toBe("camp-1 › creative-3");
+  });
+
+  it("returns null when nothing is known, so the field can be dropped", () => {
+    expect(formatCampaignTrail(null, null, null)).toBeNull();
+    expect(formatCampaignTrail("", "  ", undefined)).toBeNull();
   });
 });

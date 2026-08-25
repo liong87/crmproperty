@@ -97,3 +97,26 @@ export function formatPriceRange(from: number | null, to: number | null): string
   if (to == null || to === from) return formatMYR(from);
   return `${formatMYR(from)} – ${formatMYR(to)}`;
 }
+
+/**
+ * Campaign → ad set → ad, as one readable line.
+ *
+ * Shown on a lead so the agent about to call knows which ad the person answered —
+ * "Skyline August › Investors KL › Carousel A" tells them what was promised before
+ * they pick up the phone, which campaign alone does not.
+ *
+ * Levels are omitted when absent rather than shown as gaps: Google's webhook sends
+ * ids for some levels and nothing for others, and a trail reading "camp-1 › — › —"
+ * is worse than no trail. Returns null when nothing is known, so the caller can drop
+ * the field entirely instead of rendering an empty row.
+ */
+export function formatCampaignTrail(
+  campaign: string | null | undefined,
+  adSet: string | null | undefined,
+  ad: string | null | undefined,
+): string | null {
+  const parts = [campaign, adSet, ad]
+    .map((p) => (p == null ? "" : String(p).trim()))
+    .filter((p) => p !== "");
+  return parts.length ? parts.join(" › ") : null;
+}

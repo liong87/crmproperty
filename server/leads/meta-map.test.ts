@@ -145,3 +145,39 @@ describe("extractLeadgenChanges", () => {
     }
   });
 });
+
+describe("mapMetaLead — ad-set and ad attribution", () => {
+  it("carries the ad set through as utmContent and the ad as utmTerm", () => {
+    const m = mapMetaLead(record({}), null);
+    expect(m.utmContent).toBe("KL 25-45");
+    expect(m.utmTerm).toBe("Carousel A");
+  });
+
+  it("leaves the ad set null when Meta sends no name, rather than inventing one", () => {
+    // The Graph fields we request carry no adset_id, so there is nothing to fall back to.
+    expect(mapMetaLead(record({}, { adsetName: null }), null).utmContent).toBeNull();
+  });
+
+  it("falls back to the ad id when the ad has no name, as campaign does", () => {
+    expect(mapMetaLead(record({}, { adName: null }), null).utmTerm).toBe("ad-1");
+  });
+
+  it("survives a record with no campaign, ad set or ad at all", () => {
+    const m = mapMetaLead(
+      record({ full_name: "Lim", phone_number: "0123456789" }, {
+        campaignId: null, campaignName: null, adId: null, adName: null, adsetName: null,
+      }),
+      null,
+    );
+    expect(m.utmCampaign).toBeNull();
+    expect(m.utmContent).toBeNull();
+    expect(m.utmTerm).toBeNull();
+    // The lead itself must still be usable — attribution is a nice-to-have, the phone is not.
+    expect(m.phone).toBe("+60123456789");
+  });
+
+  it("truncates an over-long ad set name to the column width", () => {
+    const long = "x".repeat(400);
+    expect(mapMetaLead(record({}, { adsetName: long }), null).utmContent).toHaveLength(255);
+  });
+});

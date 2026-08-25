@@ -220,33 +220,43 @@ Worth keeping in view so we don't rebuild ourselves into a worse product:
 
 ## 4. Recommended sequence
 
-Decision taken 25 Aug 2026: **nothing with a recurring cost is being built yet.**
-Everything below in Sprints 1–3 uses infrastructure we already pay for
-(Supabase, Cloudflare, Clerk). The paid items are parked in section 4b with the
-conditions that would unpark them.
+Decision taken 25 Aug 2026: **nothing with a recurring cost is being built.**
+Everything below uses infrastructure already paid for (Supabase, Cloudflare,
+Clerk). Paid items are parked in section 4b with the conditions that unpark them.
 
-Nothing here displaces Phase 0 in ROADMAP.md — backups, credential rotation and
-production Clerk keys still come first. Assuming those are done:
+**Status as of 25 Aug 2026 — all seven items built.**
 
-**Sprint 1 — a week, all of it felt daily**
+| # | Item | Status |
+|---|---|---|
+| 1 | Message templates | Already built before this review — placeholders, aliases, listing picker |
+| 2 | Working-leads queue on the dashboard | Built — follow-ups, appointments, funnel tiles |
+| 3 | Ad-set / ad attribution (`utm_content`, `utm_term`) | Built — migration 0009 |
+| 4 | Appointment board + no-show rate | Built — kanban columns, show-up rate on `/reports` |
+| 5 | Per-agent funnel with drop-off | Built — `funnel.byAgent`, managers only |
+| 6 | Campaign spend → cost per lead / per closed deal | Built — migration 0010, `/reports/spend` |
+| 7 | Stale-lead flagging | Built — `/leads/stale`, dashboard banner |
 
-1. Message templates (ROADMAP 1.3) — 1 day
-2. Working-leads queue as the agent landing page — 2 days
-3. Add `utmContent` / `utmTerm` to lead intake — half a day
-   *(do this early: attribution data can't be backfilled)*
+Notes on what was built, where it differs from the original recommendation:
 
-**Sprint 2 — the manager's view**
+**Ad-set attribution (3).** `lib/leadads/meta-provider.ts` was already fetching
+`adset_name` and `ad_name` from the Graph API and `mapMetaLead` was discarding
+them — this was connecting a wire that had already been run. Mapped onto standard
+UTM names so Google and TikTok land in the same columns. CSV import was capturing
+no UTM at all and now reads Facebook, Google and plain `utm_` spellings.
 
-4. Appointment/viewing board + show-up rate on reports — 3 days
-5. Per-agent funnel with drop-off percentages — 2 days
+**Spend (6).** Hand-entered, no ad-platform API. The join is on campaign *name*,
+which is the only identifier both sides share — Meta never sends a campaign id on
+a lead. Campaigns with spend and no matching leads get their own flagged row
+rather than being dropped by a join, because that row is the most useful line the
+report can show. Ratios return null rather than zero or infinity.
 
-**Sprint 3 — the money question**
+**Stale leads (7).** The safe half of Zien's collaborator mechanic: surfaced, never
+automatically transferred. Reassignment is manual, manager-only, and writes who
+lost it, who got it and why to the lead's timeline. See the module header in
+`server/leads/stale.ts` for the full argument against a timer.
 
-6. `campaign_spend` table and cost-per-lead / cost-per-closed-deal — 2 days
-7. Stale-lead flagging for managers (the safe half of 2.4) — 1 day
-
-All seven items are free to run. Together they cover most of what the Zien reel
-demonstrates, minus the automated sending.
+**Not tested:** the stale-lead query and the spend aggregation are SQL-heavy and
+verified only by typecheck. Worth exercising against seed data.
 
 ---
 

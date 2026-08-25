@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Inbox, UserCheck, Wallet, BellRing, Activity, CalendarCheck } from "lucide-react";
+import { Inbox, UserCheck, Wallet, BellRing, Activity, CalendarCheck, Snowflake } from "lucide-react";
 import { getCurrentDbUser } from "@/lib/auth";
 import { listFollowUps } from "@/server/activities/queries";
+import { countStaleLeads, STALE_AFTER_DAYS } from "@/server/leads/stale";
 import { listUpcomingAppointments, countAppointmentsNeedingOutcome } from "@/server/appointments/queries";
 import { AppointmentList } from "@/components/appointments/appointment-list";
 import { getReportData } from "@/server/reports/queries";
@@ -17,13 +18,14 @@ export default async function DashboardPage() {
   if (!user) return null;
 
   // Ask for 5, not "all of them then slice to 5".
-  const [followUps, report, appts, toWriteUp, funnel, trend] = await Promise.all([
+  const [followUps, report, appts, toWriteUp, funnel, trend, staleCount] = await Promise.all([
     listFollowUps(user, 5),
     getReportData(user),
     listUpcomingAppointments(user, 5),
     countAppointmentsNeedingOutcome(user),
     getFunnel(user),
     getFunnelTrend(user, 8),
+    countStaleLeads(user),
   ]);
   const overdue = followUps.filter((f) => f.overdue).length;
   const booked = funnel.stages.find((s) => s.key === "booked")?.count ?? 0;
@@ -89,6 +91,27 @@ export default async function DashboardPage() {
           spark={trend.map((t) => t.appointments)}
         />
       </div>
+
+      {/* Shown only when it applies. A permanent "0 going cold" row is furniture the
+          eye learns to skip, which is exactly what this must not become. */}
+      {staleCount > 0 && (
+        <Link
+          href="/leads/stale"
+          className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm transition-colors hover:bg-amber-100"
+        >
+          <span className="flex items-center gap-2 text-amber-900">
+            <Snowflake className="h-4 w-4 shrink-0" />
+            <span>
+              <strong className="font-semibold">{staleCount}</strong>{" "}
+              {staleCount === 1 ? "lead has" : "leads have"} had nothing logged for{" "}
+              {STALE_AFTER_DAYS} days or more
+            </span>
+          </span>
+          <span className="shrink-0 font-medium text-amber-900 underline underline-offset-2">
+            Review
+          </span>
+        </Link>
+      )}
 
       <Card>
         <CardHeader className="flex-row items-center justify-between">
