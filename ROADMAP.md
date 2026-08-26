@@ -183,14 +183,25 @@ Extend `viewings` rather than replacing it, so nothing is lost:
 Rename to `appointments` in the same migration. `VIEWING_STATUS` and
 `VIEWING_OUTCOME` in `lib/constants.ts` become the new sets.
 
-**1.3 Pipelines** — *1–2 days*
+**1.3 Pipelines** — *done, 25 Aug 2026*
 
-Add `pipeline` to `deal_stages`. Seed the project pipeline:
+`deal_stages` gains `pipeline`; `deals` gains `dealType` and `projectId`; `/pipeline`
+gets a New launch / Resale tab. Existing stages and deals default to `resale`, so
+nothing already in flight moves.
 
-> Lead → Appointment Set → Showed Up → Booked → SPA Signed → Loan Approved → Completed
+**The project pipeline is shorter than this document originally proposed, deliberately:**
 
-Keep the existing resale stages under a `resale` pipeline. `deals` gains `dealType`
-and `projectId`. The kanban board filters by pipeline.
+> Booked → SPA Signed → Loan Approved → Completed (and Cancelled)
+
+The original plan started it at Lead and repeated Appointment Set → Showed Up. But the
+appointment board already owns those steps, and duplicating them as deal stages would
+count the same event twice and let the funnel and the pipeline disagree about the same
+week. A project deal therefore begins where the appointment board ends — at the booking
+— and tracks the transaction from there, which is where the developer's money moves.
+
+Two details worth keeping: the board filters on the stage set **and** `dealType`, so a
+deal moved by hand cannot appear on a board it does not belong to; and a deal whose
+stage has been deleted is counted and reported rather than silently vanishing.
 
 **1.4 Appointment board** — *done, 25 Aug 2026*
 
@@ -199,10 +210,22 @@ already exists. Add **no-show rate** to reports, per closer and overall — the 
 is being captured today and nobody is looking at it. This is the most useful
 operational number in project sales.
 
-**1.5 Ownership across setter and closer** — *1 day*
+**1.5 Ownership across setter and closer** — *done, 25 Aug 2026*
 
-A two-column `ownershipFilter`, applied to appointments and to project deals, with
-unit tests. Managers and admins are unaffected.
+`ownershipFilterAny` and `canEditAny` in `lib/auth/rbac.ts`, applied to appointment
+queries and to the funnel. Managers and admins are unaffected.
+
+This was fixing a live bug, not closing a gap. Since 1.2 shipped closers, an agent
+handed somebody else's appointment to close **could edit it but could not see it** —
+`loadEditable` already allowed the closer through while every list query filtered on the
+setter alone. Visibility and permission now use the same rule.
+
+It also forced an honest change to per-agent reporting. A single row per agent mixing
+both halves would credit whoever sat in `assignedTo` for work they did not do, and a
+setter who books excellent appointments and hands them over would appear to have
+converted nothing. So **appointments set are credited to the setter, and show-ups and
+bookings to whoever ran the presentation** (`coalesce(closer_id, assigned_to)` — no
+closer means the setter closed it themselves). The reports table says so under its title.
 
 **1.6 Lead → project interest** — *done, 25 Aug 2026*
 
@@ -260,7 +283,7 @@ Decisions worth knowing:
   mirroring the existing Google Ads decision. **Adding a consent checkbox to the Meta
   form puts this on firmer ground, and the mapper will use it automatically.**
 
-**2.2 Project lead pools and pass-on** — *2 days*
+**2.2 Project lead pools and pass-on** — *done, 25 Aug 2026*
 
 Round-robin becomes per-project: each project has a pool of setters, and a lead
 routes into that pool. If a setter logs no activity within N days, the lead passes
@@ -300,6 +323,49 @@ approved template the moment a Meta lead lands — the hook point already exists
 **On the competitor's visual flow builder:** the value is the auto-reply, not the canvas.
 A node-graph editor is weeks of frontend work for something a per-project reply template
 achieves. Build the reply first and see whether the canvas is ever missed.
+
+### 2.2 as built — and the design conflict it had to resolve
+
+Between sessions, `server/leads/stale.ts` landed with the opposite decision recorded in
+it: *"ZienCRM's answer is to reassign it automatically after N days… it is the wrong
+answer here, where the client relationship IS the agent's asset… So: surface, do not
+confiscate."* `assignLead` went further — *"Never automatic."*
+
+Both positions are right, for different halves of the business. The resolution:
+
+**Automatic pass-on applies to PROJECT leads only.** A lead attached to a project that
+has opted in — by setting a pass-on window — moves to the next person in that project's
+pool when its owner has logged nothing inside the window. Resale and unprojected leads
+are surfaced by the stale list and never moved. The distinction holds because on a
+launch the pool are interchangeable setters working the developer's campaign and passing
+leads on is the working model, whereas in resale the relationship is the agent's own asset.
+
+What was built:
+
+- `project_pool_members` — who works a project's leads and in what order, with a
+  "paused" state for somebody on leave that keeps their place in the rotation.
+- Per-project round-robin. The counter is keyed per project, so adding a project never
+  perturbs another's sequence. A project with no pool, and every lead with no project,
+  falls back to the global rotation exactly as before.
+- `lead_assignments` — append-only chain of custody: who held it, who moved it, why.
+  Written on first assignment too, so "arrived and went to nobody" is visible.
+- `leads.assignedAt` — when the *current* owner got it, reset on every move, so the
+  clock measures this person's silence rather than the lead's age.
+- The sweep (`server/leads/pass-on.ts`, `pnpm passon:leads`, weekday mornings 09:00 MYT)
+  with a dry-run mode, and a pool manager on the project page.
+
+**Nothing moves quietly.** Every transfer writes a history row, a note on the lead's
+timeline naming both agents, and a message to each of them. The person who lost the lead
+hears it from the system, not from a colleague.
+
+**What it refuses to touch**, each verified against a real database: leads inside the
+window; qualified or disqualified leads; leads with any activity logged since the current
+owner received them; leads with an appointment booked; leads with no project; projects
+that have not opted in; and pools of one, which have nobody to pass to and are counted
+rather than treated as an error. Re-running the sweep the same morning moves nothing,
+because the clock resets on transfer.
+
+---
 
 ---
 
@@ -401,6 +467,38 @@ Smaller corrections along the way: hero figures moved to proportional digits and
 sans (tabular figures make a large number look loose; a display serif reads as
 decoration), bar lists stopped colouring nominal categories by their value, and gridlines
 became solid hairlines rather than dashes.
+
+---
+
+## 3.3 Cost per booking (done, 26 Aug 2026)
+
+A previous session had already built campaign spend entry and cost per lead / cost per
+closed deal. Two numbers were missing, and they are the ones an agency can act on:
+
+- **Cost per appointment** — the report already counted appointments and never priced them.
+- **Cost per booking** — there was no concept of a booking here at all.
+
+**Why cost per closed deal is not enough.** In project sales a booking is followed by SPA
+signing, loan approval and completion: six to eighteen months. Cost per closed deal is
+therefore a verdict on advertising paid for last year and cannot inform this month's
+budget. The booking happens within weeks of the lead and is the earliest point at which
+money is genuinely committed, so it is the fastest honest read on whether a campaign
+works. Cost per closed deal stays — it is the eventual truth, and it is what resale runs on.
+
+Two details that were easy to get wrong and are now covered by tests:
+
+- **Counting is per LEAD, not per appointment.** A lead with two appointments counts as
+  one appointment-producing lead, and a lead with two booked appointments as one booking.
+  A campaign that bought one buyer who booked twice bought one booking's worth of business.
+  The funnel on `/reports` counts the same event at the *appointment* grain, because it is
+  describing what happened to appointments — so the two figures can legitimately differ,
+  and neither should be "fixed" to match the other.
+- **Attribution follows the lead and its converted contact.** A booking made against the
+  contact a lead became still counts for the campaign that bought the lead.
+
+Spend with no matching leads still appears as its own row, flagged, rather than as a cost
+per booking of infinity — money out with nothing in is the most useful line on the report.
+Managers and admins only; agents never see agency ad spend.
 
 ---
 
