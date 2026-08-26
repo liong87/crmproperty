@@ -31,6 +31,9 @@ export default async function SpendPage() {
         <h1 className="mt-1 text-xl font-semibold">Advertising spend</h1>
         <p className="text-sm text-muted-foreground">
           What each campaign cost, against what it produced. Last three months.
+          Cost per <strong>booking</strong> is the one to judge a live campaign on — a
+          completed sale is months behind it, so cost per closed deal is a verdict on
+          last year&rsquo;s advertising.
         </p>
       </div>
 

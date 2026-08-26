@@ -74,14 +74,25 @@ export function SpendManager({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Spend" value={formatMYR(t.spend)} />
-        <Stat label="Leads" value={String(t.leads)} />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <Stat label="Spend" value={formatMYR(t.spend)} hint={`${t.leads} leads`} />
         <Stat label="Cost per lead" value={money(t.costPerLead)} />
+        <Stat
+          label="Cost per appointment"
+          value={money(t.costPerAppointment)}
+          hint={t.appointments === 0 ? "None set yet" : `${t.appointments} set`}
+        />
+        {/* The one to watch. A booking happens within weeks; a completion is months
+            away, so cost per closed deal cannot inform this month's budget. */}
+        <Stat
+          label="Cost per booking"
+          value={money(t.costPerBooking)}
+          hint={t.bookings === 0 ? "Nothing booked yet" : `${t.bookings} booked`}
+        />
         <Stat
           label="Cost per closed deal"
           value={money(t.costPerWon)}
-          hint={t.won === 0 ? "Nothing closed yet in this window" : `${t.won} closed`}
+          hint={t.won === 0 ? "Lags bookings by months" : `${t.won} closed`}
         />
       </div>
 
@@ -170,8 +181,11 @@ export function SpendManager({
                     <TH className="text-right">Spend</TH>
                     <TH className="text-right">Leads</TH>
                     <TH className="text-right">Appts</TH>
+                    <TH className="text-right">Booked</TH>
                     <TH className="text-right">Closed</TH>
                     <TH className="text-right">Per lead</TH>
+                    <TH className="text-right">Per appt</TH>
+                    <TH className="text-right">Per booking</TH>
                     <TH className="text-right">Per deal</TH>
                   </TR>
                 </THead>
@@ -194,9 +208,12 @@ export function SpendManager({
                       <TD className="text-right">{money(r.spend)}</TD>
                       <TD className="text-right">{r.leads}</TD>
                       <TD className="text-right">{r.appointments}</TD>
+                      <TD className="text-right font-medium">{r.bookings}</TD>
                       <TD className="text-right">{r.won}</TD>
-                      <TD className="text-right font-medium">{money(r.costPerLead)}</TD>
-                      <TD className="text-right font-medium">{money(r.costPerWon)}</TD>
+                      <TD className="text-right">{money(r.costPerLead)}</TD>
+                      <TD className="text-right">{money(r.costPerAppointment)}</TD>
+                      <TD className="text-right font-semibold">{money(r.costPerBooking)}</TD>
+                      <TD className="text-right">{money(r.costPerWon)}</TD>
                     </TR>
                   ))}
                 </TBody>

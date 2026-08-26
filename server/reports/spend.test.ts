@@ -25,3 +25,23 @@ describe("costPer", () => {
     expect(costPer(50_000, -1)).toBeNull();
   });
 });
+
+describe("costPer — the funnel-stage denominators", () => {
+  it("prices an appointment and a booking independently of each other", () => {
+    // RM 3,000 across 40 appointments and 5 bookings.
+    expect(costPer(300_000, 40)).toBe(7_500);   // RM 75 per appointment
+    expect(costPer(300_000, 5)).toBe(60_000);   // RM 600 per booking
+  });
+
+  it("returns null for a booking count of zero, not Infinity", () => {
+    // The common early case: money spent, appointments happening, nothing booked yet.
+    // Reporting an infinite or zero cost per booking would both be lies.
+    expect(costPer(300_000, 0)).toBeNull();
+  });
+
+  it("is unaffected by whether other stages have counts", () => {
+    // Each ratio is spend ÷ that stage's own count. A campaign with leads but no
+    // bookings still reports a real cost per lead.
+    expect(costPer(100_000, 250)).toBe(400);
+  });
+});
