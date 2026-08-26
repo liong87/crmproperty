@@ -45,3 +45,10 @@ export const MALAYSIAN_STATES = [
 // upcoming = not open for booking yet; open = selling; closing = last units;
 // closed = fully sold or the agency's appointment with the developer has ended.
 export const PROJECT_STATUS = ["upcoming", "open", "closing", "closed"] as const;
+
+/**
+ * Deal pipelines. A project deal begins where the appointment board ends — at the
+ * booking — so the two never count the same event twice.
+ */
+export const DEAL_PIPELINE = ["project", "resale"] as const;
+export const DEAL_TYPE = ["project", "resale", "rental"] as const;

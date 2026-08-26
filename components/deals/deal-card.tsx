@@ -10,7 +10,7 @@ export interface DealCardData {
   id: string;
   contactId: string;
   contactName: string;
-  propertyTitle: string | null;
+  subjectTitle: string | null;
   value: number | null;
   stageId: string;
 }
@@ -33,7 +33,7 @@ export function DealCard({ card, stages }: { card: DealCardData; stages: { id: s
   return (
     <div className="rounded-md border bg-background p-3 text-sm shadow-sm">
       <Link href={`/contacts/${card.contactId}`} className="font-medium hover:underline">{card.contactName}</Link>
-      <div className="text-muted-foreground">{card.propertyTitle ?? "No property"}</div>
+      <div className="text-muted-foreground">{card.subjectTitle ?? "No listing or project"}</div>
       <div className="mt-1 font-medium">{formatMYR(card.value)}</div>
       <Select
         className="mt-2 h-9"

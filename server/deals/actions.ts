@@ -4,6 +4,7 @@ import { z } from "zod";
 import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
+import { DEAL_TYPE } from "@/lib/constants";
 import { deals, dealStages, contacts, activities, type Deal } from "@/lib/db/schema";
 import { requireDbUser, assertCanEdit, AuthorizationError } from "@/lib/auth";
 import { ok, fail } from "@/lib/action-result";
@@ -17,6 +18,8 @@ const createSchema = z.object({
   stageId: z.string().uuid().optional(),
   value: z.coerce.number().int().nonnegative().optional().nullable(),
   commissionPct: z.coerce.number().int().min(0).max(10000).optional().nullable(), // basis points
+  projectId: z.string().uuid().optional().nullable(),
+  dealType: z.enum(DEAL_TYPE).optional(),
 });
 
 export async function createDeal(input: unknown): Promise<ActionResult<Deal>> {
@@ -32,16 +35,28 @@ export async function createDeal(input: unknown): Promise<ActionResult<Deal>> {
     if (!contact) return fail("Contact not found — a deal must be linked to a contact.");
     assertCanEdit(me, contact.assignedTo);
 
-    // Default to the first (lowest sort_order) stage if none provided.
+    // A deal against a project is a project deal even if the caller did not say so —
+    // inferring it here stops a booked unit landing in the resale pipeline because a
+    // form forgot a hidden field.
+    const dealType = d.dealType ?? (d.projectId ? "project" : "resale");
+    const pipeline = dealType === "project" ? "project" : "resale";
+
+    // Default to the first (lowest sort_order) stage OF THAT PIPELINE if none provided.
     let stageId = d.stageId;
     if (!stageId) {
       const [first] = await db
         .select({ id: dealStages.id })
         .from(dealStages)
-        .where(isNull(dealStages.deletedAt))
+        .where(and(isNull(dealStages.deletedAt), eq(dealStages.pipeline, pipeline)))
         .orderBy(dealStages.sortOrder)
         .limit(1);
-      if (!first) return fail("No deal stages configured.");
+      if (!first) {
+        return fail(
+          pipeline === "project"
+            ? "No project stages configured. Run the migrations to seed them."
+            : "No deal stages configured.",
+        );
+      }
       stageId = first.id;
     }
 
@@ -50,6 +65,8 @@ export async function createDeal(input: unknown): Promise<ActionResult<Deal>> {
       .values({
         contactId: d.contactId,
         propertyId: d.propertyId ?? null,
+        projectId: d.projectId ?? null,
+        dealType,
         stageId,
         value: d.value ?? null,
         commissionPct: d.commissionPct ?? null,

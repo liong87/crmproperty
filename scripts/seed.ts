@@ -55,12 +55,19 @@ async function main() {
   const stages = await db
     .insert(dealStages)
     .values([
-      { name: "New", sortOrder: 1, isTerminal: false },
-      { name: "Contacted", sortOrder: 2, isTerminal: false },
-      { name: "Viewing Scheduled", sortOrder: 3, isTerminal: false },
-      { name: "Negotiation", sortOrder: 4, isTerminal: false },
-      { name: "Closed Won", sortOrder: 5, isTerminal: true, isWon: true },
-      { name: "Closed Lost", sortOrder: 6, isTerminal: true, isWon: false },
+      // Resale / rental.
+      { name: "New", sortOrder: 1, isTerminal: false, pipeline: "resale" },
+      { name: "Contacted", sortOrder: 2, isTerminal: false, pipeline: "resale" },
+      { name: "Viewing Scheduled", sortOrder: 3, isTerminal: false, pipeline: "resale" },
+      { name: "Negotiation", sortOrder: 4, isTerminal: false, pipeline: "resale" },
+      { name: "Closed Won", sortOrder: 5, isTerminal: true, isWon: true, pipeline: "resale" },
+      { name: "Closed Lost", sortOrder: 6, isTerminal: true, isWon: false, pipeline: "resale" },
+      // New launch. Starts at the booking — everything before it is the appointment board.
+      { name: "Booked", sortOrder: 1, isTerminal: false, pipeline: "project" },
+      { name: "SPA Signed", sortOrder: 2, isTerminal: false, pipeline: "project" },
+      { name: "Loan Approved", sortOrder: 3, isTerminal: false, pipeline: "project" },
+      { name: "Completed", sortOrder: 4, isTerminal: true, isWon: true, pipeline: "project" },
+      { name: "Cancelled", sortOrder: 5, isTerminal: true, isWon: false, pipeline: "project" },
     ])
     .returning({ id: dealStages.id, name: dealStages.name });
 
