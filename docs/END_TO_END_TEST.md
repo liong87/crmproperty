@@ -5,6 +5,32 @@ touches Supabase.
 
 ---
 
+## Local first, then Cloudflare — not one or the other
+
+Both, in that order, and for different reasons.
+
+**Do the functional pass locally.** It is fast, `pnpm seed` gives you test data safely
+(it refuses to run against a remote database), and you can break things without
+consequence. If something is wrong, it gets fixed and re-tested in seconds rather than
+through a deploy cycle. Steps 1 to 6 below are all local.
+
+**Then deploy and re-check the short list that can only fail there.** Nothing below
+substitutes for it:
+
+| Only testable on Cloudflare | Why |
+|---|---|
+| **Meta Lead Ads** | Meta needs a public HTTPS URL to call. A tunnel (ngrok, Cloudflare Tunnel) works too |
+| **The Workers runtime** | OpenNext runs on Workers, not Node. Anything relying on a Node API fails only there |
+| **R2 file storage** | Local runs against whatever `.env` points at; signed URLs and uploads are worth one real check — attach a PDF to a checklist item and open it |
+| **Scheduled jobs** | The pass-on sweep and the PDPA purge run in GitHub Actions. Both have a "Run workflow" button with a dry-run option |
+
+**Before you deploy**, note that deploying means running migrations against Supabase.
+Migrations 0004–0013 are additive — they were tested against a database with existing
+rows and nothing already in flight moves — but run the backup workflow first anyway.
+It costs nothing and this is the one irreversible step in the whole exercise.
+
+---
+
 ## Read this first
 
 Two things about your current setup:
@@ -57,7 +83,7 @@ Needs Docker Desktop running.
 ```bash
 pnpm install
 pnpm db:local:up        # starts PostgreSQL 17 on port 5433
-pnpm db:migrate         # applies all 12 migrations
+pnpm db:migrate         # applies all 13 migrations
 pnpm seed               # loads the 5-person agency + test data
 pnpm dev                # http://localhost:3000
 ```
@@ -145,6 +171,59 @@ real signed-in session — so it is worth your attention.)*
 
 ---
 
+### 4.8 The paperwork checklist
+
+Open the deal you just created — from the pipeline card, click **Paperwork**.
+
+**Expect:** a checklist already there, created from the project template: Booking form,
+Booking fee receipt, IC or passport, Income documents, Loan application, **Loan approval
+letter**, SPA signed, Stamping. Each has a suggested due date counted from today.
+
+Then:
+
+- **Tick one item.** It should grey out and strike through, and the counter at the top
+  should move.
+- **Change a due date** — set the Loan approval letter to a date in the past. Expect it
+  to turn red and read "N days overdue".
+- **Attach a file** to any item (a PDF or an image). Expect the filename to appear as a
+  link. **Note it does not tick the item** — that is deliberate: somebody still has to
+  confirm the document is the right one.
+- **Add an item by hand** at the bottom, e.g. "Developer's confirmation letter".
+
+*Worth checking the arithmetic while you are here:* an item due in 3 days should say
+"Due in 3 days", not 2. That off-by-one was a real bug and the fix is worth confirming
+in a browser.
+
+### 4.9 Paperwork shows up where the work happens
+
+Go to **Reminders**.
+
+**Expect:** a **Paperwork due** card above the follow-ups, listing anything due in the
+next 14 days plus anything already overdue, soonest first, with the client and project
+named. The overdue loan approval from 4.8 should be at the top in red.
+
+Go to the **Dashboard**.
+
+**Expect:** a red banner saying how many documents are overdue. It only appears when
+there is something overdue — a permanent "0 overdue" row is furniture people learn to
+skip.
+
+### 4.10 Cost per booking
+
+**Reports → Advertising spend** (managers and admins only — an agent is redirected).
+
+Record a spend figure against a campaign. To see the numbers work you need a lead
+carrying that campaign name, which means either importing `samples/leads-with-campaign.csv`
+or setting `utm_campaign` on a lead directly.
+
+**Expect:** cost per lead, **cost per appointment**, **cost per booking** and cost per
+closed deal. Cost per booking is the one to judge a live campaign on — a completed sale
+is months behind it.
+
+**Also expect:** a campaign with money recorded but no matching leads appears as its own
+row, flagged, rather than showing an infinite cost. That row — money out, nothing in — is
+the most useful line on the page.
+
 ## Step 5 — The setter/closer split (needs a second login)
 
 This is the change most worth testing, and it needs two accounts.
@@ -219,5 +298,9 @@ pnpm db:migrate
 **Never run `pnpm seed` against Supabase.** It wipes the database. The guard will stop you
 unless you deliberately override it — do not override it.
 
-Two housekeeping items while you are in there: delete the `_to_delete/` folder, and decide
-whether to commit. The work is on disk and uncommitted.
+Housekeeping while you are in there:
+
+- Delete the `_to_delete/` folder — scratch files from moving work between machines.
+- `git gc --prune=now` — committing through the folder bridge left orphaned `tmp_obj_*`
+  files in `.git/objects`. Harmless; `git fsck` is clean.
+- `main` is ahead of `origin/main`. Push when you are happy.
