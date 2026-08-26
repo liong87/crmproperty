@@ -18,14 +18,14 @@ export interface ProjectFormValues {
   address: string; galleryAddress: string; tenure: string; titleType: string;
   launchDate: string; expectedVpDate: string; totalUnits: string;
   bumiQuotaPct: string; bumiDiscountPct: string; rebatePackage: string;
-  developerCommissionPct: string; status: string; notes: string;
+  developerCommissionPct: string; passOnAfterDays: string; status: string; notes: string;
 }
 
 const empty: ProjectFormValues = {
   name: "", developer: "", propertyType: "condo", state: "Kuala Lumpur", area: "",
   address: "", galleryAddress: "", tenure: "", titleType: "", launchDate: "",
   expectedVpDate: "", totalUnits: "", bumiQuotaPct: "", bumiDiscountPct: "",
-  rebatePackage: "", developerCommissionPct: "", status: "open", notes: "",
+  rebatePackage: "", developerCommissionPct: "", passOnAfterDays: "", status: "open", notes: "",
 };
 
 /**
@@ -74,6 +74,7 @@ export function ProjectForm({
       bumiDiscountBp: percentToBp(v.bumiDiscountPct),
       rebatePackage: v.rebatePackage || null,
       developerCommissionBp: percentToBp(v.developerCommissionPct),
+      passOnAfterDays: num(v.passOnAfterDays),
       status: v.status,
       notes: v.notes || null,
     };
@@ -118,6 +119,14 @@ export function ProjectForm({
 
       <Field label="Rebate package">
         <Textarea rows={2} placeholder="10% early bird, free legal fees, free S&amp;P" {...register("rebatePackage")} />
+      </Field>
+      <Field label="Pass leads on after (days)">
+        <Input type="number" min="1" max="365" placeholder="Leave empty to never pass on" {...register("passOnAfterDays")} />
+        <p className="text-xs text-muted-foreground">
+          A lead with nothing logged for this many days moves to the next person in this
+          project&rsquo;s pool. Both agents are told and the hand-over is recorded. Applies
+          only to this project&rsquo;s leads — resale leads are never moved automatically.
+        </p>
       </Field>
       <Field label="Notes"><Textarea rows={3} {...register("notes")} /></Field>
       <Field label="Status"><Select {...register("status")}>{PROJECT_STATUS.map((x) => <option key={x} value={x}>{x}</option>)}</Select></Field>

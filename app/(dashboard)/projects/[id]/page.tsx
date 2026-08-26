@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
-import { getProjectWithUnitTypes } from "@/server/projects/queries";
+import { getProjectWithUnitTypes, listProjectPool } from "@/server/projects/queries";
+import { listAssignableAgents } from "@/server/leads/queries";
+import { PoolManager } from "@/components/projects/pool-manager";
 import { listAppointmentsForProject } from "@/server/appointments/queries";
 import { AppointmentList } from "@/components/appointments/appointment-list";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,6 +58,19 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         <CardHeader><CardTitle>Unit types</CardTitle></CardHeader>
         <CardContent>
           <UnitTypeManager projectId={project.id} unitTypes={unitTypes} canEdit={canEdit} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Lead pool</CardTitle></CardHeader>
+        <CardContent>
+          <PoolManager
+            projectId={project.id}
+            pool={await listProjectPool(project.id)}
+            agents={canEdit ? await listAssignableAgents() : []}
+            canEdit={canEdit}
+            passOnAfterDays={project.passOnAfterDays}
+          />
         </CardContent>
       </Card>
 

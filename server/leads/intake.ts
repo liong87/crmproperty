@@ -13,7 +13,8 @@
 import { z } from "zod";
 import { and, eq, isNull, ne, or, asc, desc, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { leads, users, activities, assignmentCounter } from "@/lib/db/schema";
+import { leads, users, activities, assignmentCounter, leadAssignments } from "@/lib/db/schema";
+import { pickFromPool } from "./pool";
 import { messaging } from "@/lib/messaging";
 import { monitoring } from "@/lib/monitoring";
 import { LEAD_SOURCE, INTEREST } from "@/lib/constants";
@@ -151,8 +152,28 @@ export async function createLeadFromIntake(
       return ok({ leadId: existing.id, deduped: true });
     }
 
-    // undefined means "decide for me" (round-robin); an explicit id or null is honoured.
-    const assignedTo = assignTo === undefined ? await pickAssignee() : assignTo;
+    /**
+     * undefined means "decide for me"; an explicit id or null is honoured.
+     *
+     * A lead that names a project goes to that project's pool first, so the people
+     * working a launch get its leads. A project with no pool — and every lead with no
+     * project at all — falls back to the global rotation, which is the behaviour that
+     * existed before pools and must keep working.
+     */
+    let assignedTo: string | null;
+    let assignReason: "round-robin" | "pool" | "manual" = "round-robin";
+    if (assignTo !== undefined) {
+      assignedTo = assignTo;
+      assignReason = "manual";
+    } else {
+      const fromPool = p.projectId ? await pickFromPool(p.projectId) : null;
+      if (fromPool) {
+        assignedTo = fromPool;
+        assignReason = "pool";
+      } else {
+        assignedTo = await pickAssignee();
+      }
+    }
 
     const [inserted] = await db
       .insert(leads)
@@ -175,12 +196,31 @@ export async function createLeadFromIntake(
         projectId: p.projectId ?? null,
         status: "new",
         assignedTo,
+        // Starts the pass-on clock. Null when nobody owns it, so an unassigned lead is
+        // never counted as overdue against a person who does not exist.
+        assignedAt: assignedTo ? new Date() : null,
         consentGivenAt: p.consentGiven ? new Date() : null,
         consentSource: p.consentSource ?? null,
       })
       .returning({ id: leads.id });
 
     const leadId = inserted!.id;
+
+    // The first entry in the chain of custody. Written even when nobody was assigned,
+    // because "arrived and went to no one" is itself worth being able to see later.
+    try {
+      await db.insert(leadAssignments).values({
+        leadId,
+        fromUserId: null,
+        toUserId: assignedTo,
+        reason: assignReason,
+        note: `Lead created via ${source}${p.sourceDetail ? ` (${p.sourceDetail})` : ""}.`,
+      });
+    } catch (histErr) {
+      // The lead exists and is assigned; losing the history row is worth reporting but
+      // not worth failing the intake and making the platform retry.
+      monitoring.captureException(histErr, { where: "createLeadFromIntake.history" });
+    }
 
     // Log intake activity.
     await db.insert(activities).values({

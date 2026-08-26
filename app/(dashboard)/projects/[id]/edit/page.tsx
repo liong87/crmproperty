@@ -40,6 +40,7 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
     bumiDiscountPct: bpToPct(project.bumiDiscountBp),
     rebatePackage: project.rebatePackage ?? "",
     developerCommissionPct: bpToPct(project.developerCommissionBp),
+    passOnAfterDays: numToStr(project.passOnAfterDays),
     status: project.status,
     notes: project.notes ?? "",
   };

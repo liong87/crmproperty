@@ -148,3 +148,30 @@ export async function listProjectOptions(): Promise<{ id: string; name: string }
     .where(and(isNull(projects.deletedAt), inArray(projects.status, ["upcoming", "open", "closing"])))
     .orderBy(asc(projects.name));
 }
+
+/* ---------- lead pool ---------- */
+
+export interface PoolRow {
+  id: string;
+  userId: string;
+  name: string;
+  sortOrder: number;
+  active: boolean;
+}
+
+/** The project's pool, including members whose rotation is paused. */
+export async function listProjectPool(projectId: string): Promise<PoolRow[]> {
+  const { projectPoolMembers, users } = await import("@/lib/db/schema");
+  return db
+    .select({
+      id: projectPoolMembers.id,
+      userId: projectPoolMembers.userId,
+      name: users.name,
+      sortOrder: projectPoolMembers.sortOrder,
+      active: projectPoolMembers.active,
+    })
+    .from(projectPoolMembers)
+    .innerJoin(users, eq(users.id, projectPoolMembers.userId))
+    .where(and(eq(projectPoolMembers.projectId, projectId), isNull(projectPoolMembers.deletedAt)))
+    .orderBy(asc(projectPoolMembers.sortOrder), asc(projectPoolMembers.createdAt));
+}

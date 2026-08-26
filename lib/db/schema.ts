@@ -98,6 +98,11 @@ export const leads = pgTable(
      * FK declared in migration 0007; `projects` is defined later in this file.
      */
     projectId: uuid("project_id"),
+    /**
+     * When the CURRENT owner got it. Reset on every reassignment, so the pass-on
+     * sweep measures "how long has this person sat on it", not "how old is the lead".
+     */
+    assignedAt: timestamp("assigned_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => ({
@@ -205,10 +210,18 @@ export const dealStages = pgTable(
     // off the stage NAME: deal_stages is editable without a deploy, so renaming
     // "Closed Won" silently zeroed every agent's won value with no error anywhere.
     isWon: boolean("is_won").notNull().default(false),
+    /**
+     * Which mode this stage belongs to: project | resale.
+     *
+     * A new-launch deal and a resale deal do not pass through the same columns —
+     * "Viewing Scheduled" is meaningless on a booked developer unit.
+     */
+    pipeline: varchar("pipeline", { length: 20 }).notNull().default("resale"),
     ...timestamps,
   },
   (t) => ({
     sortIdx: index("deal_stages_sort_idx").on(t.sortOrder),
+    pipelineIdx: index("deal_stages_pipeline_idx").on(t.pipeline, t.sortOrder),
   }),
 );
 
@@ -221,6 +234,17 @@ export const deals = pgTable(
       .notNull()
       .references(() => contacts.id, { onDelete: "restrict" }),
     propertyId: uuid("property_id").references(() => properties.id, { onDelete: "set null" }),
+    /**
+     * The project, for a new-launch deal. Set alongside `dealType = 'project'`.
+     * Unlike appointments this is not exclusive with `propertyId` — a resale deal has
+     * a property, a project deal has a project, and neither is required.
+     */
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+    /**
+     * project | resale | rental. Chooses the pipeline the deal moves through, and
+     * later chooses which commission model applies to it.
+     */
+    dealType: varchar("deal_type", { length: 20 }).notNull().default("resale"),
     stageId: uuid("stage_id")
       .notNull()
       .references(() => dealStages.id, { onDelete: "restrict" }),
@@ -233,6 +257,8 @@ export const deals = pgTable(
   (t) => ({
     contactIdx: index("deals_contact_idx").on(t.contactId),
     propertyIdx: index("deals_property_idx").on(t.propertyId),
+    projectIdx: index("deals_project_idx").on(t.projectId),
+    typeIdx: index("deals_type_idx").on(t.dealType),
     stageIdx: index("deals_stage_idx").on(t.stageId),
     assignedIdx: index("deals_assigned_idx").on(t.assignedTo),
   }),
@@ -377,6 +403,18 @@ export const projects = pgTable(
     rebatePackage: text("rebate_package"),
     /** What the developer pays us, in basis points (250 = 2.50%). Drives phase 3.1. */
     developerCommissionBp: integer("developer_commission_bp"),
+    /**
+     * Pass a lead to the next person in this project's pool if its owner has logged
+     * nothing for this many days. Null — the default — means never pass on.
+     *
+     * Deliberately opt-in per project, and deliberately confined to project leads.
+     * `server/leads/stale.ts` makes the case that automatic transfer is wrong for
+     * resale, where the client relationship IS the agent's asset; that argument does
+     * not hold for a launch, where the pool are interchangeable setters working the
+     * developer's campaign and passing leads on is the working model. Resale leads
+     * are surfaced, never confiscated.
+     */
+    passOnAfterDays: integer("pass_on_after_days"),
     /** upcoming | open | closing | closed */
     status: varchar("status", { length: 20 }).notNull().default("open"),
     notes: text("notes"),
@@ -460,6 +498,72 @@ export const leadFormSources = pgTable(
   (t) => ({
     lookupIdx: index("lead_form_sources_lookup_idx").on(t.provider, t.externalFormId),
     projectIdx: index("lead_form_sources_project_idx").on(t.projectId),
+  }),
+);
+
+/* ---------- project lead pools and assignment history ---------- */
+
+/**
+ * Who works a project's leads, and in what order.
+ *
+ * A single global rotation is wrong once projects exist: an agent who does not sell
+ * Skyline should not be handed Skyline leads, and the developer's campaign budget
+ * should reach the people actually working it. A project with no pool falls back to
+ * the global rotation, so nothing breaks the day a project is created.
+ */
+export const projectPoolMembers = pgTable(
+  "project_pool_members",
+  {
+    id: id(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Rotation order. Ties break on createdAt, so the sequence is deterministic. */
+    sortOrder: integer("sort_order").notNull().default(0),
+    /** Off means "still on the team, not taking new leads this week". */
+    active: boolean("active").notNull().default(true),
+    ...timestamps,
+  },
+  (t) => ({
+    projectIdx: index("project_pool_members_project_idx").on(t.projectId),
+    userIdx: index("project_pool_members_user_idx").on(t.userId),
+    orderIdx: index("project_pool_members_order_idx").on(t.projectId, t.sortOrder),
+  }),
+);
+
+/**
+ * Every change of hands, append-only.
+ *
+ * The `leads` row says who holds it now. This says who held it before, who moved it
+ * and why — which is what a commission dispute turns on, and what "passed out /
+ * passed in" reporting is built from. Deriving that later from a mutable column is
+ * impossible, which is why it is written at the time.
+ */
+export const leadAssignments = pgTable(
+  "lead_assignments",
+  {
+    id: id(),
+    leadId: uuid("lead_id")
+      .notNull()
+      .references(() => leads.id, { onDelete: "cascade" }),
+    /** Null on the first assignment — it came from nobody. */
+    fromUserId: uuid("from_user_id").references(() => users.id, { onDelete: "set null" }),
+    /** Null means it was left unassigned (no eligible agent). */
+    toUserId: uuid("to_user_id").references(() => users.id, { onDelete: "set null" }),
+    /** round-robin | pool | manual | import | sla-pass-on */
+    reason: varchar("reason", { length: 20 }).notNull(),
+    note: text("note"),
+    /** Null when no person did it — an automated sweep. */
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => ({
+    leadIdx: index("lead_assignments_lead_idx").on(t.leadId),
+    toIdx: index("lead_assignments_to_idx").on(t.toUserId),
+    fromIdx: index("lead_assignments_from_idx").on(t.fromUserId),
   }),
 );
 
@@ -588,6 +692,8 @@ export type NewActivity = typeof activities.$inferInsert;
 export type Document = typeof documents.$inferSelect;
 export type MessageLog = typeof messageLog.$inferSelect;
 export type MessageTemplate = typeof messageTemplates.$inferSelect;
+export type ProjectPoolMember = typeof projectPoolMembers.$inferSelect;
+export type LeadAssignment = typeof leadAssignments.$inferSelect;
 export type LeadFormSource = typeof leadFormSources.$inferSelect;
 export type NewLeadFormSource = typeof leadFormSources.$inferInsert;
 export type Appointment = typeof appointments.$inferSelect;

@@ -42,6 +42,9 @@ const projectSchema = z.object({
   bumiDiscountBp: optBp,
   rebatePackage: z.string().max(2000).optional().nullable(),
   developerCommissionBp: optBp,
+  // 1..365 days, or null for never. Zero would mean 'pass on instantly', which is
+  // never what anyone means, so the floor is 1.
+  passOnAfterDays: z.coerce.number().int().min(1).max(365).optional().nullable(),
   status: z.enum(PROJECT_STATUS).optional(),
   notes: z.string().max(4000).optional().nullable(),
 });
@@ -95,6 +98,7 @@ export async function createProject(input: unknown): Promise<ActionResult<Projec
         bumiDiscountBp: d.bumiDiscountBp ?? null,
         rebatePackage: d.rebatePackage || null,
         developerCommissionBp: d.developerCommissionBp ?? null,
+        passOnAfterDays: d.passOnAfterDays ?? null,
         status: d.status ?? "open",
         notes: d.notes || null,
       })
@@ -137,6 +141,7 @@ export async function updateProject(input: unknown): Promise<ActionResult<Projec
         bumiDiscountBp: keep(d.bumiDiscountBp, existing.bumiDiscountBp),
         rebatePackage: keep(d.rebatePackage, existing.rebatePackage),
         developerCommissionBp: keep(d.developerCommissionBp, existing.developerCommissionBp),
+        passOnAfterDays: keep(d.passOnAfterDays, existing.passOnAfterDays),
         status: d.status ?? existing.status,
         notes: keep(d.notes, existing.notes),
       })

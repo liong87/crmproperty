@@ -1,0 +1,46 @@
+name: Project lead pass-on
+
+# Passes stalled PROJECT leads to the next person in that project's pool.
+#
+# Only touches leads attached to a project that has opted in by setting a pass-on
+# window; resale and unprojected leads are never moved. See server/leads/pass-on.ts
+# for why the boundary is drawn there.
+#
+# Weekday mornings, 01:00 UTC = 09:00 Malaysia time — so a lead that went cold
+# overnight is on somebody's list at the start of the working day rather than the end.
+on:
+  schedule:
+    - cron: "0 1 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "List what would move without moving it"
+        type: boolean
+        default: true
+
+jobs:
+  pass-on:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Pass on stalled project leads
+        env:
+          # Direct connection (5432): the sweep runs a transaction per moved lead.
+          DATABASE_URL: ${{ secrets.SUPABASE_DIRECT_URL }}
+          PASS_ON_DRY_RUN: ${{ inputs.dry_run == true && '1' || '' }}
+        run: pnpm passon:leads
+
+      - name: Note the outcome
+        if: always()
+        run: echo "Pass-on finished with status ${{ job.status }}. Counts are in the log above."
