@@ -502,6 +502,40 @@ Managers and admins only; agents never see agency ad spend.
 
 ---
 
+## 3.2 Deal document checklist (done, 26 Aug 2026)
+
+The paperwork is what actually stalls a transaction, and an expiring loan approval is
+the classic preventable deal-killer: the letter carries its own date, nobody is watching
+it, and the booking collapses.
+
+- `document_requirements` — the checklist template per pipeline, as rows rather than a
+  hardcoded list, for the same reason `deal_stages` are rows: what a developer demands
+  varies by launch, and a code change per variation is how a checklist stops being kept up.
+- `deal_documents` — one line per deal, instantiated from the template when the deal is
+  created, with a due date, a completion mark and an optional attached file. Items can be
+  added by hand; no template survives contact with a real developer.
+- `/deals/[id]` — deals had no page of their own, only cards. Now they have one, and it
+  leads with the paperwork.
+- Outstanding paperwork appears on `/reminders` above the follow-ups, and an overdue
+  count sits on the dashboard.
+
+Decisions worth keeping:
+
+- **Attaching a file does not tick the item.** Somebody still has to confirm the document
+  is the right one and in order — that is what the checklist is for.
+- **Overdue items are never dropped from the chase list**, even though it is nominally a
+  14-day window. A loan approval that expired last week is more urgent than one expiring
+  next Tuesday, and falling out of the list once the date passes is exactly how it gets
+  missed.
+- **A due date is a calendar date, not an instant.** Counting elapsed milliseconds made an
+  item due in three days read as two, and one nine days overdue read as ten. Days are now
+  counted as whole calendar days in Malaysia time. On a feature whose only job is chasing
+  dates, an off-by-one is how people stop trusting the number.
+- **Instantiating a checklist is idempotent.** A second call would silently double every
+  line, and a checklist showing "Loan approval letter" twice is one nobody finishes.
+
+---
+
 ## On leaderboards, revisited for the setter/closer model
 
 The existing leaderboard ranks on won value, managers and admins only. Under a

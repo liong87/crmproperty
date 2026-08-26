@@ -32,9 +32,18 @@ export function DealCard({ card, stages }: { card: DealCardData; stages: { id: s
 
   return (
     <div className="rounded-md border bg-background p-3 text-sm shadow-sm">
-      <Link href={`/contacts/${card.contactId}`} className="font-medium hover:underline">{card.contactName}</Link>
+      {/* The client and the deal are different destinations — one is the person, the
+          other is the paperwork. Both are wanted from a card, so both are offered. */}
+      <Link href={`/contacts/${card.contactId}`} className="font-medium hover:underline">
+        {card.contactName}
+      </Link>
       <div className="text-muted-foreground">{card.subjectTitle ?? "No listing or project"}</div>
-      <div className="mt-1 font-medium">{formatMYR(card.value)}</div>
+      <div className="mt-1 flex items-baseline justify-between gap-2">
+        <span className="font-medium">{formatMYR(card.value)}</span>
+        <Link href={`/deals/${card.id}`} className="text-xs text-primary underline underline-offset-2">
+          Paperwork
+        </Link>
+      </div>
       <Select
         className="mt-2 h-9"
         value={card.stageId}

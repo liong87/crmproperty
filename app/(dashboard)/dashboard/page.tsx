@@ -7,6 +7,7 @@ import { listUpcomingAppointments, countAppointmentsNeedingOutcome } from "@/ser
 import { AppointmentList } from "@/components/appointments/appointment-list";
 import { getReportData } from "@/server/reports/queries";
 import { getFunnel, getFunnelTrend } from "@/server/reports/funnel";
+import { countDocumentsDue } from "@/server/deal-documents/queries";
 import { STATUS } from "@/lib/chart-colors";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/reports/stat-tile";
@@ -18,7 +19,7 @@ export default async function DashboardPage() {
   if (!user) return null;
 
   // Ask for 5, not "all of them then slice to 5".
-  const [followUps, report, appts, toWriteUp, funnel, trend, staleCount] = await Promise.all([
+  const [followUps, report, appts, toWriteUp, funnel, trend, staleCount, docsDue] = await Promise.all([
     listFollowUps(user, 5),
     getReportData(user),
     listUpcomingAppointments(user, 5),
@@ -26,6 +27,7 @@ export default async function DashboardPage() {
     getFunnel(user),
     getFunnelTrend(user, 8),
     countStaleLeads(user),
+    countDocumentsDue(user),
   ]);
   const overdue = followUps.filter((f) => f.overdue).length;
   const booked = funnel.stages.find((s) => s.key === "booked")?.count ?? 0;
@@ -54,6 +56,22 @@ export default async function DashboardPage() {
 
       {/* Six tiles: the row divides evenly at 2 (mobile), 3 and 6, so none is orphaned
           on a second line at any breakpoint. */}
+      {docsDue.overdue > 0 && (
+        <Link
+          href="/reminders"
+          className="block rounded-xl border p-4 transition-colors hover:bg-muted/40"
+          style={{ borderColor: STATUS.critical }}
+        >
+          <p className="text-sm">
+            <strong className="font-semibold" style={{ color: STATUS.critical }}>
+              {docsDue.overdue} document{docsDue.overdue === 1 ? " is" : "s are"} overdue
+            </strong>{" "}
+            across your deals. An expired loan approval is the commonest way a booking
+            collapses.
+          </p>
+        </Link>
+      )}
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         {/* openLeads, not totalLeads: a disqualified lead is finished work, and
             showing it here made the tile useless as a "do I have anything to chase"

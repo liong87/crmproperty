@@ -8,6 +8,7 @@ import { DEAL_TYPE } from "@/lib/constants";
 import { deals, dealStages, contacts, activities, type Deal } from "@/lib/db/schema";
 import { requireDbUser, assertCanEdit, AuthorizationError } from "@/lib/auth";
 import { ok, fail } from "@/lib/action-result";
+import { instantiateChecklist } from "@/server/deal-documents/actions";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { getDealById } from "./queries";
@@ -81,6 +82,11 @@ export async function createDeal(input: unknown): Promise<ActionResult<Deal>> {
       body: `Deal created by ${me.name}.`,
       createdBy: me.id,
     });
+
+    // The paperwork checklist for this pipeline. Best-effort by design — a deal that
+    // exists without its checklist is recoverable; failing creation over a template
+    // row is not what anyone wants at that moment.
+    await instantiateChecklist(row!.id, pipeline);
 
     revalidatePath("/pipeline");
     return ok(row!);

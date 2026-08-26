@@ -567,6 +567,81 @@ export const leadAssignments = pgTable(
   }),
 );
 
+/* ---------- deal document checklists ---------- */
+
+/**
+ * The checklist template for a pipeline — what paperwork a deal of this kind needs.
+ *
+ * Rows rather than a hardcoded list, for the same reason `deal_stages` are rows: the
+ * paperwork a developer demands varies by project and changes between launches, and a
+ * code change per variation is how a checklist stops being maintained.
+ */
+export const documentRequirements = pgTable(
+  "document_requirements",
+  {
+    id: id(),
+    /** project | resale — matches deal_stages.pipeline. */
+    pipeline: varchar("pipeline", { length: 20 }).notNull(),
+    label: varchar("label", { length: 255 }).notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    /** A deal cannot sensibly complete without it. Advisory — nothing is blocked. */
+    required: boolean("required").notNull().default(true),
+    /**
+     * Suggested deadline, in days from the deal being created. A starting point only:
+     * the date that actually matters (a loan approval's expiry) is printed on the
+     * document, so `deal_documents.due_at` is editable per deal.
+     */
+    dueAfterDays: integer("due_after_days"),
+    notes: text("notes"),
+    ...timestamps,
+  },
+  (t) => ({
+    pipelineIdx: index("document_requirements_pipeline_idx").on(t.pipeline, t.sortOrder),
+  }),
+);
+
+/**
+ * One checklist line on one deal.
+ *
+ * Instantiated from the template when the deal is created, and editable afterwards —
+ * items can be added ad hoc, because no template survives contact with a real developer.
+ *
+ * `documentId` links the uploaded file once there is one. An item can be marked done
+ * without a file (the agent saw the original) and a file can be attached before the item
+ * is ticked, so the two are deliberately independent.
+ */
+export const dealDocuments = pgTable(
+  "deal_documents",
+  {
+    id: id(),
+    dealId: uuid("deal_id")
+      .notNull()
+      .references(() => deals.id, { onDelete: "cascade" }),
+    /** Null for an item added by hand rather than from the template. */
+    requirementId: uuid("requirement_id").references(() => documentRequirements.id, {
+      onDelete: "set null",
+    }),
+    label: varchar("label", { length: 255 }).notNull(),
+    required: boolean("required").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+    /** The deadline that matters. Editable — a loan approval expires on its own date. */
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    completedBy: uuid("completed_by").references(() => users.id, { onDelete: "set null" }),
+    /** The uploaded file, when one has been attached. */
+    documentId: uuid("document_id").references(() => documents.id, { onDelete: "set null" }),
+    notes: text("notes"),
+    ...timestamps,
+  },
+  (t) => ({
+    dealIdx: index("deal_documents_deal_idx").on(t.dealId, t.sortOrder),
+    // "What is due or overdue and not yet done" — the only query that needs to be fast.
+    dueIdx: index("deal_documents_due_idx")
+      .on(t.dueAt)
+      .where(sql`completed_at is null and deleted_at is null`),
+  }),
+);
+
 /* ---------- appointments (gallery visits and property viewings) ---------- */
 /**
  * A scheduled property viewing.
@@ -692,6 +767,8 @@ export type NewActivity = typeof activities.$inferInsert;
 export type Document = typeof documents.$inferSelect;
 export type MessageLog = typeof messageLog.$inferSelect;
 export type MessageTemplate = typeof messageTemplates.$inferSelect;
+export type DocumentRequirement = typeof documentRequirements.$inferSelect;
+export type DealDocument = typeof dealDocuments.$inferSelect;
 export type ProjectPoolMember = typeof projectPoolMembers.$inferSelect;
 export type LeadAssignment = typeof leadAssignments.$inferSelect;
 export type LeadFormSource = typeof leadFormSources.$inferSelect;
