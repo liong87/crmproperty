@@ -111,8 +111,33 @@ function createDb() {
 
 type DrizzleDb = ReturnType<typeof createDb>;
 
-/** Long-lived singleton — correct for Node (one process, many requests). */
-let _db: DrizzleDb | null = null;
+/**
+ * Long-lived singleton — correct for Node (one process, many requests).
+ *
+ * Held on `globalThis`, NOT in module scope, and the reason is specific to
+ * development. Next's dev server discards and re-evaluates modules on every hot
+ * reload. A module-scoped `let` is re-initialised each time, so every reload built a
+ * fresh `postgres()` pool — up to `max` connections — and orphaned the previous one
+ * with its connections still open. Nothing closed them: the old module instance was
+ * unreachable, so no code was left to call `.end()`.
+ *
+ * After an afternoon of edits that is dozens of abandoned pools holding hundreds of
+ * connections, and Supabase's pooler starts refusing new clients. It presents as the
+ * application getting progressively slower over a session — 1.6s, then 65s, then
+ * 130s — and finally as trivial queries failing outright, while a standalone script
+ * against the same database stays fast because it owns exactly one pool. That is a
+ * miserable thing to debug, because every measurement taken outside the dev server
+ * exonerates the database.
+ *
+ * `globalThis` survives module re-evaluation, so the pool is created once per
+ * process. In production modules are evaluated once anyway and this is simply a
+ * singleton.
+ */
+const GLOBAL_DB = Symbol.for("propertyagent.db");
+
+interface DbGlobal {
+  [GLOBAL_DB]?: DrizzleDb | null;
+}
 
 /**
  * Per-request instances for the Workers runtime.
@@ -147,8 +172,9 @@ function resolveDb(): DrizzleDb {
     return scoped;
   }
 
-  if (!_db) _db = createDb();
-  return _db;
+  const g = globalThis as DbGlobal;
+  if (!g[GLOBAL_DB]) g[GLOBAL_DB] = createDb();
+  return g[GLOBAL_DB];
 }
 
 export const db = new Proxy({} as DrizzleDb, {

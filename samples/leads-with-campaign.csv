@@ -1,0 +1,5 @@
+name,phone,email,interest,campaign_name,adset_name,ad_name,utm_source,consent
+Test Lead One,0123456701,one@example.my,buy,Skyline August,Investors KL,Carousel A,meta,yes
+Test Lead Two,0123456702,two@example.my,buy,Skyline August,Investors KL,Video B,meta,yes
+Test Lead Three,0123456703,three@example.my,rent,Skyline August,Young Families,Carousel A,meta,yes
+Test Lead Four,0123456704,,buy,Parkfield Launch,Selangor Upgraders,Static C,meta,yes
