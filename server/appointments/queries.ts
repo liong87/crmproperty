@@ -2,7 +2,7 @@ import { and, asc, count, eq, isNull, lt } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db/client";
 import { appointments, properties, projects, contacts, leads, users, type User } from "@/lib/db/schema";
-import { ownershipFilter, isManagerOrAbove } from "@/lib/auth";
+import { ownershipFilterAny, isManagerOrAbove } from "@/lib/auth";
 
 export interface AppointmentRow {
   id: string;
@@ -91,8 +91,10 @@ async function baseQuery(user: User) {
     .where(
       and(
         isNull(appointments.deletedAt),
-        // Agents see their own diary; managers and admins see the team's.
-        ownershipFilter(user, appointments.assignedTo),
+        // An agent's diary is what they SET plus what they are CLOSING. Filtering on
+        // the setter alone hid appointments a closer had been handed — and which they
+        // were nonetheless allowed to write up.
+        ownershipFilterAny(user, [appointments.assignedTo, appointments.closerId]),
       ),
     )
     .orderBy(asc(appointments.scheduledAt));
@@ -203,7 +205,7 @@ export async function countAppointmentsNeedingOutcome(user: User): Promise<numbe
         isNull(appointments.deletedAt),
         eq(appointments.status, "scheduled"),
         lt(appointments.scheduledAt, new Date()),
-        ownershipFilter(user, appointments.assignedTo),
+        ownershipFilterAny(user, [appointments.assignedTo, appointments.closerId]),
       ),
     );
   return row?.c ?? 0;

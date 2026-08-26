@@ -54,6 +54,8 @@ export default async function ReportsPage() {
           title="By agent"
           rows={funnel.byAgent}
           emptyHint="No activity in this window yet."
+          columns={{ appointments: "Set", showedUp: "Showed", booked: "Booked" }}
+          note="Appointments are credited to whoever set them; show-ups and bookings to whoever ran the presentation."
         />
       )}
 

@@ -57,6 +57,58 @@ export function assertCanEdit(user: User, ownerId: string | null, teamId?: strin
  * @param ownerColumn the assigned-to column on the table (e.g. leads.assignedTo)
  * @param teamMemberIds ids of users in the manager's team (optional; managers see all by default)
  */
+/**
+ * Ownership filter across SEVERAL owner columns — a record is visible if the user
+ * owns it in ANY of the given roles.
+ *
+ * Appointments are why this exists. Since the setter/closer split, `assignedTo` is the
+ * setter and `closerId` is whoever runs the presentation, and those are routinely
+ * different people. Filtering on the setter alone meant a closer could edit an
+ * appointment they were unable to see — handed a presentation that was invisible in
+ * their own diary.
+ *
+ * Getting this wrong fails in one of two bad ways: too narrow hides an agent's own
+ * work from them, too wide leaks the whole team's pipeline. Hence the tests.
+ */
+export function ownershipFilterAny(
+  user: User,
+  ownerColumns: AnyPgColumn[],
+  teamMemberIds?: string[],
+): SQL | undefined {
+  if (ownerColumns.length === 0) return undefined;
+  if (isManagerOrAbove(user)) {
+    if (user.role === "manager" && teamMemberIds && teamMemberIds.length > 0) {
+      return or(
+        ...ownerColumns.flatMap((c) => [inArray(c, teamMemberIds), eq(c, user.id)]),
+      );
+    }
+    return undefined;
+  }
+  // Agent: theirs in any role. NULL columns simply do not match, which is correct —
+  // an appointment with no closer is visible to its setter and nobody else.
+  return or(...ownerColumns.map((c) => eq(c, user.id)));
+}
+
+/** Can this user EDIT a record they may own through any of several roles? */
+export function canEditAny(
+  user: User,
+  ownerIds: Array<string | null>,
+  teamId?: string | null,
+): boolean {
+  if (user.role === "admin") return true;
+  if (user.role === "manager") return teamId == null || teamId === user.teamId;
+  return ownerIds.some((id) => id != null && id === user.id);
+}
+
+/** Assert edit permission across several owner roles, or throw. */
+export function assertCanEditAny(
+  user: User,
+  ownerIds: Array<string | null>,
+  teamId?: string | null,
+): void {
+  if (!canEditAny(user, ownerIds, teamId)) throw new AuthorizationError();
+}
+
 export function ownershipFilter(
   user: User,
   ownerColumn: AnyPgColumn,

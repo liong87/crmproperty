@@ -11,10 +11,10 @@
  * Every figure is scoped by the caller's role, using the same ownership rules as the
  * rest of the app: an agent sees their own numbers, a manager sees the team's.
  */
-import { and, count, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, count, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { leads, appointments, projects, users, type User } from "@/lib/db/schema";
-import { ownershipFilter, isManagerOrAbove } from "@/lib/auth";
+import { ownershipFilter, ownershipFilterAny, isManagerOrAbove } from "@/lib/auth";
 
 export interface FunnelStage {
   key: "leads" | "appointments" | "showed-up" | "booked";
@@ -64,7 +64,9 @@ export async function getFunnel(user: User, sinceDays = 90): Promise<FunnelData>
   const liveAppt = and(
     isNull(appointments.deletedAt),
     gte(appointments.scheduledAt, since),
-    ownershipFilter(user, appointments.assignedTo),
+    // Setter or closer: an agent's own numbers must include presentations they ran
+    // for somebody else's lead.
+    ownershipFilterAny(user, [appointments.assignedTo, appointments.closerId]),
   );
 
   const [
@@ -73,7 +75,8 @@ export async function getFunnel(user: User, sinceDays = 90): Promise<FunnelData>
     leadsByProject,
     apptsByProject,
     leadsByAgent,
-    apptsByAgent,
+    apptsSetByAgent,
+    apptsClosedByAgent,
   ] = await Promise.all([
     db.select({ c: count() }).from(leads).where(liveLead),
 
@@ -115,19 +118,38 @@ export async function getFunnel(user: User, sinceDays = 90): Promise<FunnelData>
       .where(liveLead)
       .groupBy(leads.assignedTo, users.name),
 
+    /**
+     * Appointments SET, credited to the setter.
+     *
+     * Split from the closing figures below on purpose. Under a setter/closer model one
+     * person books and another may close, so a single per-agent row that mixed the two
+     * would credit whoever happened to be in `assignedTo` for work they did not do —
+     * and a setter who books excellent appointments and hands them over would appear
+     * to have converted nothing.
+     */
+    db
+      .select({ id: appointments.assignedTo, name: users.name, c: count() })
+      .from(appointments)
+      .leftJoin(users, eq(appointments.assignedTo, users.id))
+      .where(liveAppt)
+      .groupBy(appointments.assignedTo, users.name),
+
+    /**
+     * Outcomes, credited to whoever actually ran the presentation.
+     *
+     * `coalesce(closer_id, assigned_to)` — when no closer was assigned, the setter
+     * closed it themselves and the credit is theirs.
+     */
     db
       .select({
-        id: appointments.assignedTo,
-        name: users.name,
-        total: count(),
+        id: sql<string | null>`coalesce(${appointments.closerId}, ${appointments.assignedTo})`,
         showedUp: sql<number>`count(*) filter (where ${appointments.status} = 'showed-up')::int`,
         noShow: sql<number>`count(*) filter (where ${appointments.status} = 'no-show')::int`,
         booked: sql<number>`count(*) filter (where ${appointments.outcome} = 'booked')::int`,
       })
       .from(appointments)
-      .leftJoin(users, eq(appointments.assignedTo, users.id))
       .where(liveAppt)
-      .groupBy(appointments.assignedTo, users.name),
+      .groupBy(sql`coalesce(${appointments.closerId}, ${appointments.assignedTo})`),
   ]);
 
   const totalLeads = leadTotals[0]?.c ?? 0;
@@ -166,8 +188,53 @@ export async function getFunnel(user: User, sinceDays = 90): Promise<FunnelData>
     // would make every fresh appointment look like a success and dilute the rate.
     noShowRate: share(t.noShow, t.showedUp + t.noShow),
     byProject: merge(leadsByProject, apptsByProject, "Unassigned / resale"),
-    byAgent: isManagerOrAbove(user) ? merge(leadsByAgent, apptsByAgent, "Unassigned") : [],
+    byAgent: isManagerOrAbove(user)
+      ? await mergeAgents(leadsByAgent, apptsSetByAgent, apptsClosedByAgent)
+      : [],
   };
+}
+
+/**
+ * Per-agent rows where the columns mean different things either side of the split:
+ * `appointments` is what they SET, `showedUp` and `booked` are what they CLOSED.
+ */
+async function mergeAgents(
+  leadRows: LeadGroup[],
+  setRows: Array<{ id: string | null; name: string | null; c: number }>,
+  closedRows: Array<{ id: string | null; showedUp: number; noShow: number; booked: number }>,
+): Promise<FunnelRow[]> {
+  const byId = new Map<string | null, FunnelRow>();
+  const ensure = (id: string | null, name?: string | null): FunnelRow => {
+    let row = byId.get(id);
+    if (!row) {
+      row = { id, label: name ?? "Unassigned", leads: 0, appointments: 0, showedUp: 0, booked: 0, noShowRate: null };
+      byId.set(id, row);
+    }
+    if (name && row.label === "Unassigned") row.label = name;
+    return row;
+  };
+
+  for (const r of leadRows) ensure(r.id, r.name).leads = r.c;
+  for (const r of setRows) ensure(r.id, r.name).appointments = r.c;
+  for (const r of closedRows) {
+    const row = ensure(r.id);
+    row.showedUp = r.showedUp;
+    row.booked = r.booked;
+    row.noShowRate = share(r.noShow, r.showedUp + r.noShow);
+  }
+
+  // A closer who set nothing has no name yet — the closer query does not join users,
+  // because grouping on a coalesce cannot also carry the joined name reliably.
+  const unnamed = [...byId.values()].filter((r) => r.id && r.label === "Unassigned").map((r) => r.id!);
+  if (unnamed.length > 0) {
+    const names = await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, unnamed));
+    for (const n of names) {
+      const row = byId.get(n.id);
+      if (row) row.label = n.name;
+    }
+  }
+
+  return [...byId.values()].sort((a, b) => b.booked - a.booked || b.appointments - a.appointments || b.leads - a.leads);
 }
 
 type LeadGroup = { id: string | null; name: string | null; c: number };

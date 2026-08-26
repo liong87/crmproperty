@@ -4,6 +4,9 @@ export { syncCurrentUser, getCurrentDbUser, requireDbUser } from "./sync";
 export {
   assertRole,
   assertCanEdit,
+  assertCanEditAny,
+  canEditAny,
+  ownershipFilterAny,
   canView,
   canEdit,
   isAdmin,

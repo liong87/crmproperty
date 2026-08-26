@@ -15,7 +15,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { appointments, contacts, leads, activities, users } from "@/lib/db/schema";
-import { requireDbUser, canEdit, isManagerOrAbove, AuthorizationError } from "@/lib/auth";
+import { requireDbUser, canEdit, canEditAny, isManagerOrAbove, AuthorizationError } from "@/lib/auth";
 import { APPOINTMENT_STATUS, APPOINTMENT_OUTCOME } from "@/lib/constants";
 import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
@@ -314,9 +314,9 @@ async function loadEditable(
     .from(appointments)
     .where(and(eq(appointments.id, id), isNull(appointments.deletedAt)));
   if (!row) return { error: fail("Appointment not found.") };
-  // The setter owns it. A closer working someone else's client still needs the setter's
-  // permission model, which managers and admins pass by role.
-  if (!canEdit(me, row.assignedTo) && row.closerId !== me.id) throw new AuthorizationError();
+  // Setter or closer, the same pair the list query scopes on. Editable and visible must
+  // agree: anything a person can change, they must also be able to see.
+  if (!canEditAny(me, [row.assignedTo, row.closerId])) throw new AuthorizationError();
   return { row };
 }
 

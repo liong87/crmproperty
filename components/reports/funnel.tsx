@@ -93,11 +93,14 @@ function Figure({ label, value, hint, tone }: { label: string; value: string; hi
 }
 
 export function FunnelBreakdown({
-  title, rows, emptyHint,
+  title, rows, emptyHint, columns, note,
 }: {
   title: string;
   rows: FunnelData["byProject"];
   emptyHint: string;
+  /** Header overrides. The per-agent table counts different things — see `note`. */
+  columns?: { appointments?: string; showedUp?: string; booked?: string };
+  note?: string;
 }) {
   if (rows.length === 0) {
     return (
@@ -112,7 +115,10 @@ export function FunnelBreakdown({
 
   return (
     <Card>
-      <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
+      <CardHeader className="space-y-1">
+        <CardTitle>{title}</CardTitle>
+        {note && <p className="text-xs text-muted-foreground">{note}</p>}
+      </CardHeader>
       <CardContent className="px-0">
         {/* Wide table on a 390px screen: scroll the table, never the page. */}
         <div className="overflow-x-auto">
@@ -121,9 +127,9 @@ export function FunnelBreakdown({
               <tr className="border-b text-left text-xs text-muted-foreground">
                 <th className="px-4 py-2 font-medium">Name</th>
                 <th className="px-2 py-2 text-right font-medium">Leads</th>
-                <th className="px-2 py-2 text-right font-medium">Appts</th>
-                <th className="px-2 py-2 text-right font-medium">Showed</th>
-                <th className="px-2 py-2 text-right font-medium">Booked</th>
+                <th className="px-2 py-2 text-right font-medium">{columns?.appointments ?? "Appts"}</th>
+                <th className="px-2 py-2 text-right font-medium">{columns?.showedUp ?? "Showed"}</th>
+                <th className="px-2 py-2 text-right font-medium">{columns?.booked ?? "Booked"}</th>
                 <th className="px-4 py-2 text-right font-medium">No-show</th>
               </tr>
             </thead>
