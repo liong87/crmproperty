@@ -25,6 +25,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     { href: "/appointments", label: "Appointments" },
     { href: "/reminders", label: "Reminders" },
     { href: "/reports", label: "Reports" },
+    { href: "/help", label: "Guide" },
     ...(isManagerOrAbove(user)
       ? [
           { href: "/lead-sources", label: "Lead sources" },

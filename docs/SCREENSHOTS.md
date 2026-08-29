@@ -21,26 +21,26 @@ Landscape shots of a browser window work best — around 1400px wide is plenty.
 | File name | What to capture |
 |---|---|
 | `01-sign-in` | The sign-in screen, signed out |
-| `02-dashboard` | Dashboard with the four tiles and the follow-ups card |
-| `03-new-lead` | The New Lead form, ideally part-filled |
-| `04-leads-list` | Leads list showing the search box and status filter |
+| `02-dashboard` | Dashboard with the tiles and the follow-ups card |
+| `03-new-lead` | The New Lead form, part-filled, with the Project picker visible |
+| `04-leads-list` | Leads list showing search, status filter and the **Assigned to** column |
 | `05-import-csv` | The Import leads screen, after an import so the summary shows |
 | `06-lead-detail` | A lead record with the Activity & Notes timeline visible |
-| `07-qualify` | Close-up of the "Qualify → Contact" and "Disqualify" buttons |
-| `08-contact-detail` | A contact record |
-| `09-new-property` | The property form |
-| `10-property-photos` | A property with photographs uploaded |
-| `11-pipeline` | Pipeline board with a few deals in different stages |
-| `12-reminders` | Reminders screen, ideally with one overdue item |
-| `13-reports` | Reports screen |
-| `14-users` | Users screen showing roles and Deactivate |
+| `07-qualify` | Close-up of the Qualify and Disqualify buttons |
+| `09-appointments` | The appointments board with the **no-show rate** above it |
+| `11-pipeline` | Pipeline board on the **New launch** tab, with the Resale tab visible |
+| `12-paperwork` | A deal's paperwork checklist, ideally with one item overdue in red |
+| `13-reminders` | Reminders, with the **Paperwork due** card above the follow-ups |
+| `14-reports` | Reports — the funnel, the trend chart and the period selector |
+| `15-project` | A project page with two or more unit types, so the price range is a range |
+| `16-lead-pool` | A project's lead pool with two or more members and the pass-on note |
+| `18-users` | Users screen showing roles and Deactivate |
+
+The old `dashboard.png`, `lead.png`, `newlead.png` and `signup.png` in `screenshots/`
+predate this list and are not picked up — rename them to the keys above if they are
+still accurate, or retake them.
 
 ## Before you screenshot
 
 Use realistic but **fake** client details — invented names, phone numbers and budgets.
-Once this guide circulates, anything visible in it has left the system, and real client
-data (especially identity-card numbers) must not travel that way.
-
-A tidy sequence: create one fake lead, work it through to a contact and a deal, then
-capture every screen in one pass. That gives consistent-looking figures and lets you
-delete the test records afterwards.
+Real client data in a document that gets emailed around is a PDPA problem.

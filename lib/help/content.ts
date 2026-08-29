@@ -1,0 +1,315 @@
+/**
+ * The in-app user guide.
+ *
+ * Content lives here as data rather than as JSX so there is ONE place to edit when
+ * the product changes, and so sections can be filtered by role before rendering —
+ * an agent is never shown instructions for a screen they cannot reach.
+ *
+ * The same material is published as docs/PropertyAgent-CRM-User-Guide.pdf for
+ * handing to a new agent on day one. If you change one, change the other.
+ */
+
+export type Block =
+  | { kind: "p"; text: string }
+  | { kind: "steps"; items: string[] }
+  | { kind: "list"; items: string[] }
+  | { kind: "note"; tone: "info" | "warn" | "stop"; text: string }
+  | { kind: "table"; head: string[]; rows: string[][] };
+
+export interface HelpSection {
+  id: string;
+  n: number;
+  title: string;
+  part: string;
+  /** Manager and admin only. Filtered out server-side, not hidden with CSS. */
+  managerOnly?: boolean;
+  blocks: Block[];
+}
+
+export const HELP_SECTIONS: HelpSection[] = [
+  {
+    id: "signing-in", n: 1, part: "Getting started", title: "Signing in",
+    blocks: [
+      { kind: "p", text: "Sign in with your work email. You do not create a password here — sign-in is handled by Clerk, and it links your account to your staff record by email address." },
+      { kind: "p", text: "If you land on a page saying your account is pending, that is correct. New sign-ups arrive inactive and an admin has to approve you before you can see any client data." },
+      { kind: "note", tone: "warn", text: "Sign in with the email your admin was given. A different address creates a brand-new inactive account instead of finding yours." },
+      {
+        kind: "table",
+        head: ["Role", "Sees", "Can also"],
+        rows: [
+          ["Agent", "Their own leads, contacts, deals and appointments", "—"],
+          ["Manager", "Their team's records", "Reassign leads, create projects, manage pools, see ad spend"],
+          ["Admin", "Everything in the agency", "All of the above, plus approving accounts and setting roles"],
+        ],
+      },
+      { kind: "p", text: "This is enforced in the data itself, not by hiding buttons — an agent cannot reach another agent's client by guessing a web address." },
+    ],
+  },
+  {
+    id: "dashboard", n: 2, part: "Getting started", title: "Your dashboard",
+    blocks: [
+      { kind: "p", text: "The dashboard answers one question: what needs me today? Lead and pipeline counts, follow-ups due, and two warnings that appear only when they matter — a red banner counting overdue documents, and a count of leads that have gone quiet." },
+      { kind: "note", tone: "info", text: "No news means no banner. A permanent “0 overdue” row is furniture people learn to skip, so those warnings are absent entirely when there is nothing wrong. If you see one, it is real." },
+    ],
+  },
+  {
+    id: "lead-sources-in", n: 3, part: "Leads", title: "Where leads come from",
+    blocks: [
+      { kind: "p", text: "Four routes in, and the route decides who gets the lead." },
+      {
+        kind: "table",
+        head: ["How it arrives", "Who it goes to"],
+        rows: [
+          ["New Lead button", "Whoever created it — you. An agent cannot assign to somebody else"],
+          ["Import CSV", "Whoever uploaded the file"],
+          ["Facebook or Instagram lead form", "The project's lead pool, in rotation"],
+          ["Website form or public API", "The same rotation, or the agency-wide one if no project is attached"],
+        ],
+      },
+      { kind: "p", text: "So a lead you sourced yourself is yours from the moment you enter it. Rotation only ever touches leads nobody owns yet — the ones the agency paid for." },
+      { kind: "p", text: "On the leads list, the Assigned to column shows who owns each lead, and calls out Unassigned in red. Duplicates are detected by phone and email, so re-importing the same CSV does not create the same person twice." },
+    ],
+  },
+  {
+    id: "working-a-lead", n: 4, part: "Leads", title: "Working a lead",
+    blocks: [
+      { kind: "p", text: "Open a lead to see their details, the project they enquired about, and a timeline of everything that has happened." },
+      {
+        kind: "steps",
+        items: [
+          "Log every contact — call, WhatsApp, email or note. This is what proves you are working the lead, and it is what stops a project lead being passed to somebody else.",
+          "Set a follow-up date when you log something. It appears on your dashboard and Reminders that day, so you have one list rather than a separate diary.",
+          "Use WhatsApp from the lead. The button opens a chat with their number filled in, and templates fill in their name and the project.",
+        ],
+      },
+      { kind: "note", tone: "warn", text: "Log it the same day. Pass-on, response-time reporting and the funnel all read the timeline. Work that is not logged did not happen as far as the system is concerned." },
+    ],
+  },
+  {
+    id: "qualify", n: 5, part: "Leads", title: "Qualify or disqualify",
+    blocks: [
+      { kind: "p", text: "When someone is genuinely interested and can proceed, use Qualify. That converts them to a contact — carrying across their details, consent record and history — and a contact is what a deal is built on." },
+      { kind: "p", text: "When they are not a buyer, mark them disqualified rather than leaving them in your list. It keeps your numbers honest and stops the system chasing you about them." },
+      { kind: "note", tone: "info", text: "Disqualifying is part of the funnel, not a failure. Conversion is measured against every lead received, including the ones you rejected. Rejecting a poor lead quickly is good work." },
+    ],
+  },
+  {
+    id: "pass-on", n: 6, part: "Leads", title: "When a lead moves on",
+    blocks: [
+      { kind: "p", text: "On a new launch, a lead left untouched can be passed to the next person in the project's pool. This only happens when all of the following are true:" },
+      {
+        kind: "list",
+        items: [
+          "The lead is attached to a project, and that project has a pass-on window set",
+          "It came from the agency — a Facebook form, the website or the API. A lead you entered by hand or imported yourself is never passed on",
+          "You have logged nothing since it was assigned to you",
+          "There is no appointment booked, and it is not marked qualified",
+          "The pool has more than one active person",
+        ],
+      },
+      { kind: "p", text: "Any activity at all stops the clock. Log a call and the lead stays yours, and the window restarts from that moment." },
+      { kind: "note", tone: "info", text: "Nothing happens quietly. Every transfer writes a note on the lead's timeline naming both agents, and messages each of you." },
+    ],
+  },
+  {
+    id: "booking", n: 7, part: "Appointments", title: "Booking an appointment",
+    blocks: [
+      { kind: "p", text: "From a lead or a contact, choose Schedule appointment. Pick the subject — a project from the New launch group, or a property for a resale viewing. It is one or the other, never both." },
+      {
+        kind: "list",
+        items: [
+          "I am closing this myself — the usual case.",
+          "Another agent — under a setter and closer split, you booked it and they run the presentation. Both are recorded, both can see it, and commission splits on that record later.",
+        ],
+      },
+      { kind: "note", tone: "info", text: "Booking a project appointment links the lead to that project if it did not already have one. Somebody who turns up at a gallery is a lead for that project, and the timeline says so." },
+    ],
+  },
+  {
+    id: "outcomes", n: 8, part: "Appointments", title: "Recording what happened",
+    blocks: [
+      { kind: "p", text: "Appointments opens as a board: Scheduled → Showed up → Booked → No show → Cancelled. Use Record outcome on a card after the appointment." },
+      {
+        kind: "table",
+        head: ["Status", "Then outcome"],
+        rows: [
+          ["Showed up", "Booked, interested, undecided or not interested"],
+          ["No show", "—"],
+          ["Cancelled", "—"],
+        ],
+      },
+      { kind: "p", text: "The no-show rate above the board tells you whether your confirmations are working. It counts only appointments that reached a verdict, so a fresh booking never dilutes it." },
+      { kind: "note", tone: "warn", text: "Record the outcome the same day. An appointment with no outcome counts as nothing in the funnel, so a good week can look like a bad one purely because nobody closed the loop." },
+    ],
+  },
+  {
+    id: "deals", n: 9, part: "Deals and paperwork", title: "Creating a deal",
+    blocks: [
+      { kind: "p", text: "A deal needs a contact, so qualify the lead first. On the contact, choose Create Deal. The Project picker decides which pipeline the deal joins, and it is pre-filled from the lead they came in on." },
+      {
+        kind: "list",
+        items: [
+          "A project selected → new launch deal, starting at Booked",
+          "Left blank → resale deal, starting at New",
+        ],
+      },
+      { kind: "p", text: "A line under the picker tells you which you are about to get. Check it before saving." },
+      {
+        kind: "table",
+        head: ["New launch pipeline", "Resale pipeline"],
+        rows: [
+          ["Booked", "New"],
+          ["SPA Signed", "Contacted"],
+          ["Loan Approved", "Viewing Scheduled"],
+          ["Completed", "Negotiation"],
+          ["Cancelled", "Closed Won / Closed Lost"],
+        ],
+      },
+      { kind: "p", text: "A project deal starts at Booked because the appointment board already owns everything before that. Repeating those steps here would count the same event twice." },
+    ],
+  },
+  {
+    id: "paperwork", n: 10, part: "Deals and paperwork", title: "The paperwork checklist",
+    blocks: [
+      { kind: "p", text: "Click Paperwork on a pipeline card. The checklist is already there, created from the project template, with a suggested due date on each item: booking form, booking fee receipt, IC or passport, income documents, loan application, loan approval letter, SPA signed, stamping." },
+      { kind: "p", text: "On each item you can tick it off, change the due date, attach a file, or add your own item." },
+      { kind: "note", tone: "stop", text: "Attaching a file does not tick the item. Somebody still has to confirm the document is the right one and legible. Tick it when you have checked it, not when it uploads." },
+      { kind: "p", text: "Overdue items turn red and say how many days late. They also appear on Reminders and, when overdue, on the dashboard — so paperwork chases you rather than waiting to be found." },
+      { kind: "note", tone: "warn", text: "The loan approval letter is the one that kills deals. It expires. Watch its date more closely than the rest." },
+    ],
+  },
+  {
+    id: "reminders", n: 11, part: "Staying on top", title: "Reminders",
+    blocks: [
+      { kind: "p", text: "Two lists on one screen. Paperwork due sits above the follow-ups: anything due in the next 14 days plus anything already overdue, soonest first, with the client and project named. Overdue items never drop off. Below it, your follow-ups — every date you set while logging activity." },
+    ],
+  },
+  {
+    id: "reports", n: 12, part: "Staying on top", title: "Reports",
+    blocks: [
+      { kind: "p", text: "The funnel is the heart of it: Leads → Appointments set → Showed up → Booked, with the conversion rate at each step. Underneath, the same figures by project and, for managers, by agent. A trend chart plots leads, appointments and bookings week by week." },
+      { kind: "p", text: "The period selector — 30 days, 90 days, 6 months, 12 months, All time — drives the funnel, the trend and both tables together. The four tiles at the top are not filtered: open pipeline is a snapshot of what is live right now." },
+      { kind: "note", tone: "info", text: "Setting and closing are credited separately. Appointments set count for whoever booked them; show-ups and bookings for whoever ran the presentation. A setter who hands over good appointments is never shown as having converted nothing." },
+    ],
+  },
+  {
+    id: "projects", n: 13, part: "For managers", title: "Projects and unit types", managerOnly: true,
+    blocks: [
+      { kind: "p", text: "Projects → New Project. Name, developer, state and area are the minimum. Also worth setting: developer commission rate, expected VP date, gallery address, and the pass-on window in days." },
+      { kind: "p", text: "Then add unit types — label, built-up, beds, baths, parking, list price and the nett price after rebate. This is the level agents quote at. Every field stays editable, and editing keeps the type's identity, so any lead or booking pointing at it is not orphaned." },
+      { kind: "note", tone: "info", text: "The price range on the project card is calculated, never typed. It comes from the unit types every time the card is drawn, using the nett price where one exists." },
+      { kind: "p", text: "Projects belong to the agency, not to an agent. Every agent views them; only managers and admins create, edit or delete. That differs from Properties on purpose — a listing belongs to the agent who won it." },
+    ],
+  },
+  {
+    id: "pools", n: 14, part: "For managers", title: "Lead pools and pass-on", managerOnly: true,
+    blocks: [
+      { kind: "p", text: "On a project page, Lead pool decides who receives that project's leads and in what order. New leads go round the list in rotation, so over any stretch of time everyone gets the same number. Position is a seat at the table, not a ranking." },
+      {
+        kind: "list",
+        items: [
+          "Add someone — they join the end of the rotation, which never disturbs the existing order",
+          "Up and down arrows — change the order",
+          "Pause — keeps their place but skips them, for somebody on leave",
+          "Remove — takes them out entirely",
+        ],
+      },
+      { kind: "p", text: "Set the pass-on window on the project's edit page. Leave it blank and pass-on never runs. A pool of one has nobody to pass to, and the screen says so." },
+      { kind: "note", tone: "warn", text: "Tell the team when you switch pass-on on. Agents cannot see the pool or the rule from inside the app, so the first hand-over will otherwise be a surprise. And it applies retroactively — switching it on for a project with old untouched leads will move a batch on the first night." },
+    ],
+  },
+  {
+    id: "lead-form-mapping", n: 15, part: "For managers", title: "Lead sources", managerOnly: true,
+    blocks: [
+      { kind: "p", text: "When you launch a Facebook or Instagram lead form, map it here: form ID, a name you will recognise, and the project it advertises. Leads from that form then arrive already attached to the project, which is what makes per-project reporting work." },
+      { kind: "note", tone: "info", text: "An unmapped form still creates the lead — it just arrives with no project. Losing a lead the agency paid for because nobody filled in a mapping would be far worse than filing it imperfectly." },
+    ],
+  },
+  {
+    id: "users", n: 16, part: "For managers", title: "Users and templates", managerOnly: true,
+    blocks: [
+      { kind: "p", text: "Users is where new sign-ups are approved. Somebody who has signed up appears inactive and can see nothing until you activate them and set their role." },
+      { kind: "note", tone: "warn", text: "Deactivate somebody the day they leave. Their sign-in keeps working until you do." },
+      { kind: "p", text: "Templates holds reusable WhatsApp and email messages with placeholders for name, project and price, so agents send something consistent without retyping it." },
+    ],
+  },
+  {
+    id: "spend", n: 17, part: "For managers", title: "Advertising spend", managerOnly: true,
+    blocks: [
+      { kind: "p", text: "Reports → Advertising spend. Record what each campaign cost and the report divides it by what the campaign produced. Agents never see agency ad spend." },
+      {
+        kind: "table",
+        head: ["Figure", "What it tells you"],
+        rows: [
+          ["Cost per lead", "Whether the ad is reaching anyone"],
+          ["Cost per appointment", "Whether those leads are real"],
+          ["Cost per booking", "Whether the campaign works. Judge a live campaign on this"],
+          ["Cost per closed deal", "The eventual truth — but months behind"],
+        ],
+      },
+      { kind: "p", text: "Cost per booking is the one to act on. A booking happens within weeks of the lead; a completed sale is six to eighteen months later, so cost per closed deal is a verdict on last year's advertising." },
+      { kind: "note", tone: "warn", text: "The most useful line is the flagged one. A campaign with money recorded and no matching leads appears as its own row — money out, nothing in." },
+    ],
+  },
+  {
+    id: "vocabulary", n: 18, part: "Reference", title: "Status vocabulary",
+    blocks: [
+      {
+        kind: "table",
+        head: ["Lead status", "Means"],
+        rows: [
+          ["new", "Arrived, nobody has spoken to them"],
+          ["contacted", "You have reached them at least once"],
+          ["qualified", "Real buyer — converted to a contact"],
+          ["disqualified", "Not a buyer. Say so rather than leaving them"],
+        ],
+      },
+      {
+        kind: "table",
+        head: ["Appointment", "Outcome", "Means"],
+        rows: [
+          ["scheduled", "—", "Booked in, not yet happened"],
+          ["showed-up", "booked", "They turned up and booked a unit"],
+          ["showed-up", "interested", "Turned up, keen, no booking yet"],
+          ["showed-up", "undecided", "Turned up, thinking about it"],
+          ["showed-up", "not-interested", "Turned up, ruled it out"],
+          ["no-show", "—", "Did not turn up"],
+          ["cancelled", "—", "Called off beforehand"],
+        ],
+      },
+      {
+        kind: "table",
+        head: ["Term", "Means"],
+        rows: [
+          ["Setter", "The agent who owns the client and books the appointment"],
+          ["Closer", "The agent who runs the presentation. Often the same person"],
+          ["Lead pool", "The agents who receive a project's leads, in rotation"],
+          ["Pass-on", "Moving an untouched agency lead to the next person in the pool"],
+          ["Nett price", "List price after the developer's rebate — what the buyer pays"],
+          ["VP", "Vacant possession — when the developer hands over the unit"],
+          ["SPA", "Sale and purchase agreement"],
+        ],
+      },
+    ],
+  },
+  {
+    id: "pdpa", n: 19, part: "Reference", title: "Protecting client data",
+    blocks: [
+      { kind: "p", text: "Everything here is personal data belonging to real people, and Malaysian law gives them rights over it. A few habits keep the agency on the right side of that:" },
+      {
+        kind: "list",
+        items: [
+          "Record consent where the form asks for it. Leads from a form with a consent question carry the answer automatically — do not overwrite it.",
+          "Do not export client lists to your own device unless you have been asked to.",
+          "Use fake details in screenshots and in anything shared outside the agency.",
+          "Tell your admin immediately if you think data has gone somewhere it should not have. Early is recoverable; late is not.",
+        ],
+      },
+    ],
+  },
+];
+
+/** Sections this user may see. Filtered here, not hidden in the browser. */
+export function sectionsFor(isManager: boolean): HelpSection[] {
+  return HELP_SECTIONS.filter((s) => isManager || !s.managerOnly);
+}
