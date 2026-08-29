@@ -64,7 +64,13 @@ GitHub -> Settings -> Secrets and variables -> Actions:
 OLD database — a backup of the wrong thing is worse than no backup, because it looks
 like cover.
 
-### 5. Deploy and verify
+### 5. Bootstrap the first admin
+
+Before signing in — see "What has to be recreated by hand" below for why:
+
+    pnpm bootstrap:admin you@agency.com "Your Name"
+
+### 6. Deploy and verify
 
 Run the deploy workflow, then load production `/leads`. It should be **empty** — that
 absence is the confirmation you are on the new database. Sign in, create a lead, check
@@ -74,10 +80,27 @@ it appears.
 
 Rows, not schema, so migrations will not bring them:
 
-- **Users.** The `users` table is keyed on the Clerk external id. A fresh database has
-  none. CHECK HOW THE FIRST ADMIN IS BOOTSTRAPPED before switching, or you will be
-  locked out of every admin-only page (`/lead-sources`, `/users`, bulk delete, PDPA
-  export). This was flagged and not yet investigated.
+- **Users — investigated 29 Aug, and the answer was "there is no bootstrap".**
+
+  `syncCurrentUser` (`lib/auth/sync.ts`) matches a Clerk identity to a staff row by
+  `external_auth_id`, then by email, and failing both inserts the row as
+  `role: "agent", active: false`. On an empty database the first person to sign in
+  therefore lands on `/pending` — and there is no admin in existence to approve them.
+  Locked out, exactly as feared. `pnpm seed` was the only escape and it DELETES every
+  row, so it cannot be used against a database that matters.
+
+  **Fixed by `scripts/bootstrap-admin.ts`.** Run it against the new database BEFORE
+  signing in:
+
+      pnpm bootstrap:admin you@agency.com "Your Name"
+
+  It inserts one active admin with a placeholder `external_auth_id`; signing in with
+  that email makes `syncCurrentUser` adopt the row by email and attach the real Clerk
+  id. Non-destructive, and it refuses to run once any user exists — a bootstrap, not a
+  back door for granting yourself admin later.
+
+  Order matters when moving Clerk at the same time: bootstrap with the email you will
+  use on the **production** Clerk instance, not the test one.
 - **The Met1 Residence project.**
 - **The lead source mapping**: provider `meta`, form id `1613980423612055`, name
   "met1 campaign", project Met1 Residence. `/lead-sources`, two minutes.
