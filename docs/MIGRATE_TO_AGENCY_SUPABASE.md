@@ -65,11 +65,50 @@ Put both values in `.env`, then:
 All 14 migrations (0000 to 0013) should apply. The dashboard's "Last migration" stops
 saying "No migrations".
 
+### Pick a password without punctuation
+
+Learned the hard way on 29 Aug 2026. A database password of `Liong7876!!` worked
+everywhere — psql, drizzle migrations, `pnpm db:check` on both poolers — but Cloudflare
+refused to save it in Hyperdrive:
+
+    Invalid database credentials. Ensure the username and password are correct,
+    that the user exists, and that the user has permissions to connect. [code: 2013]
+
+Cloudflare validates the credentials by connecting before it saves, and something in
+that path mishandled the `!!`. Changing the password to `Liong7876__` was accepted
+immediately, with nothing else altered.
+
+So: use letters, digits and underscores only. Get the strength from length (24+
+characters), not from punctuation. The same advice avoids URL-encoding problems in the
+connection string, where `@ # / : ? &` all break parsing — an earlier attempt in this
+same migration failed because the password placeholder `[PASSWORD]` was pasted
+literally and the `[` `]` produced a misleading "password authentication failed for
+user postgres".
+
+If a connection fails, check the SHAPE of the string before suspecting the password:
+
+    node -e "const u=new URL(process.env.DATABASE_URL); console.log(u.username, u.hostname, u.port)"
+
+A username that comes back as bare `postgres` rather than `postgres.<ref>` means the
+URL split in the wrong place.
+
 ### 3. Repoint Hyperdrive — the one that switches production
 
-Cloudflare dashboard -> Storage & databases -> **Hyperdrive** -> config
-`6db9c58c11e5432bafde0b1c292d099f` -> edit the connection to the new project's **6543**
-string.
+Cloudflare dashboard -> Storage & databases -> **Hyperdrive** -> the config named
+`propertyagent-db` (`6db9c58c11e5432bafde0b1c292d099f`) -> **Edit** on Connection Details.
+
+Only the USER and PASSWORD change:
+
+    Database host   aws-0-ap-southeast-1.pooler.supabase.com   unchanged
+    Port            5432                                       LEAVE IT
+    Database name   postgres                                   unchanged
+    User            postgres.dgiwxuwjvyfkpxhsicrs              <- was ...rgifjuiapkdosxufbkky
+    Password        the new project's password
+
+Keep port **5432**, not 6543. Hyperdrive does its own connection pooling, so it should
+talk to Supabase's SESSION pooler; pointing it at the transaction pooler would be
+pooling on top of pooling. The app's own `DATABASE_URL` still uses 6543 because that
+path has no Hyperdrive in front of it.
 
 ### 4. The other credentials
 
