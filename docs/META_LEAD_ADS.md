@@ -178,6 +178,30 @@ Verified working end to end on 2026-08-28 with form `4598404903712128`: a Test f
 submission of "Rodney Liong" / MY+60 / 163373357 arrived as `+60163373357`, was
 normalised by `toE164`, and created a lead.
 
+## Decision: a lead without a phone number is not a lead
+
+Taken 29 Aug 2026. `intakeSchema` requires a phone in E.164 and that stays.
+
+The reasoning: this agency works leads by phone and WhatsApp. An email-only lead
+cannot be called or WhatsApped, and every follow-up path in the product assumes a
+number. Accepting them would mean rows that look like leads but cannot be worked.
+
+The consequence to manage: a Meta lead form that does not ASK for a phone number
+loses every lead it produces. Intake rejects them, they are logged at `info` as
+"Meta lead rejected by intake", and nothing else happens — no error, no retry,
+nobody notified. That is correct behaviour for bad data and a silent hole for a
+badly built form.
+
+So this is now an operational rule rather than a code problem:
+
+**Every Meta lead form MUST include the Phone number field, and it must NOT be
+marked Optional.** Check it when creating a form, and check it on any form a client
+or team member builds before pointing it at the CRM.
+
+If unattributed loss ever becomes a real worry, the cheap safeguard is to surface
+rejected leads somewhere visible — a count on the dashboard, or a rejected list —
+rather than to relax the phone requirement.
+
 ## Known gaps
 
 - Realtime delivery from Meta has never been observed to arrive. Track status stays
@@ -185,14 +209,17 @@ normalised by `toE164`, and created a lead.
   data is not delivered to unpublished apps. Publishing needs a privacy policy URL and
   App Review. Until then `scripts/replay-meta-lead.mjs` is how leads get in during
   development — it exercises the real path apart from Meta's delivery hop.
-- No `lead_form_sources` row exists yet for form `4598404903712128`. Add one
-  (provider `meta`, `external_form_id` = that id, pointing at the right project) or
-  leads ingest unattached to any project. Until then every delivery logs
-  "Meta lead form is not mapped to a project" at info level, which is expected.
+- Mapping is live: form `1613980423612055` -> "met1 campaign" -> Met1 Residence,
+  verified in production (a lead arrived with Source "webhook (met1 campaign)").
+  Each new campaign gets a new form id and needs its own row at `/lead-sources`.
 - Rate limiting is inert in local dev: `RATE_LIMIT_WEBHOOKS` is backed by Cloudflare
   KV, which plain `next dev` does not provide, so it throws and fails open. Harmless
   locally, must work in production.
-- `getFunnel` (server/reports/funnel.ts) times out against Supabase — statement
-  timeout 57014, /dashboard taking 10-23s. Indexes look correct; suspect the
-  transaction-mode pooler (port 6543) plus a large concurrent Promise.all. Unrelated
-  to lead ingestion.
+- `/dashboard` slowness is a LOCAL DEV problem only, confirmed 29 Aug 2026.
+  `next dev` showed 10-23s and later 120s+ with Postgres statement timeouts (57014)
+  from `getFunnel`; production loads fast. The cause is dev-mode recompilation plus
+  ~19 concurrent queries (8 on the page, ~11 more inside `getFunnel`) going straight
+  to Supabase's transaction-mode pooler on port 6543 from Malaysia, where each query
+  takes its own pooled connection and the rest queue. Production goes through
+  Hyperdrive, which holds warm pooled connections at the edge. No work needed; do not
+  be alarmed by the timings in `pnpm dev`.
