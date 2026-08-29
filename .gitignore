@@ -23,3 +23,4 @@ _backup_before_patch/
 _to_delete/
 *.tsbuildinfo
 tsconfig.tsbuildinfo
+.env.local.*
