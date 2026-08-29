@@ -8,10 +8,14 @@ export const clerkProvider: AuthProvider = {
     if (!userId) return null;
     const u = await currentUser();
     if (!u) return null;
+    const primary = u.primaryEmailAddress;
     return {
       externalAuthId: u.id,
-      email: u.primaryEmailAddress?.emailAddress ?? "",
+      email: primary?.emailAddress ?? "",
       name: [u.firstName, u.lastName].filter(Boolean).join(" ") || (u.username ?? ""),
+      // Anything other than an explicit "verified" is treated as unverified. A missing
+      // or unrecognised status must fail closed — this gates role adoption.
+      emailVerified: primary?.verification?.status === "verified",
     };
   },
   async requireUser(): Promise<AuthUser> {

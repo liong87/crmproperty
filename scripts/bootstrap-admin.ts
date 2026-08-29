@@ -15,6 +15,10 @@
  * Then sign in with that email. syncCurrentUser matches the row by email and adopts
  * it, so the Clerk id is attached on first login and you arrive as an active admin.
  *
+ * The address must be VERIFIED at the auth provider for that link to happen — role
+ * adoption by email is a privilege boundary, so an unverified address is refused. Use
+ * an email you can actually receive on.
+ *
  * Deliberately NOT destructive and deliberately narrow:
  *
  *  - It refuses to run once any active user exists. This is a bootstrap, not a

@@ -9,12 +9,21 @@ import { eq, and, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { users, type User } from "@/lib/db/schema";
 import { getCurrentUser } from "./active-provider";
+import { monitoring } from "@/lib/monitoring";
 
 /**
  * Upsert the current identity into `users`.
  *  1. Match on external_auth_id → update name/email.
- *  2. Else match on email (links pre-seeded staff to their first login) → attach external_auth_id, keep role.
- *  3. Else insert a new row as role "agent".
+ *  2. Else match on a VERIFIED email (links pre-seeded staff to their first login) →
+ *     attach external_auth_id, keep role.
+ *  3. Else insert a new row as role "agent", inactive.
+ *
+ * Step 2 adopts the existing row's ROLE, which makes it a privilege boundary rather
+ * than a convenience: whoever signs in claiming an admin's address becomes that admin.
+ * It therefore requires the auth provider to have verified the address. An unverified
+ * one is refused outright rather than falling through to step 3, because `users.email`
+ * is unique and inserting would fail anyway — and failing closed is the right answer
+ * for an identity claiming somebody else's address.
  */
 export async function syncCurrentUser(): Promise<User | null> {
   const authUser = await getCurrentUser();
@@ -42,6 +51,17 @@ export async function syncCurrentUser(): Promise<User | null> {
       .select()
       .from(users)
       .where(and(eq(users.email, authUser.email), isNull(users.deletedAt)));
+
+    if (byEmail && !authUser.emailVerified) {
+      // Someone is signing in with an unverified address that already belongs to a
+      // member of staff. Adopting the row would hand over its role.
+      monitoring.captureMessage("Refused to link an unverified email to an existing user", {
+        externalAuthId: authUser.externalAuthId,
+        userId: byEmail.id,
+      });
+      return null;
+    }
+
     if (byEmail) {
       const [linked] = await db
         .update(users)
