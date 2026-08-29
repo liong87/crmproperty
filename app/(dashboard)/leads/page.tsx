@@ -3,12 +3,9 @@ import { redirect } from "next/navigation";
 import { getCurrentDbUser } from "@/lib/auth";
 import { listLeadsPaginated, type LeadStatus } from "@/server/leads/queries";
 import { LEAD_STATUS } from "@/lib/constants";
-import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatMYR } from "@/lib/utils";
-import { leadStatusTone } from "@/lib/status";
 import { EmptyState } from "@/components/ui/empty-state";
+import { LeadsTable } from "@/components/leads/leads-table";
 import { Inbox } from "lucide-react";
 
 export default async function LeadsPage({
@@ -49,28 +46,21 @@ export default async function LeadsPage({
         <Button type="submit" size="sm" variant="outline">Filter</Button>
       </form>
 
-      <Table>
-        <THead>
-          <TR><TH>Name</TH><TH>Phone</TH><TH>Interest</TH><TH>Budget</TH><TH>Assigned to</TH><TH>Status</TH></TR>
-        </THead>
-        <TBody>
-          {items.map((l) => (
-            <TR key={l.id}>
-              <TD className="font-medium"><Link href={`/leads/${l.id}`} className="hover:underline">{l.name}</Link></TD>
-              <TD className="text-muted-foreground">{l.phone}</TD>
-              <TD>{l.interest ?? "—"}</TD>
-              <TD>{formatMYR(l.budgetMin)}{l.budgetMax ? ` – ${formatMYR(l.budgetMax)}` : ""}</TD>
-              {/* Unassigned is called out rather than left blank — an empty cell reads
-                  as a rendering glitch, and a lead nobody owns needs to be noticed. */}
-              <TD className={l.assigneeName ? "" : "text-destructive"}>
-                {l.assigneeName ?? "Unassigned"}
-              </TD>
-              <TD><Badge className={leadStatusTone(l.status)}>{l.status}</Badge></TD>
-            </TR>
-          ))}
-
-        </TBody>
-      </Table>
+      <LeadsTable
+        rows={items.map((l) => ({
+          id: l.id,
+          name: l.name,
+          phone: l.phone,
+          interest: l.interest,
+          budgetMin: l.budgetMin,
+          budgetMax: l.budgetMax,
+          assigneeName: l.assigneeName,
+          status: l.status,
+        }))}
+        // Deletion is admin-only, matching deleteLead: an agent who can erase leads
+        // can erase the evidence of ones they never worked.
+        canDelete={me.role === "admin"}
+      />
       {items.length === 0 && <EmptyState icon={Inbox} title="No leads found" hint="Capture a new lead or adjust your filters." />}
 
       {pages > 1 && (

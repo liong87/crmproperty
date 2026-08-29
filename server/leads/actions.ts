@@ -1,7 +1,7 @@
 "use server";
 /** Lead mutations. Authn + RBAC + Zod + ActionResult on every action. */
 import { z } from "zod";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db/client";
@@ -231,6 +231,70 @@ export async function assignLead(
  * A converted lead cannot be deleted: it is the origin of a live contact, and the
  * contact page links back to it.
  */
+/**
+ * Delete several leads at once.
+ *
+ * Admin only, matching deleteLead — an agent who can erase leads can erase the
+ * evidence of ones they never worked, and stale-lead flagging depends on unworked
+ * leads staying visible.
+ *
+ * Partial success is reported rather than hidden: a lead that has become a contact
+ * is skipped, not deleted, and the caller is told how many. Failing the whole batch
+ * because one row is ineligible would make clearing test data needlessly fiddly.
+ */
+export async function deleteLeads(
+  ids: string[],
+): Promise<ActionResult<{ deleted: number; skipped: number }>> {
+  try {
+    const me = await requireDbUser();
+    assertRole(me, "admin");
+
+    const parsed = z.array(z.string().uuid()).min(1).max(200).safeParse(ids);
+    if (!parsed.success) return fail("Select at least one lead to delete.");
+    const unique = [...new Set(parsed.data)];
+
+    // Converted leads are owned by their contact; deleting one here would orphan it.
+    const eligible = await db
+      .select({ id: leads.id })
+      .from(leads)
+      .where(
+        and(
+          inArray(leads.id, unique),
+          isNull(leads.deletedAt),
+          isNull(leads.convertedToContactId),
+        ),
+      );
+
+    const eligibleIds = eligible.map((r) => r.id);
+    const skipped = unique.length - eligibleIds.length;
+
+    if (eligibleIds.length === 0) {
+      return fail(
+        skipped > 0
+          ? "Those leads became contacts and cannot be deleted. Delete the contacts instead."
+          : "Nothing to delete.",
+      );
+    }
+
+    await db
+      .update(leads)
+      .set({ deletedAt: new Date() })
+      .where(inArray(leads.id, eligibleIds));
+
+    // Bulk removal of client records should never be silent, even a soft one.
+    monitoring.captureMessage("Leads bulk deleted", {
+      count: String(eligibleIds.length),
+      skipped: String(skipped),
+      by: me.id,
+    });
+
+    revalidatePath("/leads");
+    return ok({ deleted: eligibleIds.length, skipped });
+  } catch (err) {
+    return handle(err, "deleteLeads");
+  }
+}
+
 export async function deleteLead(id: string): Promise<ActionResult<void>> {
   try {
     const me = await requireDbUser();
