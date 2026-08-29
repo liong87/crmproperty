@@ -5,6 +5,7 @@
  * so switching R2 -> S3/B2/MinIO needs no data migration.
  */
 import { z } from "zod";
+import { acceptedType, IMAGE_TYPES } from "@/lib/uploads/sniff";
 import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
@@ -43,7 +44,13 @@ export async function uploadPropertyImage(formData: FormData): Promise<ActionRes
     const key = `properties/${propertyId}/${crypto.randomUUID()}-${safeName}`;
     const bytes = Buffer.from(await file.arrayBuffer());
 
-    await storage.upload(key, bytes, file.type);
+    // The declared type got us this far; the bytes decide. Whatever we store is what
+    // R2 hands back on a signed URL, so an HTML file labelled image/jpeg would be
+    // served as a page from a link the agency gave out.
+    const sniffed = acceptedType(bytes, IMAGE_TYPES);
+    if (!sniffed) return fail("That file is not a JPEG, PNG or WebP image.");
+
+    await storage.upload(key, bytes, sniffed);
 
     const [row] = await db
       .insert(documents)

@@ -14,6 +14,7 @@ import { requireDbUser, assertCanEdit, AuthorizationError } from "@/lib/auth";
 import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
+import { acceptedType, DOCUMENT_TYPES } from "@/lib/uploads/sniff";
 
 const MAX_BYTES = 15 * 1024 * 1024; // 15 MB — an SPA scan is bigger than a photo.
 const ALLOWED = [
@@ -190,7 +191,15 @@ export async function uploadChecklistFile(formData: FormData): Promise<ActionRes
     if (!ALLOWED.includes(file.type)) return fail("Upload a PDF, Word document or image.");
 
     const key = `deals/${item.row.dealId}/${crypto.randomUUID()}-${file.name.replace(/[^\w.\-]/g, "_")}`;
-    await storage.upload(key, new Uint8Array(await file.arrayBuffer()), file.type);
+    const bytes = new Uint8Array(await file.arrayBuffer());
+
+    // The declared type is the client's word for it. These files are contracts and
+    // identity documents, and whatever content type we store is what R2 serves on a
+    // signed URL — so the bytes decide, not the header.
+    const sniffed = acceptedType(bytes, DOCUMENT_TYPES);
+    if (!sniffed) return fail("That file is not a PDF, Word document or image.");
+
+    await storage.upload(key, bytes, sniffed);
 
     const [doc] = await db
       .insert(documents)
@@ -225,12 +234,15 @@ export async function getChecklistFileUrl(itemId: string): Promise<ActionResult<
     if (!item.row.documentId) return fail("No file attached.");
 
     const [doc] = await db
-      .select({ key: documents.storageKey })
+      .select({ key: documents.storageKey, filename: documents.filename })
       .from(documents)
       .where(eq(documents.id, item.row.documentId));
     if (!doc) return fail("File not found.");
 
-    return ok({ url: await storage.getSignedUrl(doc.key) });
+    // Always a download, never a rendered page. These are contracts and identity
+    // documents; nobody needs them displayed in a tab, and rendering an uploaded file
+    // is the one thing that makes a stored file interesting to an attacker.
+    return ok({ url: await storage.getSignedUrl(doc.key, undefined, doc.filename ?? "document") });
   } catch (err) {
     return handle(err, "getChecklistFileUrl");
   }

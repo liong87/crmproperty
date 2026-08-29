@@ -60,11 +60,29 @@ export const r2Provider: StorageProvider = {
   // captured in screenshots. Pages mint fresh URLs on every load, so a short window
   // costs nothing — the only limit is how long a page can sit open before its
   // images stop loading, and 15 minutes is comfortably past a normal visit.
-  async getSignedUrl(key, expiresInSeconds = 900) {
+  async getSignedUrl(key, expiresInSeconds = 900, downloadAs = null) {
     const { client, bucket } = config();
-    return getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: key }), {
-      expiresIn: expiresInSeconds,
-    });
+
+    // Quotes and non-ASCII break the header, and a filename is user-supplied.
+    const safe = downloadAs ? downloadAs.replace(/[^\w.\- ]/g, "_").slice(0, 120) : null;
+
+    return getSignedUrl(
+      client,
+      new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        // Response headers are signed into the URL, so this cannot be stripped by
+        // editing the link.
+        ...(safe
+          ? {
+              ResponseContentDisposition: `attachment; filename="${safe}"`,
+              // Never let the browser render it, whatever the object's stored type.
+              ResponseContentType: "application/octet-stream",
+            }
+          : {}),
+      }),
+      { expiresIn: expiresInSeconds },
+    );
   },
   async delete(key) {
     const { client, bucket } = config();
