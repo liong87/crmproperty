@@ -10,6 +10,12 @@ import { clientIp, withinRateLimit, tooManyRequests } from "@/lib/rate-limit";
 export const dynamic = "force-dynamic";
 
 /**
+ * 256 KB. Generous for a webhook receipt — Meta sends ids, not lead data — while
+ * still bounding what an unauthenticated caller can make us read and hash.
+ */
+const MAX_BODY_BYTES = 256 * 1024;
+
+/**
  * Webhook receiver for form and ad-platform lead sources.
  *
  *   POST /api/webhooks/forms/tally
@@ -234,9 +240,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ provide
     return tooManyRequests();
   }
 
+  // The body has to be read before the signature can be checked — the HMAC is over
+  // these bytes — so an unauthenticated caller decides how much we read. Cap it.
+  // Meta's leadgen receipt is well under a kilobyte; batched deliveries stay small.
+  if (Number(req.headers.get("content-length") ?? "0") > MAX_BODY_BYTES) {
+    return NextResponse.json({ ok: false, error: "Payload too large" }, { status: 413 });
+  }
+
   // Read once as text: HMAC must be over the exact bytes, and a Request body
   // can only be consumed a single time.
   const rawBody = await req.text();
+  if (rawBody.length > MAX_BODY_BYTES) {
+    return NextResponse.json({ ok: false, error: "Payload too large" }, { status: 413 });
+  }
 
   const denied = await authorize(provider, req, rawBody);
   if (denied) return denied;

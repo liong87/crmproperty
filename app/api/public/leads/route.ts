@@ -6,6 +6,9 @@ import { clientIp, checkRateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
+/** 32 KB. A lead payload is a few hundred bytes; this is generous by two orders. */
+const MAX_BODY_BYTES = 32 * 1024;
+
 // Public intake — no session. Protected by a per-landing-page API key.
 // Middleware allows /api/public/* through unauthenticated.
 
@@ -72,9 +75,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Invalid API key" }, { status: 401, headers });
   }
 
+  // A lead is a few hundred bytes. Anything approaching this is either a mistake or
+  // someone seeing how much work they can make us do parsing it, and the check is
+  // cheaper before parsing than after.
+  const declaredLength = Number(req.headers.get("content-length") ?? "0");
+  if (declaredLength > MAX_BODY_BYTES) {
+    return NextResponse.json({ ok: false, error: "Payload too large" }, { status: 413, headers });
+  }
+
   let body: unknown;
   try {
-    body = await req.json();
+    // content-length can lie or be absent (chunked). Read as text and measure what
+    // actually arrived, so the header is a fast path rather than the only guard.
+    const raw = await req.text();
+    if (raw.length > MAX_BODY_BYTES) {
+      return NextResponse.json({ ok: false, error: "Payload too large" }, { status: 413, headers });
+    }
+    body = JSON.parse(raw);
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400, headers });
   }
