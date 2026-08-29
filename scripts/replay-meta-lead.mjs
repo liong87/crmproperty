@@ -230,7 +230,7 @@ console.log(`\n  ${res.status} ${res.statusText}`);
 console.log(`  ${text}\n`);
 
 if (res.status === 200) {
-  console.log("  ✓ Accepted. Check http://localhost:3000/leads\n");
+  console.log(`  ✓ Accepted. Check ${new URL(TARGET).origin}/leads\n`);
 } else if (res.status === 403) {
   console.log("  ✗ Signature rejected — WEBHOOK_SECRET_META is not the App Secret.\n");
 } else if (res.status === 503) {
