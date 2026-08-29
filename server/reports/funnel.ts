@@ -16,6 +16,16 @@ import { db } from "@/lib/db/client";
 import { leads, appointments, projects, users, type User } from "@/lib/db/schema";
 import { ownershipFilter, ownershipFilterAny, isManagerOrAbove } from "@/lib/auth";
 
+/**
+ * Bucket labels for rows with nothing to group on.
+ *
+ * Kept distinct and spelled out because "Unassigned" was doing double duty: on the
+ * By project table it meant "this lead has no project", which readers took to mean
+ * "this lead has no owner" — a different and much more alarming thing.
+ */
+const NO_PROJECT_LABEL = "No project · resale & rental";
+const NO_AGENT_LABEL = "No owner";
+
 export interface FunnelStage {
   key: "leads" | "appointments" | "showed-up" | "booked";
   label: string;
@@ -187,7 +197,7 @@ export async function getFunnel(user: User, sinceDays = 90): Promise<FunnelData>
     // Denominator is appointments that reached a verdict. Counting still-scheduled ones
     // would make every fresh appointment look like a success and dilute the rate.
     noShowRate: share(t.noShow, t.showedUp + t.noShow),
-    byProject: merge(leadsByProject, apptsByProject, "Unassigned / resale"),
+    byProject: merge(leadsByProject, apptsByProject, NO_PROJECT_LABEL),
     byAgent: isManagerOrAbove(user)
       ? await mergeAgents(leadsByAgent, apptsSetByAgent, apptsClosedByAgent)
       : [],
@@ -207,10 +217,10 @@ async function mergeAgents(
   const ensure = (id: string | null, name?: string | null): FunnelRow => {
     let row = byId.get(id);
     if (!row) {
-      row = { id, label: name ?? "Unassigned", leads: 0, appointments: 0, showedUp: 0, booked: 0, noShowRate: null };
+      row = { id, label: name ?? NO_AGENT_LABEL, leads: 0, appointments: 0, showedUp: 0, booked: 0, noShowRate: null };
       byId.set(id, row);
     }
-    if (name && row.label === "Unassigned") row.label = name;
+    if (name && row.label === NO_AGENT_LABEL) row.label = name;
     return row;
   };
 
@@ -225,7 +235,7 @@ async function mergeAgents(
 
   // A closer who set nothing has no name yet — the closer query does not join users,
   // because grouping on a coalesce cannot also carry the joined name reliably.
-  const unnamed = [...byId.values()].filter((r) => r.id && r.label === "Unassigned").map((r) => r.id!);
+  const unnamed = [...byId.values()].filter((r) => r.id && r.label === NO_AGENT_LABEL).map((r) => r.id!);
   if (unnamed.length > 0) {
     const names = await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, unnamed));
     for (const n of names) {
@@ -311,7 +321,7 @@ export async function getFunnelTrend(user: User, weeks = 12): Promise<TrendPoint
 
   const [leadRows, apptRows] = await Promise.all([
     db.execute(sql`
-      select date_trunc('week', ${leads.createdAt} at time zone 'Asia/Kuala_Lumpur') as bucket,
+      select to_char(date_trunc('week', ${leads.createdAt} at time zone 'Asia/Kuala_Lumpur'), 'YYYY-MM-DD') as bucket,
              count(*)::int as c
       from ${leads}
       where ${leads.deletedAt} is null
@@ -320,7 +330,7 @@ export async function getFunnelTrend(user: User, weeks = 12): Promise<TrendPoint
       group by 1
     `),
     db.execute(sql`
-      select date_trunc('week', ${appointments.scheduledAt} at time zone 'Asia/Kuala_Lumpur') as bucket,
+      select to_char(date_trunc('week', ${appointments.scheduledAt} at time zone 'Asia/Kuala_Lumpur'), 'YYYY-MM-DD') as bucket,
              count(*)::int as c,
              count(*) filter (where ${appointments.outcome} = 'booked')::int as booked
       from ${appointments}
@@ -331,14 +341,25 @@ export async function getFunnelTrend(user: User, weeks = 12): Promise<TrendPoint
     `),
   ]);
 
+  /*
+   * The bucket comes back as a plain 'YYYY-MM-DD' STRING, formatted by postgres,
+   * and is used as the map key verbatim — it is never parsed into a Date.
+   *
+   * `date_trunc(... at time zone ...)` yields a timestamp WITHOUT time zone: Monday
+   * midnight in Malaysian wall-clock terms. Handing that to `new Date()` made the
+   * driver interpret it in the SERVER's local zone, so on a machine set to UTC+8
+   * every bucket shifted back a day, matched nothing on the JS side, and the whole
+   * trend rendered as flat zeroes next to a funnel showing real counts. It looked
+   * correct anywhere running in UTC, which is exactly why it survived testing.
+   */
   const key = (d: Date) => d.toISOString().slice(0, 10);
   const leadBy = new Map<string, number>();
-  for (const r of leadRows as unknown as Array<{ bucket: string | Date; c: number }>) {
-    leadBy.set(key(new Date(r.bucket)), Number(r.c));
+  for (const r of leadRows as unknown as Array<{ bucket: string; c: number }>) {
+    leadBy.set(r.bucket, Number(r.c));
   }
   const apptBy = new Map<string, { c: number; booked: number }>();
-  for (const r of apptRows as unknown as Array<{ bucket: string | Date; c: number; booked: number }>) {
-    apptBy.set(key(new Date(r.bucket)), { c: Number(r.c), booked: Number(r.booked) });
+  for (const r of apptRows as unknown as Array<{ bucket: string; c: number; booked: number }>) {
+    apptBy.set(r.bucket, { c: Number(r.c), booked: Number(r.booked) });
   }
 
   // Build every week in the window, so a quiet week reads as a dip rather than

@@ -7,14 +7,27 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { StatCard, BarList } from "@/components/reports/charts";
 import { FunnelChart, FunnelBreakdown } from "@/components/reports/funnel";
 import { TrendChart } from "@/components/reports/trend";
+import { RangeFilter, parseRangeDays, rangeLabel } from "@/components/reports/range-filter";
 import { STATUS } from "@/lib/chart-colors";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { formatMYR } from "@/lib/utils";
 
-export default async function ReportsPage() {
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ days?: string }>;
+}) {
   const me = await getCurrentDbUser();
   if (!me) redirect("/sign-in");
-  const [r, funnel, trend] = await Promise.all([getReportData(me), getFunnel(me), getFunnelTrend(me)]);
+  const days = parseRangeDays((await searchParams).days);
+  // Weekly points, floored at 4 so a short window still draws a line, and capped so
+  // "All time" cannot render hundreds of unreadable buckets.
+  const weeks = Math.min(104, Math.max(4, Math.ceil(days / 7)));
+  const [r, funnel, trend] = await Promise.all([
+    getReportData(me),
+    getFunnel(me, days),
+    getFunnelTrend(me, weeks),
+  ]);
 
   return (
     <div className="space-y-4">
@@ -36,6 +49,16 @@ export default async function ReportsPage() {
         <StatCard label="Qualified" value={String(r.qualifiedLeads)} />
         <StatCard label="Conversion" value={`${Math.round(r.conversionRate * 100)}%`} />
         <StatCard label="Open pipeline" value={formatMYR(r.openPipelineValue)} />
+      </div>
+
+      {/*
+        The selector drives the funnel, the trend and the breakdowns below — the parts
+        that describe a PERIOD. The tiles above are current state (open pipeline is a
+        snapshot, not a total), so windowing them would say something untrue.
+      */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
+        <h2 className="text-base font-semibold">Funnel · {rangeLabel(days)}</h2>
+        <RangeFilter days={days} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">

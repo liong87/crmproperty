@@ -1,3 +1,4 @@
+import { rangeLabel } from "@/components/reports/range-filter";
 import type { FunnelData } from "@/server/reports/funnel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FUNNEL_RAMP, STATUS } from "@/lib/chart-colors";
@@ -23,7 +24,7 @@ export function FunnelChart({ data }: { data: FunnelData }) {
       <CardHeader className="flex-row items-baseline justify-between gap-3">
         <CardTitle>Funnel</CardTitle>
         <span className="text-xs text-muted-foreground">
-          Last {data.sinceDays} days · {data.scope === "team" ? "whole team" : "your leads"}
+          {rangeLabel(data.sinceDays)} · {data.scope === "team" ? "whole team" : "your leads"}
         </span>
       </CardHeader>
       <CardContent className="space-y-4">
