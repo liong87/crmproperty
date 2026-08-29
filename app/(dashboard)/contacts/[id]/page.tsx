@@ -11,7 +11,7 @@ import { MatchingListings } from "@/components/matching/match-panels";
 import { listActiveTemplates } from "@/server/templates/actions";
 import { listPickableListings } from "@/server/matching/queries";
 import { listProjectOptions } from "@/server/projects/queries";
-import { listAssignableAgents } from "@/server/leads/queries";
+import { listAssignableAgents, getLeadProjectId } from "@/server/leads/queries";
 import { listAppointmentsForClient } from "@/server/appointments/queries";
 import { ScheduleAppointment } from "@/components/appointments/schedule-appointment";
 import { AppointmentList } from "@/components/appointments/appointment-list";
@@ -54,7 +54,13 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       {contact.notes && (
         <Card><CardHeader><CardTitle>Notes</CardTitle></CardHeader><CardContent className="text-sm whitespace-pre-wrap">{contact.notes}</CardContent></Card>
       )}
-      {editable && <CreateDealButton contactId={contact.id} />}
+      {editable && (
+        <CreateDealButton
+          contactId={contact.id}
+          projects={await listProjectOptions()}
+          defaultProjectId={await getLeadProjectId(contact.sourceLeadId)}
+        />
+      )}
 
       {editable && (
         <Card>

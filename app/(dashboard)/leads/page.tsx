@@ -51,7 +51,7 @@ export default async function LeadsPage({
 
       <Table>
         <THead>
-          <TR><TH>Name</TH><TH>Phone</TH><TH>Interest</TH><TH>Budget</TH><TH>Status</TH></TR>
+          <TR><TH>Name</TH><TH>Phone</TH><TH>Interest</TH><TH>Budget</TH><TH>Assigned to</TH><TH>Status</TH></TR>
         </THead>
         <TBody>
           {items.map((l) => (
@@ -60,6 +60,11 @@ export default async function LeadsPage({
               <TD className="text-muted-foreground">{l.phone}</TD>
               <TD>{l.interest ?? "—"}</TD>
               <TD>{formatMYR(l.budgetMin)}{l.budgetMax ? ` – ${formatMYR(l.budgetMax)}` : ""}</TD>
+              {/* Unassigned is called out rather than left blank — an empty cell reads
+                  as a rendering glitch, and a lead nobody owns needs to be noticed. */}
+              <TD className={l.assigneeName ? "" : "text-destructive"}>
+                {l.assigneeName ?? "Unassigned"}
+              </TD>
               <TD><Badge className={leadStatusTone(l.status)}>{l.status}</Badge></TD>
             </TR>
           ))}

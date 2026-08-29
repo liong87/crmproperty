@@ -101,6 +101,25 @@ export async function scheduleAppointment(input: unknown): Promise<ActionResult<
       })
       .returning({ id: appointments.id });
 
+    /*
+     * Booking a lead into a project's gallery IS the moment that lead becomes a lead
+     * for that project — so record it, or the funnel shows an appointment under the
+     * project with no lead above it and the two rows contradict each other.
+     *
+     * Only filled in when blank. A lead already pointed at another project is somebody
+     * shopping two launches, and their stated primary interest is not ours to rewrite
+     * on the back of one viewing.
+     */
+    let projectBackfilled = false;
+    if (d.projectId && d.leadId) {
+      const touched = await db
+        .update(leads)
+        .set({ projectId: d.projectId })
+        .where(and(eq(leads.id, d.leadId), isNull(leads.projectId), isNull(leads.deletedAt)))
+        .returning({ id: leads.id });
+      projectBackfilled = touched.length > 0;
+    }
+
     // Logged on the client's timeline, and doubling as the agent's reminder.
     //
     // followUpAt makes it appear on /reminders and the dashboard, so an agent has one
@@ -116,7 +135,10 @@ export async function scheduleAppointment(input: unknown): Promise<ActionResult<
       entityType: d.contactId ? "contacts" : "leads",
       entityId: (d.contactId ?? d.leadId)!,
       type: "appointment",
-      body: `Appointment scheduled${bookedByOther}.${d.notes ? ` ${d.notes}` : ""}`,
+      body:
+        `Appointment scheduled${bookedByOther}.` +
+        (projectBackfilled ? " Lead linked to the project." : "") +
+        (d.notes ? ` ${d.notes}` : ""),
       occurredAt: new Date(),
       followUpAt: new Date(d.scheduledAt),
       createdBy: attendee,

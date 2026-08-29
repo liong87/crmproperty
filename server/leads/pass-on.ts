@@ -21,7 +21,7 @@
  * Scheduled by:  .github/workflows/lead-pass-on.yml
  * Set PASS_ON_DRY_RUN=1 to report what would move without moving anything.
  */
-import { and, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, isNull, ne, notInArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { leads, projects, users, activities, appointments, leadAssignments } from "@/lib/db/schema";
 import { listPool, nextAfter } from "./pool";
@@ -52,6 +52,10 @@ export interface PassOnResult {
  * The exclusions are the whole design. A lead is NOT passed on when it:
  *
  *  - has no project, or its project has no pass-on window set (opt-in, per project)
+ *  - was sourced by the agent themselves — entered by hand or imported from their own
+ *    export. Pass-on redistributes leads the AGENCY paid for; an agent's own walk-in,
+ *    referral or personal ad campaign is their asset and taking it off them is theft,
+ *    not management. Only `api` and `webhook` leads are agency-sourced.
  *  - is converted, disqualified or already qualified — all finished or in-hand work
  *  - has an appointment of any kind, which means somebody is actively working it
  *  - has any activity logged since the current owner received it
@@ -78,6 +82,9 @@ async function findCandidates(): Promise<PassOnCandidate[]> {
     .where(
       and(
         isNull(leads.deletedAt),
+        // Agency-sourced only. `manual` is an agent typing in their own enquiry and
+        // `import` is an agent uploading their own export; neither belongs to the pool.
+        notInArray(leads.source, ["manual", "import"]),
         isNull(leads.convertedToContactId),
         ne(leads.status, "disqualified"),
         ne(leads.status, "qualified"),
