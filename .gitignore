@@ -24,3 +24,7 @@ _to_delete/
 *.tsbuildinfo
 tsconfig.tsbuildinfo
 .env.local.*
+
+# Screen recordings kept for reference - too large for git
+samples/*.mp4
+samples/_frames/
