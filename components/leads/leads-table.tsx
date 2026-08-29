@@ -45,6 +45,8 @@ export function LeadsTable({
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [armed, setArmed] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // A partial delete succeeded — it is not an error and should not be red.
+  const [notice, setNotice] = React.useState<string | null>(null);
   const [pending, start] = React.useTransition();
 
   const pageIds = React.useMemo(() => rows.map((r) => r.id), [rows]);
@@ -68,6 +70,7 @@ export function LeadsTable({
 
   function onDelete() {
     setError(null);
+    setNotice(null);
     start(async () => {
       const res = await deleteLeads([...selected]);
       if (!res.success) {
@@ -75,11 +78,11 @@ export function LeadsTable({
         setArmed(false);
         return;
       }
-      if (res.data.skipped > 0) {
-        setError(
-          `Deleted ${res.data.deleted}. Skipped ${res.data.skipped} that became contacts — delete those from Contacts.`,
-        );
-      }
+      setNotice(
+        res.data.skipped > 0
+          ? `Deleted ${res.data.deleted}. Skipped ${res.data.skipped} that became contacts — delete those from Contacts.`
+          : `Deleted ${res.data.deleted}.`,
+      );
       setSelected(new Set());
       setArmed(false);
       router.refresh();
@@ -120,6 +123,12 @@ export function LeadsTable({
       {error && (
         <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
+        </p>
+      )}
+
+      {notice && (
+        <p className="rounded-md border border-input bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          {notice}
         </p>
       )}
 
