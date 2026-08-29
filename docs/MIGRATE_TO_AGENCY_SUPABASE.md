@@ -33,9 +33,28 @@ Supabase dashboard -> **Connect**. Take both:
     DATABASE_URL          port 6543   transaction pooler   the app
     DIRECT_DATABASE_URL   port 5432   session pooler       migrations
 
+Both use the same host and user; only the port differs:
+
+    host  aws-0-ap-southeast-1.pooler.supabase.com
+    user  postgres.dgiwxuwjvyfkpxhsicrs
+    db    postgres
+
+Percent-encode the password in the URI if it contains special characters.
+
 Migrations need 5432: DDL and advisory locks do not work through transaction-mode
 pooling. Do NOT use the `db.<ref>.supabase.co` direct host — it is IPv6-only unless the
 IPv4 add-on is bought, and fails with ENOTFOUND on a normal network.
+
+**IPv6 note, changed since the comments in `lib/db/client.ts` were written.** Supabase
+now says the TRANSACTION pooler (6543) "uses IPv6 by default" and needs the paid IPv4
+add-on to be reachable from an IPv4-only network, while the SESSION pooler (5432) is
+"IPv4 proxied for free".
+
+Production does not care — Hyperdrive does the connecting and Cloudflare has IPv6.
+Local development might: if `pnpm dev` cannot reach 6543, set `DATABASE_URL` to the
+**5432** string locally as well. Session-mode pooling is less efficient under
+concurrency but fine for one developer, and `prepare: false` in `lib/db/client.ts` is
+safe either way. Keep the Worker/Hyperdrive side on 6543.
 
 ### 2. Create the schema
 
@@ -105,6 +124,16 @@ Rows, not schema, so migrations will not bring them:
 - **The lead source mapping**: provider `meta`, form id `1613980423612055`, name
   "met1 campaign", project Met1 Residence. `/lead-sources`, two minutes.
 - **Campaign spend rows**, if any were entered.
+
+## Note on the first sign-in after bootstrapping
+
+`pnpm bootstrap:admin` works by creating a row that your Clerk login then adopts by
+email. As of `f339890` that adoption requires the address to be VERIFIED at the auth
+provider — linking an unverified address to an existing staff row would hand over that
+row's role, so it is refused and logged.
+
+Bootstrap with an address you can actually receive mail on, and complete Clerk's email
+verification before expecting admin access.
 
 ## Do the Clerk move at the same time
 
