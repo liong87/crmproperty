@@ -61,18 +61,25 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle>Lead pool</CardTitle></CardHeader>
-        <CardContent>
-          <PoolManager
-            projectId={project.id}
-            pool={await listProjectPool(project.id)}
-            agents={canEdit ? await listAssignableAgents() : []}
-            canEdit={canEdit}
-            passOnAfterDays={project.passOnAfterDays}
-          />
-        </CardContent>
-      </Card>
+      {/*
+        Managers and admins only. Who is on a project's rotation, and in what order,
+        is a staffing decision — and gating the card here means an agent is never
+        sent the membership at all, rather than being shown it without the buttons.
+      */}
+      {canEdit && (
+        <Card>
+          <CardHeader><CardTitle>Lead pool</CardTitle></CardHeader>
+          <CardContent>
+            <PoolManager
+              projectId={project.id}
+              pool={await listProjectPool(project.id)}
+              agents={await listAssignableAgents()}
+              canEdit={canEdit}
+              passOnAfterDays={project.passOnAfterDays}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader><CardTitle>Appointments</CardTitle></CardHeader>

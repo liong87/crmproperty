@@ -6,7 +6,7 @@
  * therefore whose funnel and commission they land in.
  */
 import { z } from "zod";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { projectPoolMembers, users } from "@/lib/db/schema";
@@ -79,6 +79,57 @@ export async function setPoolMemberActive(id: string, active: boolean): Promise<
     return ok<void>(undefined);
   } catch (err) {
     return handle(err, "setPoolMemberActive");
+  }
+}
+
+/**
+ * Move somebody one place up or down the rotation.
+ *
+ * The whole list is renumbered 0..n-1 rather than swapping two values, because
+ * rows added before ordering existed all share sort_order 0. Renumbering makes
+ * the sequence unambiguous from the first move onwards.
+ */
+export async function movePoolMember(id: string, direction: "up" | "down"): Promise<ActionResult<void>> {
+  try {
+    const me = await requireDbUser();
+    assertRole(me, "admin", "manager");
+    z.string().uuid().parse(id);
+    z.enum(["up", "down"]).parse(direction);
+
+    const [row] = await db
+      .select({ projectId: projectPoolMembers.projectId })
+      .from(projectPoolMembers)
+      .where(and(eq(projectPoolMembers.id, id), isNull(projectPoolMembers.deletedAt)));
+    if (!row) return fail("Pool member not found.");
+
+    const members = await db
+      .select({ id: projectPoolMembers.id })
+      .from(projectPoolMembers)
+      .where(
+        and(eq(projectPoolMembers.projectId, row.projectId), isNull(projectPoolMembers.deletedAt)),
+      )
+      .orderBy(asc(projectPoolMembers.sortOrder), asc(projectPoolMembers.createdAt));
+
+    const from = members.findIndex((m) => m.id === id);
+    const to = direction === "up" ? from - 1 : from + 1;
+    // Already at the end it is being moved towards — nothing to do, and not an error.
+    if (from < 0 || to < 0 || to >= members.length) return ok<void>(undefined);
+
+    const reordered = [...members];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved!);
+
+    for (let i = 0; i < reordered.length; i++) {
+      await db
+        .update(projectPoolMembers)
+        .set({ sortOrder: i })
+        .where(eq(projectPoolMembers.id, reordered[i]!.id));
+    }
+
+    revalidatePath(`/projects/${row.projectId}`);
+    return ok<void>(undefined);
+  } catch (err) {
+    return handle(err, "movePoolMember");
   }
 }
 

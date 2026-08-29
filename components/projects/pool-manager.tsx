@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { addPoolMember, setPoolMemberActive, removePoolMember } from "@/server/projects/pool-actions";
+import { addPoolMember, setPoolMemberActive, movePoolMember, removePoolMember } from "@/server/projects/pool-actions";
 import type { PoolRow } from "@/server/projects/queries";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -63,6 +63,26 @@ export function PoolManager({
                   <Button
                     size="sm"
                     variant="ghost"
+                    aria-label={`Move ${m.name} up`}
+                    title="Move up"
+                    disabled={pending || i === 0}
+                    onClick={() => run(() => movePoolMember(m.id, "up"))}
+                  >
+                    ↑
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Move ${m.name} down`}
+                    title="Move down"
+                    disabled={pending || i === pool.length - 1}
+                    onClick={() => run(() => movePoolMember(m.id, "down"))}
+                  >
+                    ↓
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
                     disabled={pending}
                     onClick={() => run(() => setPoolMemberActive(m.id, !m.active))}
                   >
@@ -81,7 +101,7 @@ export function PoolManager({
       <p className="text-xs text-muted-foreground">
         {passOnAfterDays
           ? activeCount > 1
-            ? `Leads with nothing logged for ${passOnAfterDays} days pass to the next person in this list. Both agents are told, and every hand-over is recorded on the lead.`
+            ? `Agency leads — from Meta, the website or the API — with nothing logged for ${passOnAfterDays} days pass to the next person in this list. Leads an agent entered or imported themselves stay theirs. Both agents are told, and every hand-over is recorded on the lead.`
             : `Pass-on is set to ${passOnAfterDays} days, but a pool of one has nobody to pass to. Add a second person, or the setting does nothing.`
           : "Pass-on is off for this project. Set it on the project's edit page to move stalled leads on automatically."}
       </p>
