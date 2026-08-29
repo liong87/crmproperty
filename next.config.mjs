@@ -12,11 +12,15 @@ const nextConfig = {
   /**
    * Security headers.
    *
-   * Deliberately the four that carry no compatibility risk. A Content-Security-Policy
-   * belongs here too, but needs care before it is switched on: Clerk loads its script
-   * from *.clerk.accounts.dev and property photographs come from signed R2 URLs on
-   * *.r2.cloudflarestorage.com, so a strict policy would break sign-in and images.
-   * Add it in report-only mode first.
+   * A Content-Security-Policy is included in REPORT-ONLY mode. It blocks nothing; the
+   * browser reports what it WOULD have blocked to the console. Run the app normally
+   * for a week — sign in, upload a photo, open a document, view every report — and
+   * watch for violations. When the console stays quiet, rename the header to
+   * `Content-Security-Policy` to enforce it.
+   *
+   * Switching it on before that would break sign-in: Clerk loads scripts and workers
+   * from its own domains, and property photographs come from signed R2 URLs. Both are
+   * allowed for below, but the list is a best guess until real usage proves it.
    */
   async headers() {
     return [
@@ -40,6 +44,34 @@ const nextConfig = {
           {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=()",
+          },
+          // REPORT-ONLY. See the note above before promoting this to enforcing.
+          {
+            key: "Content-Security-Policy-Report-Only",
+            value: [
+              "default-src 'self'",
+              // Clerk ships its SDK from its own domains and needs eval for its
+              // dev-instance tooling. 'unsafe-inline' is here because Next emits
+              // inline bootstrap scripts; removing it needs nonces, which is a
+              // separate piece of work.
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.accounts.dev https://*.clerk.com",
+              "worker-src 'self' blob:",
+              // Tailwind is compiled to a stylesheet, but Next injects inline styles.
+              "style-src 'self' 'unsafe-inline'",
+              // Property photographs arrive as signed R2 URLs; data: covers the
+              // client-side resize canvas; blob: covers object URLs for previews.
+              "img-src 'self' data: blob: https://*.r2.cloudflarestorage.com https://img.clerk.com",
+              "font-src 'self' data:",
+              "connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com",
+              // Clerk renders sign-in components in an iframe on development
+              // instances; production instances do not need this.
+              "frame-src 'self' https://*.clerk.accounts.dev https://*.clerk.com",
+              // Nothing here should ever be framed, or submit a form off-site.
+              "frame-ancestors 'none'",
+              "form-action 'self'",
+              "base-uri 'self'",
+              "object-src 'none'",
+            ].join("; "),
           },
         ],
       },
