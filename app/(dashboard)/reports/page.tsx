@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
 import { getReportData } from "@/server/reports/queries";
 import { getFunnel, getFunnelTrend } from "@/server/reports/funnel";
+import { getAgentActivity } from "@/server/reports/activity";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { StatCard, BarList } from "@/components/reports/charts";
 import { FunnelChart, FunnelBreakdown } from "@/components/reports/funnel";
@@ -23,10 +24,11 @@ export default async function ReportsPage({
   // Weekly points, floored at 4 so a short window still draws a line, and capped so
   // "All time" cannot render hundreds of unreadable buckets.
   const weeks = Math.min(104, Math.max(4, Math.ceil(days / 7)));
-  const [r, funnel, trend] = await Promise.all([
+  const [r, funnel, trend, activity] = await Promise.all([
     getReportData(me),
     getFunnel(me, days),
     getFunnelTrend(me, weeks),
+    getAgentActivity(me, days),
   ]);
 
   return (
@@ -81,6 +83,51 @@ export default async function ReportsPage({
           note="Appointments are credited to whoever set them; show-ups and bookings to whoever ran the presentation."
         />
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            {activity.scope === "team" ? "Outreach by agent" : "Your outreach"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {/* Said plainly, because a zero here is ambiguous and someone will act on it.
+              Nothing in the product dials a phone or sends a WhatsApp on its own. */}
+          <p className="text-sm text-muted-foreground">
+            Calls and WhatsApp messages <em>logged</em> in the last {days} days — not calls made.
+            A zero means nothing was recorded, which is a reason to ask rather than a conclusion.
+          </p>
+
+          {activity.empty ? (
+            <p className="text-sm text-muted-foreground">
+              Nothing logged in this window yet. Activity is recorded from a lead or contact
+              page, so these counts only mean something once the team logs calls there.
+            </p>
+          ) : (
+            <Table>
+              <THead>
+                <TR>
+                  <TH>Agent</TH>
+                  <TH className="text-right">Calls</TH>
+                  <TH className="text-right">WhatsApp</TH>
+                  <TH className="text-right">Leads touched</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {activity.rows.map((a) => (
+                  <TR key={a.id}>
+                    <TD className="font-medium">{a.name}</TD>
+                    {/* Quietest first, so the row that needs a conversation is at the top. */}
+                    <TD className={`text-right ${a.calls === 0 ? "text-destructive" : ""}`}>{a.calls}</TD>
+                    <TD className="text-right">{a.whatsapp}</TD>
+                    <TD className="text-right text-muted-foreground">{a.leadsTouched}</TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Card>
