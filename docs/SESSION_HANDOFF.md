@@ -39,10 +39,15 @@ This does not block development: `scripts/replay-meta-lead.mjs` reproduces the e
 delivery Meta would make, signed the same way, so everything except Meta's own
 delivery hop is exercised for real.
 
-## Next step: deploy to Cloudflare
+## Deploy — DONE 29 Aug 2026
 
-This is the highest-value next action, because a permanent production URL ends the
-cloudflared churn — the Meta callback URL would never need changing again.
+Live at `https://propertyagent-crm.lanthornrealty.workers.dev`, Meta's callback points
+at it, and the tunnel is no longer part of the picture. Kept below for reference.
+
+Two things learned doing it: `pnpm cf:deploy` fails on Windows (EPERM creating the
+`.next/standalone` symlinks) so deploys go through `.github/workflows/deploy-cloudflare.yml`
+on a Linux runner; and Meta never redisplays a saved verify token, so editing the
+callback URL means re-entering the token.
 
 1. Set the Worker secrets. `.env` is NOT deployed; each must be set explicitly:
 

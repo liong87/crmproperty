@@ -82,6 +82,34 @@ return the challenge, Meta's "Verify and save" cannot succeed either:
 Must print exactly `alive`. Do not build the token with a PowerShell `-replace`
 one-liner — that mangled it once and cost an hour. Paste the literal value.
 
+## Production
+
+Deployed to Cloudflare Workers at:
+
+    https://propertyagent-crm.lanthornrealty.workers.dev
+
+The Meta webhook callback points at
+`https://propertyagent-crm.lanthornrealty.workers.dev/api/webhooks/forms/meta`
+and does NOT need changing again. The tunnel section below is only for working on
+the webhook locally.
+
+Deploys run from GitHub Actions, not a laptop: `.github/workflows/deploy-cloudflare.yml`,
+manual dispatch, with a `dry_run` input that builds and tests without deploying.
+`next build` fails on Windows with EPERM creating the symlinks for `.next/standalone`,
+so a local `pnpm cf:deploy` will not work from this machine — use the workflow.
+
+Runtime secrets live on the Worker, not in the repo and not in GitHub:
+
+    pnpm exec wrangler secret list
+    pnpm exec wrangler secret put <NAME>
+
+As of 29 Aug 2026 all twelve are set, including WEBHOOK_SECRET_META,
+META_VERIFY_TOKEN and META_PAGE_ACCESS_TOKEN. GitHub holds only the three the BUILD
+needs: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY.
+
+Note `NEXT_PUBLIC_*` values are baked into the client bundle at build time, so they
+come from the build environment, not from Worker secrets.
+
 ## Local development tunnel
 
 `cloudflared` is installed at `C:\Program Files (x86)\cloudflared\cloudflared.exe` and
