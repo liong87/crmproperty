@@ -1,0 +1,58 @@
+name: Notifications
+
+# Two schedules, one script.
+#
+# Daily 00:30 UTC = 08:30 Malaysia — paperwork due in the next few days and tomorrow's
+# appointments, landing before the working day rather than after it.
+#
+# Weekly Monday 01:00 UTC = 09:00 Malaysia — the manager digest for the week just gone.
+#
+# Every notification carries a dedupe key naming the fact rather than the moment, so a
+# re-run says nothing twice. That is what makes it safe to run these on a schedule AND
+# by hand while testing.
+on:
+  schedule:
+    - cron: "30 0 * * *"
+    - cron: "0 1 * * 1"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Which job"
+        type: choice
+        options: [daily, digest]
+        default: daily
+      dry_run:
+        description: "Report without notifying"
+        type: boolean
+        default: true
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Send notifications
+        env:
+          # Direct connection (5432): this writes, and writes want a real session.
+          DATABASE_URL: ${{ secrets.SUPABASE_DIRECT_URL }}
+          # Optional. Absent, notifications are still written to the in-app inbox and
+          # marked "skipped" — the job does not fail for want of an email channel.
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          APP_URL: ${{ secrets.APP_URL }}
+          NOTIFY_DRY_RUN: ${{ inputs.dry_run == true && '1' || '' }}
+        # The Monday 01:00 run does the digest; every other run does the daily jobs.
+        run: |
+          if [ "${{ github.event.schedule }}" = "0 1 * * 1" ]; then
+            pnpm notify:run digest
+          else
+            pnpm notify:run ${{ inputs.job || 'daily' }}
+          fi

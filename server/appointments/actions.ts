@@ -18,6 +18,7 @@ import { appointments, contacts, leads, activities, users } from "@/lib/db/schem
 import { requireDbUser, canEdit, canEditAny, isManagerOrAbove, AuthorizationError } from "@/lib/auth";
 import { APPOINTMENT_STATUS, APPOINTMENT_OUTCOME } from "@/lib/constants";
 import { ok, fail } from "@/lib/action-result";
+import { notify } from "@/lib/notify";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 
@@ -144,6 +145,25 @@ export async function scheduleAppointment(input: unknown): Promise<ActionResult<
       createdBy: attendee,
     });
 
+    /*
+     * Tell the closer, when the closer is somebody else. No dedupe key: this is a
+     * one-off human action, and being handed the same appointment twice genuinely is
+     * two events worth hearing about.
+     *
+     * The setter is not told — they just did it.
+     */
+    if (closerId && closerId !== attendee) {
+      await notify({
+        userId: closerId,
+        kind: "appointment-reminder",
+        title: "An appointment has been assigned to you",
+        body: `${me.name} booked it for you${d.notes ? `. ${d.notes}` : "."}`,
+        link: "/appointments",
+        entityType: "appointments",
+        entityId: row!.id,
+      });
+    }
+
     revalidateAll(d.contactId, d.leadId, d.propertyId, d.projectId);
     return ok({ id: row!.id });
   } catch (err) {
@@ -253,6 +273,20 @@ export async function assignCloser(input: unknown): Promise<ActionResult<void>> 
       occurredAt: new Date(),
       createdBy: row.assignedTo ?? me.id,
     });
+
+    // Handed to somebody: tell them. Taken back: nothing to say, they lost work they
+    // had not started.
+    if (closerId && closerId !== me.id) {
+      await notify({
+        userId: closerId,
+        kind: "appointment-reminder",
+        title: "An appointment has been assigned to you",
+        body: `${me.name} has asked you to close this one.`,
+        link: "/appointments",
+        entityType: "appointments",
+        entityId: d.id,
+      });
+    }
 
     revalidateAll(row.contactId, row.leadId, row.propertyId, row.projectId);
     return ok(undefined);
