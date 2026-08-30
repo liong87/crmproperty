@@ -901,3 +901,43 @@ export type CommissionSchemeStage = typeof commissionSchemeStages.$inferSelect;
 export type DealCommission = typeof dealCommissions.$inferSelect;
 export type DealCommissionStage = typeof dealCommissionStages.$inferSelect;
 export type DealCommissionSplit = typeof dealCommissionSplits.$inferSelect;
+
+/* ---------- notifications ---------- */
+
+/**
+ * In-app notifications, with email as an optional second channel.
+ *
+ * `dedupeKey` is what stops a nightly job producing the same message every night. It
+ * identifies the THING BEING SAID rather than the moment of saying it — a key like
+ * `doc-due:<id>:<dueDate>` changes when the deadline moves and not otherwise, so a
+ * genuinely new fact notifies again and a repeat does not.
+ */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** lead-passed-on | document-due | appointment-reminder | digest | lead-assigned */
+    kind: varchar("kind", { length: 40 }).notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    body: text("body"),
+    /** Relative, always internal. e.g. /leads/<id> */
+    link: varchar("link", { length: 500 }),
+    entityType: varchar("entity_type", { length: 20 }),
+    entityId: uuid("entity_id"),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    /** null = not attempted; otherwise skipped | queued | sent | failed */
+    emailStatus: varchar("email_status", { length: 20 }),
+    emailError: text("email_error"),
+    /** Null means "always create" — a one-off, human-triggered event. */
+    dedupeKey: varchar("dedupe_key", { length: 200 }),
+    ...timestamps,
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId, t.createdAt),
+  }),
+);
+
+export type Notification = typeof notifications.$inferSelect;

@@ -25,8 +25,7 @@ import { and, eq, isNull, ne, notInArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { leads, projects, users, activities, appointments, leadAssignments } from "@/lib/db/schema";
 import { listPool, nextAfter } from "./pool";
-import { messaging } from "@/lib/messaging";
-import { monitoring } from "@/lib/monitoring";
+import { notify as sendNotification } from "@/lib/notify";
 
 export interface PassOnCandidate {
   leadId: string;
@@ -192,24 +191,46 @@ export async function runPassOn(
 
     result.moved++;
 
-    // Both ends are told. Telling only the receiver is how the person who lost the
-    // lead finds out from a colleague instead of from the system.
-    await notify(to[0]?.phone, `Lead passed to you: ${c.leadName} (${c.leadPhone}) — ${c.projectName}.`);
-    await notify(
-      from[0]?.phone,
-      `${c.leadName} (${c.leadPhone}) has been passed to ${toName} — nothing was logged for ${c.idleDays} days.`,
-    );
+    /*
+     * Both ends are told. Telling only the receiver is how the person who lost the
+     * lead finds out from a colleague instead of from the system.
+     *
+     * These used to go through the messaging adapter, which is the click-to-chat
+     * provider — it returns a wa.me URL and sends nothing. The code read as though
+     * agents were being notified. They were not. It now writes to the in-app inbox,
+     * which works immediately, and emails as well once email is configured.
+     *
+     * The dedupe key is the ASSIGNMENT, not the lead: the same lead can legitimately
+     * pass on again later, and that is a new fact worth saying.
+     */
+    const key = `pass-on:${c.leadId}:${toUserId}:${new Date().toISOString().slice(0, 10)}`;
+
+    if (toUserId) {
+      await sendNotification({
+        userId: toUserId,
+        kind: "lead-passed-on",
+        title: `Lead passed to you: ${c.leadName}`,
+        body: `${c.leadPhone} — ${c.projectName}. Nothing had been logged for ${c.idleDays} days.`,
+        link: `/leads/${c.leadId}`,
+        entityType: "leads",
+        entityId: c.leadId,
+        dedupeKey: `${key}:in`,
+      });
+    }
+
+    if (c.fromUserId) {
+      await sendNotification({
+        userId: c.fromUserId,
+        kind: "lead-passed-on",
+        title: `${c.leadName} has been passed to ${toName}`,
+        body: `${c.leadPhone} — ${c.projectName}. Nothing was logged for ${c.idleDays} days.`,
+        link: `/leads/${c.leadId}`,
+        entityType: "leads",
+        entityId: c.leadId,
+        dedupeKey: `${key}:out`,
+      });
+    }
   }
 
   return result;
-}
-
-/** Notification failures never fail the transfer; the lead has already moved. */
-async function notify(phone: string | null | undefined, message: string) {
-  if (!phone) return;
-  try {
-    await messaging.sendFollowUp(phone, { message });
-  } catch (err) {
-    monitoring.captureException(err, { where: "passOn.notify" });
-  }
 }

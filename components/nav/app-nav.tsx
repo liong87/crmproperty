@@ -3,13 +3,14 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   LayoutDashboard, Inbox, Contact, Building2, Columns3, Bell, BarChart3, UserCog,
-  MessageSquareText, CalendarCheck, Landmark, Radio, BookOpen, Percent,
+  MessageSquareText, CalendarCheck, Landmark, Radio, BookOpen, Percent, BellRing,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, LucideIcon> = {
   "/dashboard": LayoutDashboard,
+  "/inbox": BellRing,
   "/leads": Inbox,
   "/contacts": Contact,
   "/projects": Landmark,
