@@ -781,3 +781,123 @@ export type ProjectUnitType = typeof projectUnitTypes.$inferSelect;
 export type NewProjectUnitType = typeof projectUnitTypes.$inferInsert;
 export type CampaignSpend = typeof campaignSpend.$inferSelect;
 export type NewCampaignSpend = typeof campaignSpend.$inferInsert;
+
+/* ---------- commission ---------- */
+
+/**
+ * Reusable commission configuration. Editable, so an agency can change its split
+ * without a deploy — but see `dealCommissions`: a deal snapshots these values, so
+ * editing a scheme never rewrites a commission already agreed.
+ */
+export const commissionSchemes = pgTable(
+  "commission_schemes",
+  {
+    id: id(),
+    name: varchar("name", { length: 120 }).notNull(),
+    description: text("description"),
+    /** Null = use the project's own developerCommissionBp. Basis points. */
+    developerBp: integer("developer_bp"),
+    /** The split. Must total 10000; enforced by a table constraint. */
+    agencyBp: integer("agency_bp").notNull(),
+    setterBp: integer("setter_bp").notNull(),
+    closerBp: integer("closer_bp").notNull(),
+    coBrokeBp: integer("co_broke_bp").notNull().default(0),
+    isDefault: boolean("is_default").notNull().default(false),
+    ...timestamps,
+  },
+  (t) => ({ defaultIdx: index("commission_schemes_default_idx").on(t.isDefault) }),
+);
+
+export const commissionSchemeStages = pgTable(
+  "commission_scheme_stages",
+  {
+    id: id(),
+    schemeId: uuid("scheme_id")
+      .notNull()
+      .references(() => commissionSchemes.id, { onDelete: "cascade" }),
+    label: varchar("label", { length: 120 }).notNull(),
+    /** Share of the gross released here. All stages of a scheme must total 10000. */
+    releaseBp: integer("release_bp").notNull(),
+    /** Days after booking, for a suggested expected date. Null = no suggestion. */
+    dueDays: integer("due_days"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => ({ schemeIdx: index("commission_scheme_stages_scheme_idx").on(t.schemeId, t.sortOrder) }),
+);
+
+/**
+ * One deal's commission. Every rate here is a SNAPSHOT taken when it was created:
+ * editing the scheme afterwards must not silently change what an agent was told they
+ * would earn, and `baseAmount` is stored rather than read from the deal because a
+ * deal's value can be corrected later.
+ */
+export const dealCommissions = pgTable(
+  "deal_commissions",
+  {
+    id: id(),
+    dealId: uuid("deal_id")
+      .notNull()
+      .references(() => deals.id, { onDelete: "cascade" }),
+    schemeId: uuid("scheme_id").references(() => commissionSchemes.id, { onDelete: "set null" }),
+    schemeName: varchar("scheme_name", { length: 120 }).notNull(),
+    baseAmount: bigint("base_amount", { mode: "number" }).notNull(),
+    developerBp: integer("developer_bp").notNull(),
+    grossAmount: bigint("gross_amount", { mode: "number" }).notNull(),
+    setterId: uuid("setter_id").references(() => users.id, { onDelete: "set null" }),
+    closerId: uuid("closer_id").references(() => users.id, { onDelete: "set null" }),
+    coBrokeName: varchar("co_broke_name", { length: 255 }),
+    notes: text("notes"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => ({ dealIdx: index("deal_commissions_deal_idx").on(t.dealId) }),
+);
+
+export const dealCommissionStages = pgTable(
+  "deal_commission_stages",
+  {
+    id: id(),
+    dealCommissionId: uuid("deal_commission_id")
+      .notNull()
+      .references(() => dealCommissions.id, { onDelete: "cascade" }),
+    label: varchar("label", { length: 120 }).notNull(),
+    releaseBp: integer("release_bp").notNull(),
+    amount: bigint("amount", { mode: "number" }).notNull(),
+    expectedAt: timestamp("expected_at", { withTimezone: true }),
+    invoicedAt: timestamp("invoiced_at", { withTimezone: true }),
+    receivedAt: timestamp("received_at", { withTimezone: true }),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => ({
+    parentIdx: index("deal_commission_stages_parent_idx").on(t.dealCommissionId, t.sortOrder),
+  }),
+);
+
+export const dealCommissionSplits = pgTable(
+  "deal_commission_splits",
+  {
+    id: id(),
+    dealCommissionId: uuid("deal_commission_id")
+      .notNull()
+      .references(() => dealCommissions.id, { onDelete: "cascade" }),
+    /** agency | setter | closer | co-broke */
+    party: varchar("party", { length: 20 }).notNull(),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    label: varchar("label", { length: 255 }).notNull(),
+    shareBp: integer("share_bp").notNull(),
+    amount: bigint("amount", { mode: "number" }).notNull(),
+    ...timestamps,
+  },
+  (t) => ({
+    parentIdx: index("deal_commission_splits_parent_idx").on(t.dealCommissionId),
+    userIdx: index("deal_commission_splits_user_idx").on(t.userId),
+  }),
+);
+
+export type CommissionScheme = typeof commissionSchemes.$inferSelect;
+export type CommissionSchemeStage = typeof commissionSchemeStages.$inferSelect;
+export type DealCommission = typeof dealCommissions.$inferSelect;
+export type DealCommissionStage = typeof dealCommissionStages.$inferSelect;
+export type DealCommissionSplit = typeof dealCommissionSplits.$inferSelect;

@@ -29,6 +29,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     ...(isManagerOrAbove(user)
       ? [
           { href: "/lead-sources", label: "Lead sources" },
+          { href: "/settings/commission", label: "Commission" },
           { href: "/templates", label: "Templates" },
           { href: "/users", label: "Users" },
         ]

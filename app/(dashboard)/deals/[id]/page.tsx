@@ -3,9 +3,11 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentDbUser, canView, canEdit } from "@/lib/auth";
 import { getDealDetail, listChecklist } from "@/server/deal-documents/queries";
 import { listStages } from "@/server/deals/queries";
+import { getDealCommission, listSchemes } from "@/server/commission/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DealChecklist } from "@/components/deal-documents/checklist";
+import { DealCommissionPanel } from "@/components/commission/deal-commission";
 import { formatMYR, formatBp } from "@/lib/utils";
 
 export default async function DealPage({ params }: { params: Promise<{ id: string }> }) {
@@ -20,7 +22,9 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
 
   const editable = canEdit(me, deal.assignedTo);
   const pipeline = deal.dealType === "project" ? "project" : "resale";
-  const [checklist, stages] = await Promise.all([listChecklist(id), listStages(pipeline)]);
+  const [checklist, stages, commission, schemes] = await Promise.all([
+    listChecklist(id), listStages(pipeline), getDealCommission(id), listSchemes(),
+  ]);
   const stage = stages.find((s) => s.id === deal.stageId);
 
   return (
@@ -46,6 +50,21 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
         </CardHeader>
         <CardContent>
           <DealChecklist dealId={deal.id} items={checklist} canEdit={editable} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Commission</CardTitle></CardHeader>
+        <CardContent>
+          <DealCommissionPanel
+            dealId={deal.id}
+            data={commission}
+            schemes={schemes.map((s) => ({
+              id: s.scheme.id, name: s.scheme.name, isDefault: s.scheme.isDefault,
+            }))}
+            dealValue={deal.value}
+            canEdit={editable}
+          />
         </CardContent>
       </Card>
 
