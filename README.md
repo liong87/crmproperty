@@ -9,7 +9,7 @@ pipeline are all built and tested. What stands between here and agents using it 
 operational, not code — see `TOMORROW.md` and `HARDENING_PLAN.md`:
 
 - Clerk is still on **development** keys, which do not work on a real domain
-- The backup **restore test** has not been verified
+- ~~The backup **restore test** has not been verified~~ — verified 1 Sep 2026 (Restore test #6, green: newest dump fetched from R2, decrypted, restored into a clean PostgreSQL 17, asserted usable). Note it ran against a near-empty database, so re-run it once real client data has accumulated.
 - Credentials shared during setup need rotating
 
 Roadmap and the reasoning behind what was built (and deliberately not built) live in
