@@ -193,7 +193,42 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    id: "projects", n: 13, part: "For managers", title: "Projects and unit types", managerOnly: true,
+    id: "sales-kit", n: 13, part: "Projects", title: "The sales kit",
+    blocks: [
+      { kind: "p", text: "Every project page has a Sales kit: the price list, brochure, layout plans, APDL and licences, the blank forms you hand a buyer, the panel lawyer, and the showroom location. One place, and always the version the agency stands behind — you never have to ask anyone which price list is current." },
+      { kind: "p", text: "You cannot change a kit. Managers and admins publish it; agents read it. That is deliberate, so that two agents can never be quoting from different copies of the same price list." },
+      {
+        kind: "list",
+        items: [
+          "A file — click it to download. Price lists, brochures, licences, blank forms.",
+          "A link — opens elsewhere, such as a shared sheet or a map pin for the showroom.",
+          "A value — a plain fact you need at hand, like an HDA account number or a panel banker's phone.",
+        ],
+      },
+      { kind: "note", tone: "stop", text: "If a kit contains a unit lock or availability sheet, it records only what OUR agents have committed. Other agencies sell the same projects, and their bookings never appear in it. Always confirm a unit is still available with the developer before promising it to a buyer." },
+      { kind: "note", tone: "info", text: "Blank forms live in the kit. The buyer's SIGNED copy belongs on that buyer's deal, under the paperwork checklist — not back in the kit, which is shared by everyone." },
+    ],
+  },
+  {
+    id: "publishing-kit", n: 14, part: "For managers", title: "Publishing a sales kit", managerOnly: true,
+    blocks: [
+      { kind: "p", text: "Kit items are added from the project page itself, so the person who notices the price list is out of date is the person who can replace it." },
+      {
+        kind: "steps",
+        items: [
+          "Open the project and find the Sales kit card.",
+          "Add an item, choose the section it belongs in, and name it.",
+          "Paste a link, or type a value, or add it and then attach a file to it.",
+          "Use the Note field for anything an agent must know before acting on it.",
+        ],
+      },
+      { kind: "note", tone: "warn", text: "Name items for what they actually are. \"Available unit\" reads as developer availability; \"Unit Lock Sheet\" does not. An agent who misreads a label promises a unit that went last week." },
+      { kind: "p", text: "Replacing a file keeps the item and its name, so agents' habits do not break — the old file is removed from storage at the same time. Removing an item does not touch anything on a deal." },
+      { kind: "note", tone: "info", text: "Files you upload live in the agency's own storage, reached through this app. When you deactivate someone's account they lose access immediately, which is not true of a shared drive link they have saved." },
+    ],
+  },
+  {
+    id: "projects", n: 15, part: "For managers", title: "Projects and unit types", managerOnly: true,
     blocks: [
       { kind: "p", text: "Projects → New Project. Name, developer, state and area are the minimum. Also worth setting: developer commission rate, expected VP date, gallery address, and the pass-on window in days." },
       { kind: "p", text: "Then add unit types — label, built-up, beds, baths, parking, list price and the nett price after rebate. This is the level agents quote at. Every field stays editable, and editing keeps the type's identity, so any lead or booking pointing at it is not orphaned." },
@@ -202,7 +237,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    id: "pools", n: 14, part: "For managers", title: "Lead pools and pass-on", managerOnly: true,
+    id: "pools", n: 16, part: "For managers", title: "Lead pools and pass-on", managerOnly: true,
     blocks: [
       { kind: "p", text: "On a project page, Lead pool decides who receives that project's leads and in what order. New leads go round the list in rotation, so over any stretch of time everyone gets the same number. Position is a seat at the table, not a ranking." },
       {
@@ -219,14 +254,14 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    id: "lead-form-mapping", n: 15, part: "For managers", title: "Lead sources", managerOnly: true,
+    id: "lead-form-mapping", n: 17, part: "For managers", title: "Lead sources", managerOnly: true,
     blocks: [
       { kind: "p", text: "When you launch a Facebook or Instagram lead form, map it here: form ID, a name you will recognise, and the project it advertises. Leads from that form then arrive already attached to the project, which is what makes per-project reporting work." },
       { kind: "note", tone: "info", text: "An unmapped form still creates the lead — it just arrives with no project. Losing a lead the agency paid for because nobody filled in a mapping would be far worse than filing it imperfectly." },
     ],
   },
   {
-    id: "users", n: 16, part: "For managers", title: "Users and templates", managerOnly: true,
+    id: "users", n: 18, part: "For managers", title: "Users and templates", managerOnly: true,
     blocks: [
       { kind: "p", text: "Users is where new sign-ups are approved. Somebody who has signed up appears inactive and can see nothing until you activate them and set their role." },
       { kind: "note", tone: "warn", text: "Deactivate somebody the day they leave. Their sign-in keeps working until you do." },
@@ -234,7 +269,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    id: "spend", n: 17, part: "For managers", title: "Advertising spend", managerOnly: true,
+    id: "spend", n: 19, part: "For managers", title: "Advertising spend", managerOnly: true,
     blocks: [
       { kind: "p", text: "Reports → Advertising spend. Record what each campaign cost and the report divides it by what the campaign produced. Agents never see agency ad spend." },
       {
@@ -252,7 +287,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    id: "vocabulary", n: 18, part: "Reference", title: "Status vocabulary",
+    id: "vocabulary", n: 20, part: "Reference", title: "Status vocabulary",
     blocks: [
       {
         kind: "table",
@@ -293,7 +328,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    id: "pdpa", n: 19, part: "Reference", title: "Protecting client data",
+    id: "pdpa", n: 21, part: "Reference", title: "Protecting client data",
     blocks: [
       { kind: "p", text: "Everything here is personal data belonging to real people, and Malaysian law gives them rights over it. A few habits keep the agency on the right side of that:" },
       {
