@@ -324,24 +324,28 @@ def story():
         "<b>Staying on top</b>",
         "13 &nbsp; Reminders",
         "14 &nbsp; Reports",
+        "<b>Projects</b>",
+        "15 &nbsp; The sales kit",
         "<b>For managers and administrators</b>",
-        "15 &nbsp; Projects and unit types",
-        "16 &nbsp; Lead pools and pass-on",
-        "17 &nbsp; Lead sources",
-        "18 &nbsp; Users and templates",
-        "19 &nbsp; Advertising spend",
+        "16 &nbsp; Publishing a sales kit",
+        "17 &nbsp; Projects and unit types",
+        "18 &nbsp; Lead pools and pass-on",
+        "19 &nbsp; Lead sources",
+        "20 &nbsp; Users and templates",
+        "21 &nbsp; Advertising spend",
         "<b>Reference</b>",
-        "20 &nbsp; Status vocabulary",
-        "21 &nbsp; Protecting client data (PDPA)",
-        "22 &nbsp; Troubleshooting",
+        "22 &nbsp; Status vocabulary",
+        "23 &nbsp; Protecting client data (PDPA)",
+        "24 &nbsp; Troubleshooting",
     ]:
         s.append(Paragraph(line, S["toc"]))
 
     s.append(Spacer(1, 16))
     s.append(callout(
-        "<b>New here?</b> Read sections 1 to 14 in order. That is the whole daily loop: "
+        "<b>New here?</b> Read sections 1 to 15 in order. That is the whole daily loop: "
         "sign in, work a lead, book an appointment, record the outcome, create the deal "
-        "and chase the paperwork. Sections 15 to 19 are for managers and administrators, "
+        "and chase the paperwork, with 15 covering the sales kit you work from. "
+        "Sections 16 to 21 are for managers and administrators, "
         "and you will not be able to reach those screens as an agent."))
 
     # ---- 1 -----------------------------------------------------------------
@@ -667,7 +671,66 @@ def story():
 
     # ---- 15 ----------------------------------------------------------------
     s.append(PageBreak())
-    s += section("15", "Projects and unit types")
+    s += section("15", "The sales kit")
+
+    s.append(Paragraph(
+        "Every project page carries a <b>Sales kit</b>: the selling price list, the "
+        "brochure and layout plans, the APDL and developer licence, the blank forms you "
+        "hand a buyer, the panel lawyer, and the showroom location. One place, and always "
+        "the version the agency stands behind — you never have to ask anyone which price "
+        "list is the current one.", S["body"]))
+    s.append(Paragraph(
+        "<b>You cannot change a kit.</b> Managers and administrators publish it; agents "
+        "read it. That is deliberate: it is the only way two agents can never end up "
+        "quoting a buyer from two different copies of the same price list.", S["body"]))
+    s.append(bullets([
+        "<b>A file</b> — click to download it. Price lists, brochures, licences, blank forms.",
+        "<b>A link</b> — opens elsewhere, such as a shared sheet or a map pin for the showroom.",
+        "<b>A value</b> — a plain fact you need at hand, like an HDA account number or a "
+        "panel banker&rsquo;s direct line.",
+    ]))
+    s.append(figure("15-sales-kit", "A project&rsquo;s sales kit, grouped by section."))
+    s.append(callout(
+        "<b>A unit lock or availability sheet in a kit records only what OUR agents have "
+        "committed.</b> Other agencies sell these same projects, and their bookings never "
+        "appear in it. Always confirm a unit is still available with the developer before "
+        "you promise it to a buyer.", kind="warn"))
+    s.append(Paragraph(
+        "<b>Blank forms live in the kit. Signed ones do not.</b> The buyer&rsquo;s completed "
+        "and signed copy belongs on that buyer&rsquo;s deal, under the paperwork checklist "
+        "in section 12 — not back in the kit, which everybody shares.", S["body"]))
+
+    # ---- 16 ----------------------------------------------------------------
+    s.append(PageBreak())
+    s += section("16", "Publishing a sales kit")
+    s.append(Paragraph("Managers and administrators only.", S["small"]))
+    s.append(Spacer(1, 6))
+
+    s.append(Paragraph(
+        "Kit items are added from the project page itself, so the person who notices the "
+        "price list has gone stale is also the person who can replace it.", S["body"]))
+    s.append(steps([
+        "Open the project and find the <b>Sales kit</b> card.",
+        "<b>Add an item</b>, choose the section it belongs in, and give it a name.",
+        "Paste a link, or type a value, or add it and then attach a file to it.",
+        "Use the <b>Note</b> field for anything an agent must know before acting on it.",
+    ]))
+    s.append(callout(
+        "<b>Name items for what they actually are.</b> &ldquo;Available unit&rdquo; reads as "
+        "developer availability; &ldquo;Unit Lock Sheet&rdquo; does not. An agent who "
+        "misreads a label promises a buyer a unit that went last week.", kind="warn"))
+    s.append(Paragraph(
+        "<b>Replacing a file keeps the item and its name</b>, so agents&rsquo; habits do not "
+        "break, and the old file is removed from storage at the same time. Removing an item "
+        "affects nothing on any deal — deal paperwork is a separate thing entirely.", S["body"]))
+    s.append(callout(
+        "Files you upload live in the agency&rsquo;s own storage, reached only through this "
+        "app. Deactivate somebody&rsquo;s account and their access ends immediately — which "
+        "is not true of a shared drive link they saved months ago."))
+
+    # ---- 17 ----------------------------------------------------------------
+    s.append(PageBreak())
+    s += section("17", "Projects and unit types")
     s.append(Paragraph("Managers and administrators only.", S["small"]))
     s.append(Spacer(1, 6))
 
@@ -691,9 +754,9 @@ def story():
         "managers and administrators create, edit or delete. That differs from Properties "
         "on purpose — a listing belongs to the agent who won it.", S["body"]))
 
-    # ---- 16 ----------------------------------------------------------------
+    # ---- 18 ----------------------------------------------------------------
     s.append(PageBreak())
-    s += section("16", "Lead pools and pass-on")
+    s += section("18", "Lead pools and pass-on")
     s.append(Paragraph("Managers and administrators only.", S["small"]))
     s.append(Spacer(1, 6))
 
@@ -720,8 +783,8 @@ def story():
         "it applies retroactively — switching it on for a project with old untouched leads "
         "will move a batch on the first night.", "warn"))
 
-    # ---- 17 ----------------------------------------------------------------
-    s += section("17", "Lead sources")
+    # ---- 19 ----------------------------------------------------------------
+    s += section("19", "Lead sources")
     s.append(Paragraph("Managers and administrators only.", S["small"]))
     s.append(Spacer(1, 6))
 
@@ -735,9 +798,9 @@ def story():
         "Losing a lead the agency paid for because nobody filled in a mapping would be far "
         "worse than filing it imperfectly."))
 
-    # ---- 18 ----------------------------------------------------------------
+    # ---- 20 ----------------------------------------------------------------
     s.append(PageBreak())
-    s += section("18", "Users and templates")
+    s += section("20", "Users and templates")
     s.append(Paragraph("Managers and administrators only.", S["small"]))
     s.append(Spacer(1, 6))
 
@@ -754,8 +817,8 @@ def story():
         "name, project and price, so agents send something consistent without retyping it.",
         S["body"]))
 
-    # ---- 19 ----------------------------------------------------------------
-    s += section("19", "Advertising spend")
+    # ---- 21 ----------------------------------------------------------------
+    s += section("21", "Advertising spend")
     s.append(Paragraph("Managers and administrators only. Agents never see agency ad spend.", S["small"]))
     s.append(Spacer(1, 6))
 
@@ -778,9 +841,9 @@ def story():
         "no matching leads appears as its own row — money out, nothing in. That is the row "
         "to look at first.", "warn"))
 
-    # ---- 20 ----------------------------------------------------------------
+    # ---- 22 ----------------------------------------------------------------
     s.append(PageBreak())
-    s += section("20", "Status vocabulary")
+    s += section("22", "Status vocabulary")
 
     s.append(Paragraph("Lead status", S["h2"]))
     s.append(table([
@@ -815,9 +878,9 @@ def story():
         ["SPA", "Sale and purchase agreement"],
     ], [34 * mm, CONTENT_W - 34 * mm]))
 
-    # ---- 21 ----------------------------------------------------------------
+    # ---- 23 ----------------------------------------------------------------
     s.append(PageBreak())
-    s += section("21", "Protecting client data (PDPA)")
+    s += section("23", "Protecting client data (PDPA)")
 
     s.append(Paragraph(
         "Everything in this system is personal data belonging to real people, and Malaysian "
@@ -835,8 +898,8 @@ def story():
         "Administrators can export everything held about one person, and erase them, from "
         "the contact record — that is how a request from a client is answered.", S["body"]))
 
-    # ---- 22 ----------------------------------------------------------------
-    s += section("22", "Troubleshooting")
+    # ---- 24 ----------------------------------------------------------------
+    s += section("24", "Troubleshooting")
 
     s.append(table([
         ["Symptom", "Almost always"],
