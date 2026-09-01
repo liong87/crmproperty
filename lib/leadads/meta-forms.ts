@@ -17,6 +17,7 @@ import {
   LeadAdsTransientError,
   type CreateLeadFormInput,
   type LeadFormsProvider,
+  type RemoteFormQuestion,
   type RemoteLeadForm,
 } from "./interface";
 
@@ -99,6 +100,34 @@ export class MetaLeadFormsProvider implements LeadFormsProvider {
     // One page of 100. An agency with more live forms than that has a different
     // problem, and paginating here would hide it rather than solve it.
     return (data.data ?? []).map((f) => toForm(f));
+  }
+
+  async listQuestions(formId: string): Promise<RemoteFormQuestion[]> {
+    const { token } = this.credentials();
+    const url = graph(
+      `${encodeURIComponent(formId)}?fields=questions&access_token=${encodeURIComponent(token)}`,
+    );
+
+    let res: Response;
+    try {
+      res = await fetch(url, { headers: { accept: "application/json" } });
+    } catch (err) {
+      throw new LeadAdsTransientError(`Graph API unreachable: ${(err as Error).message}`);
+    }
+    if (!res.ok) throw new LeadAdsTransientError(await readError(res));
+
+    const data = (await res.json()) as {
+      questions?: Array<{ key?: string; label?: string; type?: string }>;
+    };
+    return (data.questions ?? [])
+      .filter((q): q is { key: string; label?: string; type?: string } => Boolean(q?.key))
+      .map((q) => ({
+        // Answers come back keyed in lower case, so the mapping has to be stored that
+        // way or it will never match what arrives.
+        key: q.key.toLowerCase(),
+        label: q.label ?? q.key,
+        type: q.type ?? null,
+      }));
   }
 
   async createForm(input: CreateLeadFormInput): Promise<RemoteLeadForm> {

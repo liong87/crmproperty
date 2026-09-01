@@ -79,6 +79,14 @@ export interface CreateLeadFormInput {
   introBody?: string;
 }
 
+/** One question as the platform defines it. `key` is what appears in a lead's answers. */
+export interface RemoteFormQuestion {
+  key: string;
+  label: string;
+  /** Platform's own type, e.g. FULL_NAME, PHONE, CUSTOM. Null when not reported. */
+  type: string | null;
+}
+
 /**
  * Reading and creating forms on the ad platform.
  *
@@ -90,5 +98,7 @@ export interface LeadFormsProvider {
   /** True when the provider has the page id and token it needs. Never throws. */
   isConfigured(): boolean;
   listForms(): Promise<RemoteLeadForm[]>;
+  /** The questions on one form — what a field mapping is chosen FROM. */
+  listQuestions(formId: string): Promise<RemoteFormQuestion[]>;
   createForm(input: CreateLeadFormInput): Promise<RemoteLeadForm>;
 }

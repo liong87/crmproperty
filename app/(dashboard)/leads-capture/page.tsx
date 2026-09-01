@@ -5,6 +5,7 @@ import { listLeadFormSources } from "@/server/lead-sources/queries";
 import { listProjectOptions } from "@/server/projects/queries";
 import { LeadSourceManager } from "@/components/lead-sources/source-manager";
 import { FacebookPanel } from "@/components/lead-sources/facebook-panel";
+import { MetaFormList } from "@/components/lead-sources/meta-form-list";
 import { metaLeadForms } from "@/lib/leadads";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -24,7 +25,8 @@ export default async function LeadsCapturePage() {
   const [sources, projects] = await Promise.all([listLeadFormSources(), listProjectOptions()]);
   // Checked on the server so the panel never renders a button that cannot work.
   const fbConfigured = metaLeadForms.isConfigured();
-  const metaCount = sources.filter((s) => s.provider === "meta").length;
+  const metaSources = sources.filter((s) => s.provider === "meta");
+  const metaCount = metaSources.length;
   const unmapped = sources.filter((s) => !s.projectId).length;
 
   return (
@@ -56,8 +58,9 @@ export default async function LeadsCapturePage() {
               : "Connect a Page to read and create lead forms without leaving the CRM."}
           </p>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <FacebookPanel configured={fbConfigured} projects={projects} />
+          <MetaFormList sources={metaSources} />
         </CardContent>
       </Card>
 

@@ -72,7 +72,14 @@ async function findMapping(formId: string | null): Promise<MetaMapping | null> {
         isNull(leadFormSources.deletedAt),
       ),
     );
-  return row ? { projectId: row.projectId, defaultInterest: row.defaultInterest, label: row.label } : null;
+  return row
+    ? {
+        projectId: row.projectId,
+        defaultInterest: row.defaultInterest,
+        label: row.label,
+        fieldMap: row.fieldMap ?? null,
+      }
+    : null;
 }
 
 /**

@@ -22,8 +22,10 @@ import {
   uniqueIndex,
   bigint,
   date,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import type { LeadFieldMap } from "@/lib/lead-forms/field-map";
 
 /* ---------- shared column helpers ---------- */
 const timestamps = {
@@ -533,6 +535,13 @@ export const leadFormSources = pgTable(
     defaultInterest: varchar("default_interest", { length: 20 }),
     /** Off means leads still arrive, but this mapping is not applied. */
     active: boolean("active").notNull().default(true),
+    /**
+     * Which question on the form answers which of our fields. Null means "guess",
+     * which is the right default: Meta's standard questions have predictable keys and
+     * the heuristics get them right. This is the override for the forms that ask in
+     * Malay, or ask twice, or call the phone field something nobody expected.
+     */
+    fieldMap: jsonb("field_map").$type<LeadFieldMap>(),
     notes: text("notes"),
     ...timestamps,
   },

@@ -9,11 +9,18 @@
 import type { LeadAdRecord } from "@/lib/leadads";
 import { toE164 } from "@/lib/phone";
 import { INTEREST } from "@/lib/constants";
+import type { LeadFieldMap } from "@/lib/lead-forms/field-map";
 
 export interface MetaMapping {
   projectId: string | null;
   defaultInterest: string | null;
   label: string | null;
+  /**
+   * An explicit question-to-field mapping for this form, when somebody has set one.
+   * Null means fall back to the heuristics below, which is right for the standard
+   * Meta questions and wrong only for forms that ask in unexpected words.
+   */
+  fieldMap?: LeadFieldMap | null;
 }
 
 export interface MappedMetaLead {
@@ -82,29 +89,63 @@ function asConsent(raw: string | null): boolean {
 
 export function mapMetaLead(record: LeadAdRecord, mapping: MetaMapping | null): MappedMetaLead {
   const f = record.fields;
+  const fm = mapping?.fieldMap ?? null;
 
-  const full = pick(f, NAME_KEYS);
-  const first = pick(f, FIRST_KEYS);
-  const last = pick(f, LAST_KEYS);
-  const name = full ?? [first, last].filter(Boolean).join(" ").trim();
+  /**
+   * An explicit mapping wins; the guess is the fallback.
+   *
+   * Note the order matters even when a mapping exists: a manager can map the phone and
+   * leave email alone, and the unmapped half should still be guessed rather than
+   * silently dropped because a mapping row exists at all.
+   */
+  const chosen = (key: keyof LeadFieldMap, fallbackKeys: string[]): string | null => {
+    const mapped = fm?.[key];
+    if (mapped) {
+      const v = f[mapped];
+      // An explicitly mapped question that arrived empty is empty on purpose — do not
+      // quietly fall back to guessing and put a different answer in the field.
+      return v && v.trim() ? v.trim() : null;
+    }
+    return pick(f, fallbackKeys);
+  };
+
+  /*
+   * Name is the one field with a two-part fallback: Meta forms ask either for a full
+   * name or for first and last separately. An explicit mapping replaces the whole of
+   * that, first/last included — someone who has named the question means it.
+   */
+  let name: string;
+  if (fm?.name) {
+    name = chosen("name", NAME_KEYS) ?? "";
+  } else {
+    const full = pick(f, NAME_KEYS);
+    const first = pick(f, FIRST_KEYS);
+    const last = pick(f, LAST_KEYS);
+    name = full ?? [first, last].filter(Boolean).join(" ").trim();
+  }
 
   // Meta returns whatever the user typed. Normalising here rather than rejecting is
   // the difference between capturing a paid lead and binning it.
-  const phone = toE164(pick(f, PHONE_KEYS)) ?? "";
+  const phone = toE164(chosen("phone", PHONE_KEYS)) ?? "";
 
-  const consentAnswer = pick(f, CONSENT_KEYS);
+  const consentAnswer = chosen("consent", CONSENT_KEYS);
+
+  // Anything mapped by hand has been consumed into a column, so it must not also be
+  // repeated in the extras note.
+  const consumed = new Set<string>(KNOWN);
+  for (const v of Object.values(fm ?? {})) if (v) consumed.add(v);
 
   const extraAnswers: Record<string, string> = {};
   for (const [k, v] of Object.entries(f)) {
-    if (!KNOWN.has(k)) extraAnswers[k] = v;
+    if (!consumed.has(k)) extraAnswers[k] = v;
   }
 
   return {
     name,
     phone,
-    email: pick(f, EMAIL_KEYS),
-    interest: asInterest(pick(f, INTEREST_KEYS)) ?? mapping?.defaultInterest ?? null,
-    preferredAreas: pick(f, AREA_KEYS),
+    email: chosen("email", EMAIL_KEYS),
+    interest: asInterest(chosen("interest", INTEREST_KEYS)) ?? mapping?.defaultInterest ?? null,
+    preferredAreas: chosen("preferredAreas", AREA_KEYS),
     projectId: mapping?.projectId ?? null,
     // The label an admin gave the form reads far better in a list than a numeric id.
     sourceDetail: (mapping?.label ?? `meta form ${record.formId ?? "unknown"}`).slice(0, 255),

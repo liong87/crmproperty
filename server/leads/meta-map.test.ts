@@ -181,3 +181,59 @@ describe("mapMetaLead — ad-set and ad attribution", () => {
     expect(mapMetaLead(record({}, { adsetName: long }), null).utmContent).toHaveLength(255);
   });
 });
+
+describe("mapMetaLead — an explicit field mapping", () => {
+  const fm = (fieldMap: Record<string, string>) => ({ ...mapping, fieldMap });
+
+  it("reads a phone question the heuristics cannot guess", () => {
+    // The exact failure this feature exists for: a Malay-labelled phone question
+    // produces a key that matches nothing, and the lead arrives uncallable.
+    const answers = { full_name: "Aisyah", nombor_telefon: "0123456789" };
+    expect(mapMetaLead(record(answers), mapping).phone).toBe("");
+    expect(mapMetaLead(record(answers), fm({ phone: "nombor_telefon" })).phone).toBe("+60123456789");
+  });
+
+  it("still guesses the fields that were left unmapped", () => {
+    const m = mapMetaLead(
+      record({ full_name: "Lim", nombor_telefon: "0123456789", email: "lim@example.com" }),
+      fm({ phone: "nombor_telefon" }),
+    );
+    expect(m.name).toBe("Lim");
+    expect(m.email).toBe("lim@example.com");
+  });
+
+  it("does not fall back to guessing when a mapped question is empty", () => {
+    // Falling back here would put a different answer in the field, which is worse than
+    // an empty one: nobody reviews a field that looks filled in.
+    const m = mapMetaLead(
+      record({ full_name: "Lim", phone_number: "0123456789", nombor_telefon: "" }),
+      fm({ phone: "nombor_telefon" }),
+    );
+    expect(m.phone).toBe("");
+  });
+
+  it("keeps a mapped question out of the extras note", () => {
+    const m = mapMetaLead(
+      record({ full_name: "Lim", nombor_telefon: "0123456789", budget: "500k" }),
+      fm({ phone: "nombor_telefon" }),
+    );
+    expect(m.extraAnswers).toEqual({ budget: "500k" });
+  });
+
+  it("takes an explicit name over the first/last pair", () => {
+    const m = mapMetaLead(
+      record({ first_name: "Siti", last_name: "Nurhaliza", nama_penuh: "Siti Nurhaliza binti Taruddin" }),
+      fm({ name: "nama_penuh" }),
+    );
+    expect(m.name).toBe("Siti Nurhaliza binti Taruddin");
+  });
+
+  it("uses a mapped consent question", () => {
+    const m = mapMetaLead(
+      record({ full_name: "Lim", phone_number: "0123456789", setuju_pdpa: "ya" }),
+      fm({ consent: "setuju_pdpa" }),
+    );
+    expect(m.consentGiven).toBe(true);
+    expect(m.consentSource).toContain("form-consent-question");
+  });
+});

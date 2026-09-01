@@ -22,7 +22,9 @@ import { requireDbUser, assertRole, AuthorizationError } from "@/lib/auth";
 import { INTEREST } from "@/lib/constants";
 import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
-import { metaLeadForms, LeadAdsTransientError } from "@/lib/leadads";
+import { metaLeadForms, LeadAdsTransientError, type RemoteFormQuestion } from "@/lib/leadads";
+import { cleanFieldMap, MAPPABLE_FIELDS, type LeadFieldMap } from "@/lib/lead-forms/field-map";
+import { getLeadFormSourceById } from "./queries";
 import type { ActionResult } from "@/types";
 
 export interface ImportSummary {
@@ -171,4 +173,74 @@ function handle(err: unknown, where: string): ActionResult<never> {
   if (err instanceof LeadAdsTransientError) return fail(`Facebook says: ${err.message}`);
   monitoring.captureException(err, { where });
   return fail("Something went wrong.");
+}
+
+
+/**
+ * The questions on one mapped form, read live from the platform.
+ *
+ * Live rather than stored on purpose: a form's questions are fixed the moment it is
+ * created, so a cached copy can only ever go stale in one direction — showing
+ * questions for a form somebody archived and rebuilt. One Graph call when the dialog
+ * opens is cheap and always right.
+ */
+export async function loadFormQuestions(sourceId: string): Promise<ActionResult<RemoteFormQuestion[]>> {
+  try {
+    const me = await requireDbUser();
+    assertRole(me, "admin", "manager");
+    z.string().uuid().parse(sourceId);
+
+    const source = await getLeadFormSourceById(sourceId);
+    if (!source) return fail("Mapping not found.");
+    if (source.provider !== "meta") {
+      return fail("Only Facebook forms can list their questions from here.");
+    }
+    if (!metaLeadForms.isConfigured()) {
+      return fail("Facebook is not connected. Set META_PAGE_ID and META_PAGE_ACCESS_TOKEN.");
+    }
+
+    return ok(await metaLeadForms.listQuestions(source.externalFormId));
+  } catch (err) {
+    return handle(err, "loadFormQuestions");
+  }
+}
+
+const fieldMapSchema = z.object({
+  id: z.string().uuid(),
+  fieldMap: z.record(z.string(), z.string()).default({}),
+});
+
+export async function saveFieldMap(input: unknown): Promise<ActionResult<LeadFieldMap>> {
+  try {
+    const me = await requireDbUser();
+    assertRole(me, "admin", "manager");
+    const d = fieldMapSchema.parse(input);
+
+    const source = await getLeadFormSourceById(d.id);
+    if (!source) return fail("Mapping not found.");
+
+    const map = cleanFieldMap(d.fieldMap);
+
+    // Mapping the same question onto two fields is always a mistake, and it produces a
+    // lead whose name is their phone number. Catch it here rather than in the data.
+    const used = new Map<string, string>();
+    for (const f of MAPPABLE_FIELDS) {
+      const q = map[f.key];
+      if (!q) continue;
+      const already = used.get(q);
+      if (already) return fail(`"${q}" is mapped to both ${already} and ${f.label}. Pick one.`);
+      used.set(q, f.label);
+    }
+
+    // Empty means "go back to guessing", which is a real choice and has to be storable.
+    await db
+      .update(leadFormSources)
+      .set({ fieldMap: Object.keys(map).length > 0 ? map : null })
+      .where(eq(leadFormSources.id, d.id));
+
+    revalidatePath("/leads-capture");
+    return ok(map);
+  } catch (err) {
+    return handle(err, "saveFieldMap");
+  }
 }
