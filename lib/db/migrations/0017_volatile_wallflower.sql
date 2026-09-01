@@ -1,0 +1,1 @@
+ALTER TABLE "lead_form_sources" ADD COLUMN "field_map" jsonb;
