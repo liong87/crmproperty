@@ -20,6 +20,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+/**
+ * What a link should READ as in the list.
+ *
+ * The item already has a name above it, so repeating a 180-character Google Sheets URL
+ * underneath tells the agent nothing and swamps the card — the file items show a tidy
+ * filename, and links should sit at the same visual weight. The full URL stays in the
+ * title attribute for anyone who wants to check where it goes before clicking.
+ */
+function linkLabel(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    // Not parseable as a URL — show it as typed rather than hiding it.
+    return url;
+  }
+}
+
 export function SalesKit({
   projectId, groups, canPublish,
 }: {
@@ -145,9 +162,10 @@ export function SalesKit({
                         href={item.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="mt-0.5 block break-all text-xs text-primary underline underline-offset-2"
+                        title={item.url}
+                        className="mt-0.5 inline-block max-w-full truncate text-xs text-primary underline underline-offset-2"
                       >
-                        {item.url}
+                        {linkLabel(item.url)} &#8599;
                       </a>
                     )}
 
