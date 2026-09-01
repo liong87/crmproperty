@@ -2,53 +2,98 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { syncCurrentUser, isManagerOrAbove } from "@/lib/auth";
 import { UserButton } from "@/lib/auth/provider-components";
-import { AppNav, type NavLink } from "@/components/nav/app-nav";
+import { AppNav, type NavGroup } from "@/components/nav/app-nav";
 import { APP_NAME } from "@/lib/constants";
+
+const ROLE_LABEL: Record<string, string> = {
+  admin: "Administrator",
+  manager: "Manager",
+  agent: "Agent",
+};
 
 /**
  * Authenticated shell. Middleware blocks unauthenticated access; here we ensure a
  * local users row exists (sync) and load role for nav. Desktop = left sidebar,
  * mobile = compact top bar + scrollable icon nav (field-first).
+ *
+ * The nav is grouped by what the agent is doing rather than listed flat: a flat list
+ * of fifteen links makes the reader scan the whole thing to find one page, and it
+ * hides which pages belong together.
  */
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await syncCurrentUser();
   if (!user) redirect("/sign-in");
   if (!user.active) redirect("/pending");
 
-  const links: NavLink[] = [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/inbox", label: "Inbox" },
-    { href: "/leads", label: "Leads" },
-    { href: "/contacts", label: "Contacts" },
-    { href: "/projects", label: "Projects" },
-    { href: "/properties", label: "Properties" },
-    { href: "/pipeline", label: "Pipeline" },
-    { href: "/appointments", label: "Appointments" },
-    { href: "/reminders", label: "Reminders" },
-    { href: "/reports", label: "Reports" },
-    { href: "/help", label: "Guide" },
-    ...(isManagerOrAbove(user)
-      ? [
-          { href: "/lead-sources", label: "Lead sources" },
-          { href: "/settings/commission", label: "Commission" },
-          { href: "/templates", label: "Templates" },
-          { href: "/users", label: "Users" },
-        ]
-      : []),
+  const manager = isManagerOrAbove(user);
+  const mgrOnly = <T,>(items: T[]): T[] => (manager ? items : []);
+
+  // Role filtering happens here, on the server, so a manager-only href is never sent
+  // to an agent's browser at all.
+  const groups: NavGroup[] = [
+    {
+      label: "Workspace",
+      links: [
+        { href: "/dashboard", label: "Dashboard" },
+        { href: "/inbox", label: "Inbox" },
+        { href: "/appointments", label: "Appointments" },
+        { href: "/reminders", label: "Reminders" },
+      ],
+    },
+    {
+      label: "Lead management",
+      links: [
+        { href: "/leads", label: "Leads" },
+        { href: "/contacts", label: "Contacts" },
+        ...mgrOnly([{ href: "/lead-sources", label: "Lead sources" }]),
+      ],
+    },
+    {
+      label: "Sales",
+      links: [
+        { href: "/projects", label: "Projects" },
+        { href: "/properties", label: "Properties" },
+        { href: "/pipeline", label: "Pipeline" },
+      ],
+    },
+    {
+      label: "Communication",
+      links: mgrOnly([{ href: "/templates", label: "Templates" }]),
+    },
+    {
+      label: "Insights",
+      links: [
+        { href: "/reports", label: "Reports" },
+        ...mgrOnly([{ href: "/settings/commission", label: "Commission" }]),
+      ],
+    },
+    {
+      label: "Team",
+      links: mgrOnly([{ href: "/users", label: "Users" }]),
+    },
+    {
+      label: "Support",
+      links: [{ href: "/help", label: "Guide" }],
+    },
   ];
 
   return (
     <div className="min-h-dvh sm:flex">
       {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r bg-card p-4 sm:flex">
-        <Link href="/dashboard" className="mb-6 block px-2 font-display text-lg font-semibold text-primary">
-          {APP_NAME}
-        </Link>
-        <div className="flex-1">
-          <AppNav links={links} variant="sidebar" />
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r bg-card sm:flex">
+        <div className="border-b px-4 py-4">
+          <Link href="/dashboard" className="block font-display text-lg font-semibold leading-tight text-primary">
+            {APP_NAME}
+          </Link>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {user.name} · {ROLE_LABEL[user.role] ?? user.role}
+          </p>
         </div>
-        <div className="mt-4 flex items-center justify-between border-t pt-4">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{user.role}</span>
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          <AppNav groups={groups} variant="sidebar" />
+        </div>
+        <div className="flex items-center justify-between border-t px-4 py-3">
+          <span className="truncate text-xs text-muted-foreground">{user.name}</span>
           <UserButton />
         </div>
       </aside>
@@ -61,7 +106,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </header>
         {/* Mobile nav */}
         <div className="sticky top-[57px] z-10 border-b bg-card/90 backdrop-blur sm:hidden">
-          <AppNav links={links} variant="bar" />
+          <AppNav groups={groups} variant="bar" />
         </div>
 
         <main className="mx-auto w-full max-w-5xl flex-1 p-4 sm:p-6">{children}</main>

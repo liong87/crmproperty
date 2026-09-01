@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Inbox, UserCheck, Wallet, BellRing, Activity, CalendarCheck, Snowflake } from "lucide-react";
+import { Inbox, UserCheck, BellRing, Activity, CalendarCheck, Snowflake } from "lucide-react";
 import { getCurrentDbUser } from "@/lib/auth";
 import { listFollowUps } from "@/server/activities/queries";
 import { countStaleLeads, STALE_AFTER_DAYS } from "@/server/leads/stale";
@@ -11,12 +11,18 @@ import { countDocumentsDue } from "@/server/deal-documents/queries";
 import { STATUS } from "@/lib/chart-colors";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/reports/stat-tile";
+import { FunnelStrip } from "@/components/reports/funnel-strip";
+import { RangeFilter, parseRangeDays, rangeLabel } from "@/components/reports/range-filter";
 import { FollowUpList } from "@/components/activities/follow-up-list";
-import { formatMYR } from "@/lib/utils";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ days?: string }>;
+}) {
   const user = await getCurrentDbUser();
   if (!user) return null;
+  const days = parseRangeDays((await searchParams).days);
 
   // Ask for 5, not "all of them then slice to 5".
   const [followUps, report, appts, toWriteUp, funnel, trend, staleCount, docsDue] = await Promise.all([
@@ -24,13 +30,12 @@ export default async function DashboardPage() {
     getReportData(user),
     listUpcomingAppointments(user, 5),
     countAppointmentsNeedingOutcome(user),
-    getFunnel(user),
+    getFunnel(user, days),
     getFunnelTrend(user, 8),
     countStaleLeads(user),
     countDocumentsDue(user),
   ]);
   const overdue = followUps.filter((f) => f.overdue).length;
-  const booked = funnel.stages.find((s) => s.key === "booked")?.count ?? 0;
   // No-show rate is the one tile here that means good or bad, so it is the only one
   // that earns a status colour.
   const noShowTone =
@@ -42,20 +47,25 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {report.scope === "team" ? "Team overview" : "Your workspace"}
-        </p>
-        <h1 className="text-2xl font-semibold">Welcome back, {firstName}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {overdue > 0
-            ? `${overdue} follow-up${overdue > 1 ? "s are" : " is"} overdue — worth a look.`
-            : "Nothing overdue. Here's where things stand."}
-        </p>
+      {/* Greeting band. The tint is the existing secondary token, not a new colour:
+          it separates "who and when" from the numbers without adding to the palette. */}
+      <div className="rounded-xl border bg-secondary/40 px-5 py-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
+              {report.scope === "team" ? "Team overview" : "Your workspace"}
+            </p>
+            <h1 className="mt-1 font-display text-2xl font-semibold">Welcome back, {firstName}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {overdue > 0
+                ? `${overdue} follow-up${overdue > 1 ? "s are" : " is"} overdue — worth a look.`
+                : "Nothing overdue. Here's where things stand."}
+            </p>
+          </div>
+          <RangeFilter days={days} basePath="/dashboard" />
+        </div>
       </div>
 
-      {/* Six tiles: the row divides evenly at 2 (mobile), 3 and 6, so none is orphaned
-          on a second line at any breakpoint. */}
       {docsDue.overdue > 0 && (
         <Link
           href="/reminders"
@@ -72,7 +82,13 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      {/* The funnel first, because it is the question the dashboard exists to answer:
+          where are people falling out. The tiles below are the day's workload. */}
+      <FunnelStrip stages={funnel.stages} periodLabel={`Last ${rangeLabel(days).toLowerCase()}`} />
+
+      {/* Four tiles, not six: booked and appointments now live in the strip above, and
+          repeating them here taught the eye to skip the row. */}
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {/* openLeads, not totalLeads: a disqualified lead is finished work, and
             showing it here made the tile useless as a "do I have anything to chase"
             signal. */}
@@ -85,26 +101,17 @@ export default async function DashboardPage() {
         <StatTile label="Qualified" value={String(report.qualifiedLeads)} icon={UserCheck}
           hint={`${Math.round(report.conversionRate * 100)}% conversion`} />
         <StatTile
-          label="Booked"
-          value={String(booked)}
-          icon={Wallet}
-          accent
-          hint={`last ${funnel.sinceDays} days`}
-          spark={trend.map((t) => t.booked)}
-        />
-        <StatTile
           label="No-show rate"
           value={funnel.noShowRate == null ? "—" : `${Math.round(funnel.noShowRate * 100)}%`}
           icon={Activity}
           tone={noShowTone}
           hint="kept or missed"
         />
-        <StatTile label="Follow-ups due" value={String(followUps.length)} icon={BellRing}
-          hint={overdue > 0 ? `${overdue} overdue` : "on track"} />
         <StatTile
           label="Appointments ahead"
           value={String(appts.length)}
           icon={CalendarCheck}
+          accent
           hint={toWriteUp > 0 ? `${toWriteUp} to write up` : undefined}
           spark={trend.map((t) => t.appointments)}
         />
@@ -131,25 +138,31 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Upcoming follow-ups</CardTitle>
-          <Link href="/reminders" className="text-sm text-primary underline-offset-2 hover:underline">View all</Link>
-        </CardHeader>
-        <CardContent>
-          <FollowUpList items={followUps} />
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <BellRing className="h-4 w-4 text-muted-foreground" /> Upcoming follow-ups
+            </CardTitle>
+            <Link href="/reminders" className="text-sm text-primary underline-offset-2 hover:underline">View all</Link>
+          </CardHeader>
+          <CardContent>
+            <FollowUpList items={followUps} />
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Upcoming appointments</CardTitle>
-          <Link href="/appointments" className="text-sm text-primary underline-offset-2 hover:underline">View all</Link>
-        </CardHeader>
-        <CardContent>
-          <AppointmentList items={appts} empty="No appointments scheduled." />
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <CalendarCheck className="h-4 w-4 text-muted-foreground" /> Upcoming appointments
+            </CardTitle>
+            <Link href="/appointments" className="text-sm text-primary underline-offset-2 hover:underline">View all</Link>
+          </CardHeader>
+          <CardContent>
+            <AppointmentList items={appts} empty="No appointments scheduled." />
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <QuickLink href="/leads" title="Leads" desc="Capture & qualify inquiries" />
