@@ -16,6 +16,7 @@
     "seed": "tsx scripts/seed.ts",
     "seed:project-checklist": "tsx scripts/seed-document-checklist-template.ts",
     "demo:sales-kit": "tsx scripts/demo-sales-kit.ts",
+    "kit:add-link": "tsx scripts/add-kit-link.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "cf:preview": "opennextjs-cloudflare build && wrangler dev",
