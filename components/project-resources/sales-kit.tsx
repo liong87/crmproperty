@@ -11,7 +11,8 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
-  addResource, removeResource, uploadResourceFile, getResourceFileUrl,
+  addResource, removeResource, getResourceFileUrl,
+  createResourceUploadUrl, confirmResourceUpload,
 } from "@/server/project-resources/actions";
 import { CATEGORY_TITLES, RESOURCE_CATEGORIES, type ResourceCategory } from "@/lib/sales-kit";
 import type { KitGroup } from "@/server/project-resources/queries";
@@ -41,6 +42,40 @@ export function SalesKit({
       const res = await fn();
       if (!res.success) return setError(res.error ?? "Something went wrong.");
       router.refresh();
+    });
+  }
+
+  /**
+   * Upload straight to object storage, then tell the server what landed.
+   *
+   * The file never passes through the server: a brochure is tens of megabytes and a
+   * Worker gets 10 ms of CPU on the free plan, which is not enough to relay one.
+   */
+  async function uploadDirect(itemId: string, file: File): Promise<{ success: boolean; error?: string }> {
+    if (!file.type) {
+      return { success: false, error: "Your browser did not report a type for that file. Rename it with a proper extension and try again." };
+    }
+
+    const started = await createResourceUploadUrl({
+      id: itemId, filename: file.name, contentType: file.type, size: file.size,
+    });
+    if (!started.success) return started;
+
+    const put = await fetch(started.data.url, {
+      method: "PUT",
+      body: file,
+      // Must match the type signed into the URL, or storage refuses the write.
+      headers: { "Content-Type": file.type },
+    });
+    if (!put.ok) {
+      return {
+        success: false,
+        error: `Storage rejected the upload (${put.status}). If this is the first one, check the bucket's CORS rule allows PUT from this origin.`,
+      };
+    }
+
+    return confirmResourceUpload({
+      id: itemId, key: started.data.key, filename: file.name, contentType: file.type, size: file.size,
     });
   }
 
@@ -121,10 +156,7 @@ export function SalesKit({
                           onChange={(e) => {
                             const f = e.target.files?.[0];
                             if (!f) return;
-                            const fd = new FormData();
-                            fd.set("id", item.id);
-                            fd.set("file", f);
-                            run(() => uploadResourceFile(fd));
+                            run(() => uploadDirect(item.id, f));
                           }}
                         />
                       </label>

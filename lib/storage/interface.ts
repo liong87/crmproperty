@@ -14,5 +14,18 @@ export interface StorageProvider {
     expiresInSeconds?: number,
     downloadAs?: string | null,
   ): Promise<string>;
+  /**
+   * Presigned PUT URL so a BROWSER can upload straight to storage, without the bytes
+   * passing through the server at all.
+   *
+   * On Cloudflare Workers this is not an optimisation, it is the difference between
+   * working and not: the free plan allows 10 ms of CPU per request, and receiving,
+   * buffering and re-uploading a multi-megabyte file does not fit in that budget.
+   *
+   * `contentType` is signed INTO the URL, so the holder can only store an object of
+   * that exact type — the browser must send a matching Content-Type header or R2
+   * rejects the PUT.
+   */
+  getUploadUrl(key: string, contentType: string, expiresInSeconds?: number): Promise<string>;
   delete(key: string): Promise<void>;
 }

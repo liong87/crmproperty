@@ -84,6 +84,18 @@ export const r2Provider: StorageProvider = {
       { expiresIn: expiresInSeconds },
     );
   },
+  /**
+   * 15 minutes, same reasoning as the read URL: it is a bearer token to write one
+   * object at one key, and the browser uses it immediately.
+   */
+  async getUploadUrl(key, contentType, expiresInSeconds = 900) {
+    const { client, bucket } = config();
+    return getSignedUrl(
+      client,
+      new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: contentType }),
+      { expiresIn: expiresInSeconds },
+    );
+  },
   async delete(key) {
     const { client, bucket } = config();
     await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));

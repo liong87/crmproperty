@@ -17,17 +17,8 @@ import { requireDbUser, isManagerOrAbove, AuthorizationError } from "@/lib/auth"
 import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
-import { acceptedType, DOCUMENT_TYPES } from "@/lib/uploads/sniff";
 import { RESOURCE_CATEGORIES } from "@/lib/sales-kit";
 
-/**
- * Kept under next.config.mjs's serverActions.bodySizeLimit (20 MB) with headroom for
- * multipart overhead. A brochure or photo gallery can exceed this: the fix for those
- * is a presigned direct-to-R2 upload so the bytes never touch the server at all, which
- * needs one new method on StorageProvider and a CORS rule on the bucket. Until then
- * this cap is honest about what actually works rather than optimistic about what does not.
- */
-const MAX_BYTES = 15 * 1024 * 1024;
 
 /** Only managers and admins publish. Agents read. */
 async function requirePublisher() {
@@ -120,38 +111,106 @@ export async function updateResource(input: unknown): Promise<ActionResult<void>
 }
 
 /**
- * Attach or replace the file on a kit item.
+ * Direct-to-storage upload, in two steps: mint a presigned PUT, then record what
+ * landed. The bytes go browser -> R2 and never touch the server.
  *
- * The declared content type is the client's word for it; the bytes decide. Whatever
- * we store is what R2 serves back on a signed URL, so a file that claims to be a PDF
- * and is not must never reach storage under that type.
+ * This exists because the server-action path (uploadResourceFile above) cannot carry
+ * a real sales kit. An e-brochure or photo gallery is tens of megabytes, and on
+ * Cloudflare Workers' free plan a request gets 10 ms of CPU — nowhere near enough to
+ * buffer and re-upload a file that size. Signing a URL costs almost nothing.
+ *
+ * THE TRADE-OFF, STATED PLAINLY: because the bytes never reach us, we cannot sniff
+ * magic bytes the way uploadResourceFile does, so the declared content type is taken
+ * on trust. Four things contain that:
+ *   1. The type is signed INTO the presigned URL, so the stored object can only ever
+ *      have the type we allowed — a caller cannot promise PDF and store HTML.
+ *   2. Only an allowlisted type is signed at all.
+ *   3. Reads always go out as `attachment` + application/octet-stream (see
+ *      getSignedUrl), so nothing is ever rendered in our origin.
+ *   4. X-Content-Type-Options: nosniff is set globally in next.config.mjs.
+ * The residual risk is a manager storing a mislabelled file that a colleague later
+ * downloads and opens deliberately — the same risk as any shared drive, and strictly
+ * smaller than the Google Drive folder this replaces.
  */
-export async function uploadResourceFile(formData: FormData): Promise<ActionResult<void>> {
+
+/** What a sales kit legitimately contains. Price lists are very often spreadsheets. */
+const UPLOAD_TYPES: Record<string, true> = {
+  "application/pdf": true,
+  "image/jpeg": true,
+  "image/png": true,
+  "image/webp": true,
+  "application/msword": true,
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+  "application/vnd.ms-excel": true,
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": true,
+};
+
+/** Generous, because this path exists for brochures and galleries. R2 takes 5 GB in one PUT. */
+const MAX_DIRECT_BYTES = 200 * 1024 * 1024;
+
+const startSchema = z.object({
+  id: z.string().uuid(),
+  filename: z.string().min(1).max(255),
+  contentType: z.string().min(1).max(255),
+  size: z.number().int().positive().max(MAX_DIRECT_BYTES),
+});
+
+export async function createResourceUploadUrl(
+  input: unknown,
+): Promise<ActionResult<{ url: string; key: string }>> {
   try {
-    const id = z.string().uuid().parse(formData.get("id"));
-    const loaded = await loadResource(id);
+    const d = startSchema.parse(input);
+    const loaded = await loadResource(d.id);
     if (loaded.error) return loaded.error;
 
-    const file = formData.get("file");
-    if (!(file instanceof File)) return fail("No file provided.");
-    if (file.size > MAX_BYTES) return fail("File exceeds 15 MB.");
+    if (!UPLOAD_TYPES[d.contentType]) {
+      return fail("Upload a PDF, Word document, spreadsheet or image.");
+    }
 
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const sniffed = acceptedType(bytes, DOCUMENT_TYPES);
-    if (!sniffed) return fail("That file is not a PDF, Word document or image.");
+    const safeName = d.filename.replace(/[^\w.\-]/g, "_").slice(0, 120);
+    const key = `projects/${loaded.row.projectId}/kit/${crypto.randomUUID()}-${safeName}`;
 
-    const key = `projects/${loaded.row.projectId}/kit/${crypto.randomUUID()}-${file.name.replace(/[^\w.\-]/g, "_")}`;
-    await storage.upload(key, bytes, sniffed);
+    return ok({ url: await storage.getUploadUrl(key, d.contentType), key });
+  } catch (err) {
+    return handle(err, "createResourceUploadUrl");
+  }
+}
+
+const confirmSchema = z.object({
+  id: z.string().uuid(),
+  key: z.string().min(1).max(1024),
+  filename: z.string().min(1).max(255),
+  contentType: z.string().min(1).max(255),
+  size: z.number().int().positive().max(MAX_DIRECT_BYTES),
+});
+
+/** Record an upload that has already landed in storage, and point the item at it. */
+export async function confirmResourceUpload(input: unknown): Promise<ActionResult<void>> {
+  try {
+    const d = confirmSchema.parse(input);
+    const loaded = await loadResource(d.id);
+    if (loaded.error) return loaded.error;
+
+    if (!UPLOAD_TYPES[d.contentType]) return fail("Unsupported file type.");
+
+    // The key came back from the client, so re-derive what it is allowed to look like
+    // rather than trusting it. Without this, a caller could point a kit item at any
+    // object in the bucket — including another project's, or a database backup if the
+    // buckets were ever merged.
+    const expected = new RegExp(
+      `^projects/${loaded.row.projectId}/kit/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-`,
+    );
+    if (!expected.test(d.key)) return fail("That upload does not belong to this project.");
 
     const [doc] = await db
       .insert(documents)
       .values({
         entityType: "projects",
         entityId: loaded.row.projectId,
-        storageKey: key,
-        filename: file.name,
-        mimeType: sniffed,
-        size: file.size,
+        storageKey: d.key,
+        filename: d.filename,
+        mimeType: d.contentType,
+        size: d.size,
         uploadedBy: loaded.me.id,
       })
       .returning({ id: documents.id });
@@ -161,17 +220,14 @@ export async function uploadResourceFile(formData: FormData): Promise<ActionResu
     await db
       .update(projectResources)
       .set({ documentId: doc!.id, updatedBy: loaded.me.id })
-      .where(eq(projectResources.id, id));
+      .where(eq(projectResources.id, d.id));
 
-    // Only after the row points at the NEW file: if clearing up the old one fails, the
-    // item still resolves, and an orphaned object costs pennies. The reverse order can
-    // leave a kit item pointing at a file that no longer exists.
     if (previousId) await discardFile(previousId);
 
     revalidatePath(`/projects/${loaded.row.projectId}`);
     return ok<void>(undefined);
   } catch (err) {
-    return handle(err, "uploadResourceFile");
+    return handle(err, "confirmResourceUpload");
   }
 }
 

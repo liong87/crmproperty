@@ -15,8 +15,10 @@ const nextConfig = {
    * was rejected by the framework with an opaque error before that friendly check
    * ever ran. Keep this at or above MAX_BYTES.
    *
-   * Note for the sales-kit work: brochures and photo galleries are tens of MB and
-   * should upload presigned direct-to-R2 rather than through a server action at all.
+   * Sales-kit files no longer come through here — they PUT straight to R2 with a
+   * presigned URL, which is what makes brochure-sized files possible at all on
+   * Workers' free plan (10 ms CPU per request). This limit still governs property
+   * photos and deal-document uploads, which remain server actions.
    */
   experimental: {
     serverActions: { bodySizeLimit: "20mb" },
@@ -77,7 +79,9 @@ const nextConfig = {
               // client-side resize canvas; blob: covers object URLs for previews.
               "img-src 'self' data: blob: https://*.r2.cloudflarestorage.com https://img.clerk.com",
               "font-src 'self' data:",
-              "connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com",
+              // The sales kit uploads straight from the browser to R2 (presigned PUT),
+              // so the bucket host must be reachable by fetch, not just as an image.
+              "connect-src 'self' https://*.r2.cloudflarestorage.com https://*.clerk.accounts.dev https://*.clerk.com",
               // Clerk renders sign-in components in an iframe on development
               // instances; production instances do not need this.
               "frame-src 'self' https://*.clerk.accounts.dev https://*.clerk.com",
