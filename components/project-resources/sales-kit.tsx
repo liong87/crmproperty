@@ -35,6 +35,7 @@ export function SalesKit({
   const [label, setLabel] = React.useState("");
   const [url, setUrl] = React.useState("");
   const [value, setValue] = React.useState("");
+  const [notes, setNotes] = React.useState("");
 
   function run(fn: () => Promise<{ success: boolean; error?: string }>) {
     setError(null);
@@ -250,6 +251,16 @@ export function SalesKit({
             </div>
           </div>
 
+          <div className="space-y-1.5">
+            <Label className="text-xs">Note (optional)</Label>
+            <Input
+              className="h-9 w-full max-w-xl"
+              placeholder="Internal holds only — confirm availability with the developer before promising a unit."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
+
           <p className="text-xs text-muted-foreground">
             A link, a value, or neither — add the item, then attach a file to it.
           </p>
@@ -266,9 +277,10 @@ export function SalesKit({
                     label,
                     url: url.trim() || null,
                     value: value.trim() || null,
+                    notes: notes.trim() || null,
                   });
                   if (res.success) {
-                    setLabel(""); setUrl(""); setValue(""); setAdding(false);
+                    setLabel(""); setUrl(""); setValue(""); setNotes(""); setAdding(false);
                   }
                   return res;
                 })
