@@ -117,6 +117,9 @@ export function DealChecklist({
                     <div className="mt-0.5 text-xs" style={tone.color ? { color: tone.color } : undefined}>
                       <span className={tone.color ? "font-semibold" : "text-muted-foreground"}>{tone.text}</span>
                     </div>
+                    {item.notes && (
+                      <p className="mt-1 max-w-prose text-xs text-muted-foreground">{item.notes}</p>
+                    )}
                     {item.filename && (
                       <button
                         type="button"

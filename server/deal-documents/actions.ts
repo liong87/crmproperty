@@ -74,6 +74,13 @@ export async function instantiateChecklist(dealId: string, pipeline: string): Pr
         // A suggested date only. The one that matters — a loan approval's expiry — is
         // printed on the letter and gets typed in when it arrives.
         dueAt: t.dueAfterDays != null ? new Date(now + t.dueAfterDays * 86_400_000) : null,
+        // The terms that EXPLAIN the deadline travel with it. A line reading "Loan
+        // Approval Letter, due in 60 days" is an instruction without a reason; the
+        // reason (the reservation is cancelled and RM1,000 refunded less RM150) lives
+        // on the template and is what makes an agent act on the date rather than move
+        // it. Copied rather than joined, so a deal whose terms differ can be corrected
+        // without editing the template every other agency deal inherits.
+        notes: t.notes,
       })),
     );
   } catch (err) {

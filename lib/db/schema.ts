@@ -463,6 +463,47 @@ export const projectUnitTypes = pgTable(
   }),
 );
 
+/**
+ * One item in a project's SALES KIT — the material the agency publishes DOWN to its
+ * agents. The mirror image of `deal_documents`, which is the paperwork a buyer sends
+ * UP into one deal. The same form appears on both sides and they are not the same
+ * object: the blank "Sales Form" every agent downloads lives here, one per project;
+ * the copy a specific buyer signed lives on that buyer's deal, with a deadline.
+ *
+ * A kit is not only files, which is why there are three payload columns of which
+ * exactly one is set. The previous agency's spreadsheet held a price-list PDF, a
+ * Google Maps pin for the showroom and an HDA account number side by side — a table
+ * that could only hold uploads would quietly lose two thirds of a kit, and the
+ * missing third is the part an agent needs while standing in front of a buyer.
+ */
+export const projectResources = pgTable(
+  "project_resources",
+  {
+    id: id(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    /** price-list | legal | marketing | forms | panel | logistics */
+    category: varchar("category", { length: 30 }).notNull(),
+    label: varchar("label", { length: 255 }).notNull(),
+    /** An uploaded file. The row holds the pointer; the bytes live in object storage. */
+    documentId: uuid("document_id").references(() => documents.id, { onDelete: "set null" }),
+    /** An external link — a Drive folder, a Google Maps pin for the showroom. */
+    url: text("url"),
+    /** A plain fact — an HDA account number, a panel banker's direct line. */
+    value: text("value"),
+    notes: text("notes"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    /** Who last published or changed this item. A price list nobody owns goes stale. */
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => ({
+    // Every read is "this project's kit, grouped by category, in order".
+    projectIdx: index("project_resources_project_idx").on(t.projectId, t.category, t.sortOrder),
+  }),
+);
+
 /* ---------- lead form sources (ad platform → project mapping) ---------- */
 
 /**
@@ -769,6 +810,7 @@ export type MessageLog = typeof messageLog.$inferSelect;
 export type MessageTemplate = typeof messageTemplates.$inferSelect;
 export type DocumentRequirement = typeof documentRequirements.$inferSelect;
 export type DealDocument = typeof dealDocuments.$inferSelect;
+export type ProjectResource = typeof projectResources.$inferSelect;
 export type ProjectPoolMember = typeof projectPoolMembers.$inferSelect;
 export type LeadAssignment = typeof leadAssignments.$inferSelect;
 export type LeadFormSource = typeof leadFormSources.$inferSelect;

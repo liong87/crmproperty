@@ -64,7 +64,7 @@ TS strict, no `any`. Server actions return `{ success, data? , error? }`. Valida
 
 ## Deployment note
 `@opennextjs/cloudflare` + `wrangler` are dev/deploy-only and are not imported by app
-code. Cloudflare Workers vs Vercel is not yet settled — see `TOMORROW.md`.
+code. The app is deployed to Cloudflare Workers (free plan) — see `TOMORROW.md`.
 
 ## PDPA
 Consent is captured on intake (`consent_given_at` + `consent_source`) and never

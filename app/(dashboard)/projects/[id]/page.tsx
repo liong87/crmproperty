@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { formatBp } from "@/lib/utils";
 import { projectStatusTone } from "@/lib/status";
 import { UnitTypeManager } from "@/components/projects/unit-type-manager";
+import { SalesKit } from "@/components/project-resources/sales-kit";
+import { listSalesKit } from "@/server/project-resources/queries";
 import { ProjectStatusControl } from "@/components/projects/status-control";
 import { DeleteProjectButton } from "@/components/projects/delete-button";
 
@@ -58,6 +60,22 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         <CardHeader><CardTitle>Unit types</CardTitle></CardHeader>
         <CardContent>
           <UnitTypeManager projectId={project.id} unitTypes={unitTypes} canEdit={canEdit} />
+        </CardContent>
+      </Card>
+
+      {/*
+        Everyone sees the kit; only managers and admins can change it. This is the
+        agency publishing DOWN to its agents — the mirror of the deal checklist, which
+        is a buyer's paperwork coming UP into one deal.
+      */}
+      <Card>
+        <CardHeader><CardTitle>Sales kit</CardTitle></CardHeader>
+        <CardContent>
+          <SalesKit
+            projectId={project.id}
+            groups={await listSalesKit(project.id)}
+            canPublish={canEdit}
+          />
         </CardContent>
       </Card>
 

@@ -28,3 +28,6 @@ tsconfig.tsbuildinfo
 # Screen recordings kept for reference - too large for git
 samples/*.mp4
 samples/_frames/
+
+# Source documents from the previous agency - reference only, not app inputs
+references/

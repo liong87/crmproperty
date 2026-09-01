@@ -6,6 +6,21 @@ const nextConfig = {
   // framework and therefore which advisories to try. No defence on its own, but
   // there is no reason to volunteer it.
   poweredByHeader: false,
+
+  /**
+   * File uploads arrive as FormData through SERVER ACTIONS (uploadChecklistFile,
+   * property photos), so Next's server-action body cap — not the app's own check —
+   * decides what actually gets through. The default is 1 MB, well under the 15 MB
+   * MAX_BYTES in server/deal-documents/actions.ts, so a 3 MB scanned SPA or IC photo
+   * was rejected by the framework with an opaque error before that friendly check
+   * ever ran. Keep this at or above MAX_BYTES.
+   *
+   * Note for the sales-kit work: brochures and photo galleries are tens of MB and
+   * should upload presigned direct-to-R2 rather than through a server action at all.
+   */
+  experimental: {
+    serverActions: { bodySizeLimit: "20mb" },
+  },
   // Deployed to Cloudflare Workers via @opennextjs/cloudflare (Node.js runtime).
   // Keep app code standard Next.js — no Workers-specific APIs in /app or /server.
 
