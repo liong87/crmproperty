@@ -330,7 +330,7 @@ def story():
         "16 &nbsp; Publishing a sales kit",
         "17 &nbsp; Projects and unit types",
         "18 &nbsp; Lead pools and pass-on",
-        "19 &nbsp; Lead sources",
+        "19 &nbsp; Leads capture",
         "20 &nbsp; Users and templates",
         "21 &nbsp; Advertising spend",
         "<b>Reference</b>",
@@ -399,7 +399,7 @@ def story():
         ["Appointments", "Gallery visits and viewings, and how they went"],
         ["Reminders", "Follow-ups due, and paperwork due"],
         ["Reports", "The funnel, by project and by agent"],
-        ["Lead sources <i>(manager)</i>", "Which Facebook form belongs to which project"],
+        ["Leads capture <i>(manager)</i>", "Create and map the forms that feed each project"],
         ["Templates <i>(manager)</i>", "Reusable WhatsApp and email messages"],
         ["Users <i>(manager)</i>", "Approving accounts and setting roles"],
     ], [44 * mm, CONTENT_W - 44 * mm]))
@@ -784,15 +784,23 @@ def story():
         "will move a batch on the first night.", "warn"))
 
     # ---- 19 ----------------------------------------------------------------
-    s += section("19", "Lead sources")
+    s += section("19", "Leads capture")
     s.append(Paragraph("Managers and administrators only.", S["small"]))
     s.append(Spacer(1, 6))
 
     s.append(Paragraph(
-        "When you launch a Facebook or Instagram lead form, map it here: form ID, a name "
-        "you will recognise, and the project it advertises. Leads from that form then "
-        "arrive already attached to the project, which is what makes per-project reporting "
-        "work.", S["body"]))
+        "Every way a lead can reach the CRM, on one page. The heart of it is the mapping "
+        "table: which form feeds which project. Leads from a mapped form arrive already "
+        "attached to the project, which is what makes per-project reporting work.",
+        S["body"]))
+    s.append(Paragraph(
+        "You no longer have to copy form IDs out of the Meta console. <b>Import forms from "
+        "Facebook</b> reads the Page and adds anything new, unmapped \u2014 you then set the "
+        "project. <b>New form on Facebook</b> builds a form here and pushes it to the Page "
+        "in one step.", S["body"]))
+    s.append(callout(
+        "<b>A Facebook lead form cannot be edited once it exists</b> \u2014 Meta allows only "
+        "create and archive. Read a new form through before submitting it."))
     s.append(callout(
         "<b>An unmapped form still creates the lead</b> — it just arrives with no project. "
         "Losing a lead the agency paid for because nobody filled in a mapping would be far "

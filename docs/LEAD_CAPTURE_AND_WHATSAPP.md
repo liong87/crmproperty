@@ -57,11 +57,19 @@ already done the console setup, and it does not need doing again.
 ### What IS worth taking
 
 The part of their Leads Capture worth copying is downstream of the pipe: **which creative
-produced the lead**. Meta's webhook gives us `ad_id`, `adset_id` and `campaign_id` on the
-leadgen record. Storing those on the lead, and pulling spend per ad from the Marketing API,
-is what turns "Facebook sent 40 leads" into "this image cost RM 68 per booking and that one
-cost RM 310". That is the ads funnel in `COMPETITOR_ZIEN_2026-09-01.md`, and it is a small
-change to a webhook we already run.
+produced the lead**. We are already most of the way there and it is worth being precise
+about where the gap actually is. `server/leads/meta-map.ts` stores, on every Meta lead:
+
+    utmCampaign = campaign name (id as fallback)
+    utmContent  = ad set name
+    utmTerm     = ad name (ad id as fallback)
+
+So the attribution is captured. What is missing is the **spend** side: `campaign_spend`
+records what a campaign cost per month, keyed on campaign NAME, which means cost can be
+divided per campaign but not per ad set or per creative. Turning "Facebook sent 40 leads"
+into "this image cost RM 68 per booking and that one cost RM 310" needs spend pulled per ad
+from the Marketing API, not a change to the webhook. That is the real remaining work behind
+the ads funnel in `COMPETITOR_ZIEN_2026-09-01.md`.
 
 ---
 

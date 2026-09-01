@@ -254,9 +254,11 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    id: "lead-form-mapping", n: 17, part: "For managers", title: "Lead sources", managerOnly: true,
+    id: "lead-form-mapping", n: 17, part: "For managers", title: "Leads capture", managerOnly: true,
     blocks: [
-      { kind: "p", text: "When you launch a Facebook or Instagram lead form, map it here: form ID, a name you will recognise, and the project it advertises. Leads from that form then arrive already attached to the project, which is what makes per-project reporting work." },
+      { kind: "p", text: "Every way a lead can reach the CRM, on one page. The heart of it is the mapping table: which form feeds which project. Leads from a mapped form arrive already attached to the project, which is what makes per-project reporting work." },
+      { kind: "p", text: "You no longer have to copy form IDs out of the Meta console. Import forms from Facebook reads the Page and adds anything new, unmapped — you then set the project. New form on Facebook builds a form here and pushes it to the Page in one step." },
+      { kind: "note", tone: "warn", text: "A Facebook lead form cannot be edited once it exists — Meta allows only create and archive. Read a new form through before submitting it." },
       { kind: "note", tone: "info", text: "An unmapped form still creates the lead — it just arrives with no project. Losing a lead the agency paid for because nobody filled in a mapping would be far worse than filing it imperfectly." },
     ],
   },

@@ -45,7 +45,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       links: [
         { href: "/leads", label: "Leads" },
         { href: "/contacts", label: "Contacts" },
-        ...mgrOnly([{ href: "/lead-sources", label: "Lead sources" }]),
+        ...mgrOnly([{ href: "/leads-capture", label: "Leads capture" }]),
       ],
     },
     {

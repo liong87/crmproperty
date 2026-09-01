@@ -42,3 +42,53 @@ export class LeadAdsTransientError extends Error {
     this.name = "LeadAdsTransientError";
   }
 }
+
+/* ---------- form management ---------- */
+
+/**
+ * A lead form as the ad platform describes it.
+ *
+ * `leadsCount` is the platform's own total for the form's whole life, not our count —
+ * a gap between the two is the honest signal that leads were submitted while our
+ * webhook was down, which is worth being able to see.
+ */
+export interface RemoteLeadForm {
+  id: string;
+  name: string;
+  /** Meta: DRAFT | ACTIVE | ARCHIVED. Null when the platform does not say. */
+  status: string | null;
+  leadsCount: number | null;
+  createdAt: Date | null;
+}
+
+/** One question on a form we are creating. */
+export type LeadFormQuestion =
+  | { type: "FULL_NAME" | "EMAIL" | "PHONE" }
+  | { type: "CUSTOM"; key: string; label: string; options?: string[] };
+
+export interface CreateLeadFormInput {
+  name: string;
+  questions: LeadFormQuestion[];
+  /** Meta REQUIRES a reachable privacy policy URL. There is no way around this. */
+  privacyPolicyUrl: string;
+  privacyLinkText?: string;
+  /** Where "View website" sends them after submitting. */
+  followUpUrl?: string;
+  /** Headline and body shown before the questions. Both or neither. */
+  introHeadline?: string;
+  introBody?: string;
+}
+
+/**
+ * Reading and creating forms on the ad platform.
+ *
+ * Split from LeadAdsProvider on purpose: retrieving a lead is on the critical path of
+ * a webhook that must answer in seconds, while this is an admin screen. A provider
+ * can implement one without the other.
+ */
+export interface LeadFormsProvider {
+  /** True when the provider has the page id and token it needs. Never throws. */
+  isConfigured(): boolean;
+  listForms(): Promise<RemoteLeadForm[]>;
+  createForm(input: CreateLeadFormInput): Promise<RemoteLeadForm>;
+}

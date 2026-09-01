@@ -64,7 +64,7 @@ export async function createLeadFormSource(input: unknown): Promise<ActionResult
       })
       .returning();
 
-    revalidatePath("/lead-sources");
+    revalidatePath("/leads-capture");
     return ok(row!);
   } catch (err) {
     return handle(err, "createLeadFormSource");
@@ -93,7 +93,7 @@ export async function updateLeadFormSource(input: unknown): Promise<ActionResult
       .where(eq(leadFormSources.id, d.id))
       .returning();
 
-    revalidatePath("/lead-sources");
+    revalidatePath("/leads-capture");
     return ok(row!);
   } catch (err) {
     return handle(err, "updateLeadFormSource");
@@ -108,7 +108,7 @@ export async function deleteLeadFormSource(id: string): Promise<ActionResult<voi
     const existing = await getLeadFormSourceById(id);
     if (!existing) return fail("Mapping not found.");
     await db.update(leadFormSources).set({ deletedAt: new Date() }).where(eq(leadFormSources.id, id));
-    revalidatePath("/lead-sources");
+    revalidatePath("/leads-capture");
     return ok<void>(undefined);
   } catch (err) {
     return handle(err, "deleteLeadFormSource");

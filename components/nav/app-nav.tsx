@@ -21,7 +21,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/reports": BarChart3,
   "/help": BookOpen,
   "/settings/commission": Percent,
-  "/lead-sources": Radio,
+  "/leads-capture": Radio,
   "/templates": MessageSquareText,
   "/users": UserCog,
 };
