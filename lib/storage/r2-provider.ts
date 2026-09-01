@@ -37,6 +37,14 @@ function config(): Config {
     bucket: required("S3_BUCKET"),
     client: new S3Client({
       region: process.env.S3_REGION ?? "auto",
+      // AWS SDK v3.729+ adds a CRC32 checksum to every request by default. For a
+      // PRESIGNED PUT that is fatal: the checksum is computed at signing time, when
+      // there is no body, so `x-amz-checksum-crc32=AAAAAA==` gets baked into the URL
+      // and R2 then rejects the real bytes for not matching it. Server-side uploads
+      // are unaffected (they have the body to hand), but the setting is global, and
+      // WHEN_REQUIRED still sends a checksum wherever the API actually demands one.
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
       endpoint: required("S3_ENDPOINT"),
       credentials: {
         accessKeyId: required("S3_ACCESS_KEY_ID"),

@@ -39,9 +39,17 @@ export function SalesKit({
   function run(fn: () => Promise<{ success: boolean; error?: string }>) {
     setError(null);
     start(async () => {
-      const res = await fn();
-      if (!res.success) return setError(res.error ?? "Something went wrong.");
-      router.refresh();
+      try {
+        const res = await fn();
+        if (!res.success) return setError(res.error ?? "Something went wrong.");
+        router.refresh();
+      } catch (err) {
+        // Anything that THROWS inside a transition escapes the action's own error
+        // handling and takes the whole page down through the error boundary — the
+        // user sees "a client-side exception has occurred" and loses the page, for
+        // what may be a recoverable problem with one file. Never let that happen.
+        setError(err instanceof Error ? err.message : "Something went wrong.");
+      }
     });
   }
 
@@ -61,17 +69,27 @@ export function SalesKit({
     });
     if (!started.success) return started;
 
-    const put = await fetch(started.data.url, {
-      method: "PUT",
-      body: file,
-      // Must match the type signed into the URL, or storage refuses the write.
-      headers: { "Content-Type": file.type },
-    });
-    if (!put.ok) {
+    let put: Response;
+    try {
+      put = await fetch(started.data.url, {
+        method: "PUT",
+        body: file,
+        // Must match the type signed into the URL, or storage refuses the write.
+        headers: { "Content-Type": file.type },
+      });
+    } catch {
+      // A CORS rejection does not come back as a failed response — fetch THROWS a
+      // TypeError, and the browser deliberately withholds the reason. In practice on
+      // a first upload it is always the bucket's CORS rule.
       return {
         success: false,
-        error: `Storage rejected the upload (${put.status}). If this is the first one, check the bucket's CORS rule allows PUT from this origin.`,
+        error:
+          "Could not reach object storage. The bucket needs a CORS rule allowing PUT from this site — see the storage section of .env.example.",
       };
+    }
+
+    if (!put.ok) {
+      return { success: false, error: `Storage rejected the upload (${put.status}).` };
     }
 
     return confirmResourceUpload({
