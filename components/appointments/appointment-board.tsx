@@ -73,6 +73,12 @@ export function bannerTone(a: { scheduledAt: Date; status: string }): string {
   return "bg-slate-100 text-slate-600 dark:bg-slate-500/25 dark:text-slate-200";
 }
 
+/** A person's name, marked when it is the viewer. Unassigned is stated, not blank. */
+function who(name: string | null, id: string | null, meId: string): string {
+  if (!name) return "Unassigned";
+  return id === meId ? `${name} (You)` : name;
+}
+
 export interface BoardColumnData {
   key: string;
   label: string;
@@ -95,7 +101,13 @@ export interface BoardColumnData {
  * Optimistic, with a revert. A drag that shows nothing for 400ms reads as broken, so
  * the card moves at once and goes back if the server refuses.
  */
-export function AppointmentBoard({ columns }: { columns: BoardColumnData[] }) {
+export function AppointmentBoard({
+  columns, meId,
+}: {
+  columns: BoardColumnData[];
+  /** Whose board this is, so the card can say "(You)" rather than repeating a name. */
+  meId: string;
+}) {
   const router = useRouter();
   const [local, setLocal] = React.useState(columns);
   const [dragging, setDragging] = React.useState<string | null>(null);
@@ -225,12 +237,34 @@ export function AppointmentBoard({ columns }: { columns: BoardColumnData[] }) {
                         >
                           {a.clientPhone}
                         </a>
-                        {a.closerName && (
-                          <>
-                            <p className="mt-1.5 text-[9px] uppercase tracking-wide text-muted-foreground/70">Closer</p>
-                            <p className="truncate text-[11px]">{a.closerName}</p>
-                          </>
-                        )}
+                        {/*
+                          WHO RUNS THIS, ALWAYS SHOWN — not only when a separate closer
+                          was named. Setter and closer are the two parties a commission
+                          splits between, so "who was on this" is the fact a dispute
+                          turns on, and it must be readable from the board rather than
+                          reconstructed from a timeline afterwards. It matters MORE once
+                          a lead can be shared outside the team, not less.
+
+                          Both are shown when they differ; one line when the setter is
+                          closing it themselves, which is the common case and does not
+                          need two rows to say so.
+                        */}
+                        <p className="mt-1.5 text-[9px] uppercase tracking-wide text-muted-foreground/70">
+                          {a.closerId && a.closerId !== a.setterId ? "Setter / Closer" : "Closer"}
+                        </p>
+                        <p className="truncate text-[11px]">
+                          {a.closerId && a.closerId !== a.setterId ? (
+                            <>
+                              <span className="text-muted-foreground">{who(a.setterName, a.setterId, meId)}</span>
+                              <span className="mx-1 opacity-50">&rarr;</span>
+                              <span className="font-medium">{who(a.closerName, a.closerId, meId)}</span>
+                            </>
+                          ) : (
+                            <span className="font-medium">
+                              {who(a.closerName ?? a.setterName, a.closerId ?? a.setterId, meId)}
+                            </span>
+                          )}
+                        </p>
                       </div>
                       {busy === a.id && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />}
                     </div>

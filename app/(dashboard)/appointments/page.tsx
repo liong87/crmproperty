@@ -7,6 +7,11 @@ import { AppointmentList } from "@/components/appointments/appointment-list";
 import { AppointmentBoard } from "@/components/appointments/appointment-board";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PageTitle } from "@/components/ui/page-title";
+import { Segmented } from "@/components/ui/segmented";
+import { QueueSearch } from "@/components/leads/queue-search";
+import { getFollowUpRate } from "@/server/leads/working";
+import { Suspense } from "react";
 import { cn } from "@/lib/utils";
 
 const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v * 100)}%`);
@@ -14,60 +19,82 @@ const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v * 100)}%`
 export default async function AppointmentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; project?: string }>;
+  searchParams: Promise<{ view?: string; project?: string; q?: string }>;
 }) {
   const me = await getCurrentDbUser();
   if (!me) redirect("/sign-in");
   const sp = await searchParams;
   // The board is the default: it answers "what is stuck?", which is the question a
   // manager opens this page to ask. The diary answers "what is next?".
-  const view = sp.view === "schedule" ? "schedule" : "board";
+  const view =
+    sp.view === "schedule" ? "schedule"
+    : sp.view === "completed" ? "completed"
+    : "ongoing";
+  const search = sp.q?.trim() || undefined;
+
+  const [counts, rate] = await Promise.all([
+    listAppointmentBoard(me, { search }).then((b) => ({
+      ongoing: b.ongoingCount, completed: b.completedCount,
+    })),
+    getFollowUpRate(me, 7),
+  ]);
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Appointments</h1>
-          <p className="text-sm text-muted-foreground">
-            {view === "board" ? "Every appointment by stage." : "Your diary, soonest first."}
-          </p>
-        </div>
-        <div className="flex gap-1 rounded-lg bg-muted p-1 text-sm">
-          <ViewTab href="/appointments" label="Board" active={view === "board"} />
-          <ViewTab href="/appointments?view=schedule" label="Schedule" active={view === "schedule"} />
-        </div>
+      <PageTitle
+        title="Appointments"
+        count={counts.ongoing}
+        actions={
+          <div className="rounded-2xl border border-gray-100 bg-card px-4 py-2.5 dark:border-gray-800">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+              Followed up · {rate.days} days
+            </p>
+            <p className="mt-0.5 text-sm">
+              <span className="text-lg font-bold tabular-nums text-primary">
+                {rate.pct == null ? "—" : `${Math.round(rate.pct * 100)}%`}
+              </span>{" "}
+              <span className="tabular-nums text-muted-foreground">
+                {rate.followed}/{rate.total} touched
+              </span>
+            </p>
+          </div>
+        }
+      >
+        ongoing {counts.ongoing === 1 ? "appointment" : "appointments"} waiting to be closed.
+      </PageTitle>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Segmented
+          items={[
+            { href: "/appointments", label: "Ongoing", count: counts.ongoing, active: view === "ongoing" },
+            { href: "/appointments?view=completed", label: "Completed", count: counts.completed, active: view === "completed" },
+            { href: "/appointments?view=schedule", label: "Schedule", active: view === "schedule" },
+          ]}
+        />
+        {view !== "schedule" && (
+          <Suspense fallback={<div className="h-10 min-w-[15rem] flex-1" />}>
+            <QueueSearch placeholder="Search name, phone, product, remarks…" />
+          </Suspense>
+        )}
       </div>
 
-      {view === "board" ? (
-        <BoardView me={me} projectId={sp.project} />
-      ) : (
-        <ScheduleView me={me} />
-      )}
+      {view === "schedule"
+        ? <ScheduleView me={me} />
+        : <BoardView me={me} projectId={sp.project} view={view} search={search} />}
     </div>
   );
 }
 
-function ViewTab({ href, label, active }: { href: string; label: string; active: boolean }) {
-  return (
-    <Link
-      href={href}
-      className={cn(
-        "rounded-md px-3 py-1.5 font-medium transition-colors",
-        active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-      )}
-    >
-      {label}
-    </Link>
-  );
-}
 
 async function BoardView({
-  me, projectId,
+  me, projectId, view, search,
 }: {
   me: NonNullable<Awaited<ReturnType<typeof getCurrentDbUser>>>;
   projectId?: string;
+  view: "ongoing" | "completed";
+  search?: string;
 }) {
-  const board = await listAppointmentBoard(me, { projectId });
+  const board = await listAppointmentBoard(me, { projectId, view, search });
   const total = board.columns.reduce((s, c) => s + c.items.length, 0);
 
   if (total === 0 && !projectId) {
@@ -102,7 +129,7 @@ async function BoardView({
       </div>
 
       {/* Mobile-first: columns scroll horizontally, matching /pipeline. */}
-      <AppointmentBoard columns={board.columns} />
+      <AppointmentBoard columns={board.columns} meId={me.id} />
     </div>
   );
 }

@@ -22,8 +22,10 @@ export interface AppointmentRow {
   /** Where to link for the client — leads and contacts live at different routes. */
   clientHref: string;
   /** The agent who owns the client and booked this. */
+  setterId: string | null;
   setterName: string | null;
   /** Who runs the presentation. Null means the setter is closing it themselves. */
+  closerId: string | null;
   closerName: string | null;
   /** True when the appointment is in the past and nobody recorded what happened. */
   needsOutcome: boolean;
@@ -78,7 +80,9 @@ async function baseQuery(user: User) {
       leadId: appointments.leadId,
       leadName: leads.name,
       leadPhone: leads.phone,
+      setterId: appointments.assignedTo,
       setterName: setter.name,
+      closerId: appointments.closerId,
       closerName: closer.name,
     })
     .from(appointments)
@@ -120,7 +124,9 @@ function toAppointment(r: Row, now: Date): AppointmentRow {
     clientName: (isLead ? r.leadName : r.contactName) ?? "(deleted client)",
     clientPhone: (isLead ? r.leadPhone : r.contactPhone) ?? "",
     clientHref: isLead ? `/leads/${r.leadId}` : `/contacts/${r.contactId}`,
+    setterId: r.setterId,
     setterName: r.setterName,
+    closerId: r.closerId,
     closerName: r.closerName,
     // The nudge that makes the feature worth having: an appointment that happened and
     // was never written up is the most common way a client's reaction gets lost.
@@ -258,15 +264,49 @@ export interface AppointmentBoard {
  * Cancelled is last and usually empty — kept visible rather than hidden so that a
  * cancellation is never mistaken for a record that vanished.
  */
+/**
+ * Which columns are still work, and which are the record of finished work.
+ *
+ * Ongoing is what an agent has to act on: booked in, or met and not yet decided.
+ * Everything else has an answer — booked, missed, written off, called off — and
+ * belongs in the completed view rather than padding the count of things to do.
+ */
+export const ONGOING_COLUMNS: BoardColumnKey[] = ["scheduled", "showed-up"];
+export const COMPLETED_COLUMNS: BoardColumnKey[] = [
+  "booked", "no-show", "not-interested", "cancelled",
+];
+
+export type BoardView = "ongoing" | "completed";
+
 export async function listAppointmentBoard(
   user: User,
-  opts: { projectId?: string } = {},
-): Promise<AppointmentBoard> {
+  opts: { projectId?: string; view?: BoardView; search?: string } = {},
+): Promise<AppointmentBoard & { ongoingCount: number; completedCount: number }> {
   const now = new Date();
   const rows = await baseQuery(user);
+  const q = opts.search?.trim().toLowerCase();
+  const digits = q ? q.replace(/\D/g, "") : "";
+
   const all = rows
     .map((r) => toAppointment(r, now))
-    .filter((a) => !opts.projectId || a.subjectId === opts.projectId);
+    .filter((a) => !opts.projectId || a.subjectId === opts.projectId)
+    /*
+     * Filtered here rather than in SQL. The board already loads every appointment to
+     * bucket them into columns, so a second round trip would buy nothing — and at the
+     * volume a five-person agency books, the whole set is a few hundred rows.
+     */
+    .filter((a) => {
+      if (!q) return true;
+      if (digits.length >= 4 && a.clientPhone.replace(/\D/g, "").includes(digits.replace(/^0+/, ""))) {
+        return true;
+      }
+      return (
+        a.clientName.toLowerCase().includes(q) ||
+        a.subjectTitle.toLowerCase().includes(q) ||
+        (a.remark ?? "").toLowerCase().includes(q) ||
+        (a.notes ?? "").toLowerCase().includes(q)
+      );
+    });
 
   const projectFilters = [
     ...new Map(
@@ -308,8 +348,15 @@ export async function listAppointmentBoard(
    */
   const decided = showedUp.length + noShow.length;
 
+  const inView = (k: BoardColumnKey) =>
+    (opts.view === "completed" ? COMPLETED_COLUMNS : ONGOING_COLUMNS).includes(k);
+  const countIn = (keys: BoardColumnKey[]) =>
+    columns.filter((c) => keys.includes(c.key)).reduce((n, c) => n + c.items.length, 0);
+
   return {
-    columns,
+    ongoingCount: countIn(ONGOING_COLUMNS),
+    completedCount: countIn(COMPLETED_COLUMNS),
+    columns: columns.filter((c) => inView(c.key)),
     scope: isTeamLeadOrAbove(user) ? "team" : "own",
     noShowRate: decided > 0 ? noShow.length / decided : null,
     projectFilters,
