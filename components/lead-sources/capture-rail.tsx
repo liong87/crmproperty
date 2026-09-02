@@ -2,15 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import {
-  Facebook,
-  MessageCircle,
-  Plus,
-  RefreshCw,
-  Unplug,
-  Loader2,
-  ChevronDown,
-} from "lucide-react";
+import { Facebook, Plus, RefreshCw, Unplug, Loader2, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { setPageSubscriptions, disconnectAccount } from "@/server/capture/actions";
 import type { CaptureAccountView } from "@/server/capture/queries";
@@ -41,9 +33,6 @@ export function CaptureRail({
   /** Just came back from Facebook — open this one's picker straight away. */
   highlightAccountId?: string;
 }) {
-  // Placeholder until the Meta app carries WhatsApp permissions; the slot is real, the
-  // connect flow is not built yet.
-  const whatsappAccounts: CaptureAccountView[] = [];
   const pagesConnected = accounts.reduce((n, a) => n + a.pages.filter((p) => p.subscribed).length, 0);
 
   return (
@@ -101,46 +90,6 @@ export function CaptureRail({
         </div>
       </section>
 
-      <section className="rounded-2xl border bg-card p-4">
-        <header className="flex items-start justify-between gap-2">
-          <div className="flex items-start gap-2.5">
-            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#25D366]/10">
-              <MessageCircle className="h-4 w-4 text-[#25D366]" aria-hidden />
-            </span>
-            <div>
-              <h2 className="text-sm font-semibold">WhatsApp accounts</h2>
-              <p className="text-xs text-muted-foreground">
-                {whatsappAccounts.length} connected
-              </p>
-            </div>
-          </div>
-          {/* Deliberately visible and deliberately disabled. Hiding the button would
-              make this look like a feature we do not have; a live button that fails
-              at Facebook would be worse. The tooltip says what is missing. */}
-          <span
-            title="Waiting on WhatsApp permissions for the Meta app"
-            className="inline-flex h-8 shrink-0 cursor-not-allowed items-center gap-1 rounded-xl border px-2.5 text-xs font-semibold text-muted-foreground"
-          >
-            <Plus className="h-3.5 w-3.5" aria-hidden />
-            Add
-          </span>
-        </header>
-
-        <div className="mt-3 space-y-2">
-          <p className="rounded-xl border border-dashed px-3 py-3 text-xs leading-relaxed text-muted-foreground">
-            <strong className="font-semibold text-foreground">Your own number, your own
-            leads.</strong>{" "}
-            When this is switched on, you sign up for a WhatsApp Business account from
-            inside the CRM — the same Add button, no forms to fill in elsewhere — and
-            people who message you from a Click-to-WhatsApp ad become leads in your queue
-            automatically, tagged with the ad they came from.
-          </p>
-          <p className="px-1 text-[11px] leading-relaxed text-muted-foreground">
-            One thing to know before you do it: the number you register leaves the normal
-            WhatsApp app for good. Use a spare SIM, not the phone you chat on.
-          </p>
-        </div>
-      </section>
     </div>
   );
 }
@@ -204,7 +153,7 @@ function AccountBlock({
             {account.displayName.slice(0, 2)}
           </span>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{account.displayName}</p>
+            <p className="break-words text-sm font-semibold">{account.displayName}</p>
             <p className="text-xs text-muted-foreground">
               {live.length} page{live.length === 1 ? "" : "s"} connected
             </p>
@@ -233,16 +182,21 @@ function AccountBlock({
             const forms = formCounts[page.id] ?? 0;
             return (
               <li key={page.id} className="pl-1">
-                <div className="flex items-center gap-2">
+                <div className="flex items-start gap-2">
                   <span
                     aria-hidden
                     className={cn(
-                      "h-1.5 w-1.5 shrink-0 rounded-full",
+                      "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
                       forms > 0 ? "bg-emerald-500" : "bg-amber-500",
                     )}
                   />
-                  <span className="min-w-0 flex-1 truncate text-xs font-medium">{page.name}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
+                  {/* Wraps rather than truncates. The rail is 20rem and a page name
+                      like "Comfy Living Property Sdn Bhd" is normal; clipping it to
+                      "Comfy" made a correct connection look like the wrong page. */}
+                  <span className="min-w-0 flex-1 break-words text-xs font-medium" title={page.name}>
+                    {page.name}
+                  </span>
+                  <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
                     {forms} form{forms === 1 ? "" : "s"}
                   </span>
                 </div>
@@ -298,7 +252,9 @@ function AccountBlock({
                 onChange={() => toggle(page.id)}
                 disabled={pending}
               />
-              <span className="min-w-0 flex-1 truncate text-xs">{page.name}</span>
+              <span className="min-w-0 flex-1 break-words text-xs" title={page.name}>
+                {page.name}
+              </span>
             </label>
           ))}
           <Button size="sm" className="mt-1 h-8 w-full text-xs" onClick={save} disabled={pending}>

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Globe, CircleAlert, CircleCheck } from "lucide-react";
+import { CircleAlert, CircleCheck } from "lucide-react";
 import { PageTitle } from "@/components/ui/page-title";
 import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { listLeadFormSources } from "@/server/lead-sources/queries";
@@ -8,8 +8,6 @@ import { listMyCaptureAccounts } from "@/server/capture/queries";
 import { captureOAuthConfigured } from "@/lib/capture/meta-graph";
 import { CaptureRail } from "@/components/lead-sources/capture-rail";
 import { FacebookFormColumn, type FormRow } from "@/components/lead-sources/facebook-form-column";
-import { WhatsAppColumn } from "@/components/lead-sources/whatsapp-column";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { STATUS } from "@/lib/chart-colors";
 
 /**
@@ -97,15 +95,14 @@ export default async function LeadsCapturePage({
         </p>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[1fr_1fr_20rem]">
+      <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
         <FacebookFormColumn
           forms={metaForms}
           projects={projects}
           canManage={manages}
           hasConnection={connectedPages > 0}
         />
-        <WhatsAppColumn />
-        <div className="lg:col-span-2 xl:col-span-1">
+        <div>
           <CaptureRail
             accounts={myAccounts}
             oauthReady={oauthReady}
@@ -115,29 +112,6 @@ export default async function LeadsCapturePage({
         </div>
       </div>
 
-      {manages && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Globe className="h-4 w-4 text-muted-foreground" /> Website &amp; other platforms
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>
-              Landing pages, Tally, Typeform and Google Ads post straight into the CRM. Each
-              provider has its own signed endpoint:
-            </p>
-            <p className="break-all rounded-md bg-muted px-3 py-2 font-mono text-xs text-foreground">
-              https://your-domain/api/webhooks/forms/&#123;tally|typeform|googleads|generic&#125;
-            </p>
-            <p>
-              Your own landing pages can post to{" "}
-              <code className="font-mono text-xs">/api/public/leads</code> with a per-page API
-              key instead — no webhook secret needed.
-            </p>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }
