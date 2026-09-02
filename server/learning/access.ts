@@ -1,6 +1,6 @@
-import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { learningTopics, documents, users } from "@/lib/db/schema";
+import { learningTopics, learningChapters, documents, users } from "@/lib/db/schema";
 import { requireDbUser, isAdmin } from "@/lib/auth";
 import type { User } from "@/lib/db/schema";
 
@@ -15,16 +15,31 @@ import type { User } from "@/lib/db/schema";
  * THE RULE, stated once so nothing re-derives it: an agent watches PUBLISHED topics
  * uploaded by their own upline — ONE level, users.team_lead_id, never a chain above
  * that (see server/users/hierarchy.ts for why depth is not wanted in this schema). A
- * draft is visible only to the person who uploaded it.
+ * draft is visible only to the person who uploaded it. This applies at the TOPIC
+ * level — a chapter has no owner or status of its own, it inherits both from the
+ * topic it belongs to, which is why every chapter query below joins back to
+ * learning_topics rather than trusting a chapter id on its own.
  *
  * Reading and writing are asymmetric on purpose. `listVisibleTopics` gives an admin
  * every topic, draft included — that is oversight of what a Team Lead has put in
  * front of their team, not a credential the way an OAuth token in
  * capture/ownership.ts is, so there is no harm in an admin seeing a title. But
- * `requireMyTopic`, used by every WRITE (upload, edit, publish, delete), has no
- * admin override at all: a Team Lead's rough draft is exactly the kind of thing they
- * do not want someone else editing or publishing out from under them.
+ * `requireMyTopic` and `requireMyChapter`, used by every WRITE (upload, edit,
+ * publish, delete), have no admin override at all: a Team Lead's rough draft is
+ * exactly the kind of thing they do not want someone else editing or publishing out
+ * from under them.
  */
+
+export type LearningChapterRow = {
+  id: string;
+  topicId: string;
+  title: string;
+  sortOrder: number;
+  documentId: string | null;
+  filename: string | null;
+  mimeType: string | null;
+  size: number | null;
+};
 
 export type LearningTopicRow = {
   id: string;
@@ -34,52 +49,65 @@ export type LearningTopicRow = {
   createdAt: Date;
   uploaderUserId: string;
   uploaderName: string;
-  documentId: string | null;
-  filename: string | null;
-  mimeType: string | null;
-  size: number | null;
+  chapters: LearningChapterRow[];
 };
 
-const SELECT_COLUMNS = {
-  id: learningTopics.id,
-  title: learningTopics.title,
-  description: learningTopics.description,
-  status: learningTopics.status,
-  createdAt: learningTopics.createdAt,
-  uploaderUserId: learningTopics.uploaderUserId,
-  uploaderName: users.name,
-  documentId: learningTopics.documentId,
-  filename: documents.filename,
-  mimeType: documents.mimeType,
-  size: documents.size,
-};
-
-/** Every topic the signed-in user may watch, newest first. */
+/** Every topic the signed-in user may watch, newest first, each with its chapters. */
 export async function listVisibleTopics(): Promise<LearningTopicRow[]> {
   const me = await requireDbUser();
 
-  const base = db
-    .select(SELECT_COLUMNS)
-    .from(learningTopics)
-    .innerJoin(users, eq(learningTopics.uploaderUserId, users.id))
-    .leftJoin(documents, eq(learningTopics.documentId, documents.id));
+  const topicSelect = {
+    id: learningTopics.id,
+    title: learningTopics.title,
+    description: learningTopics.description,
+    status: learningTopics.status,
+    createdAt: learningTopics.createdAt,
+    uploaderUserId: learningTopics.uploaderUserId,
+    uploaderName: users.name,
+  };
+  const topicQuery = db.select(topicSelect).from(learningTopics).innerJoin(users, eq(learningTopics.uploaderUserId, users.id));
 
-  if (isAdmin(me)) {
-    return base.where(isNull(learningTopics.deletedAt)).orderBy(desc(learningTopics.createdAt));
+  const topicRows = isAdmin(me)
+    ? await topicQuery.where(isNull(learningTopics.deletedAt)).orderBy(desc(learningTopics.createdAt))
+    : await topicQuery
+        .where(
+          and(
+            isNull(learningTopics.deletedAt),
+            // Own uploads (any status) plus the upline's published ones — never a
+            // chain above that, and never a downline's or a peer's.
+            inArray(learningTopics.uploaderUserId, me.teamLeadId ? [me.id, me.teamLeadId] : [me.id]),
+            or(eq(learningTopics.uploaderUserId, me.id), eq(learningTopics.status, "published")),
+          ),
+        )
+        .orderBy(desc(learningTopics.createdAt));
+
+  if (topicRows.length === 0) return [];
+
+  const topicIds = topicRows.map((t) => t.id);
+  const chapterRows = await db
+    .select({
+      id: learningChapters.id,
+      topicId: learningChapters.topicId,
+      title: learningChapters.title,
+      sortOrder: learningChapters.sortOrder,
+      documentId: learningChapters.documentId,
+      filename: documents.filename,
+      mimeType: documents.mimeType,
+      size: documents.size,
+    })
+    .from(learningChapters)
+    .leftJoin(documents, eq(learningChapters.documentId, documents.id))
+    .where(and(inArray(learningChapters.topicId, topicIds), isNull(learningChapters.deletedAt)))
+    .orderBy(asc(learningChapters.sortOrder));
+
+  const byTopic = new Map<string, LearningChapterRow[]>();
+  for (const c of chapterRows) {
+    const list = byTopic.get(c.topicId) ?? [];
+    list.push(c);
+    byTopic.set(c.topicId, list);
   }
 
-  // Own uploads (any status) plus the upline's published ones — never a chain above
-  // that, and never a downline's or a peer's.
-  const ownerIds = me.teamLeadId ? [me.id, me.teamLeadId] : [me.id];
-  return base
-    .where(
-      and(
-        isNull(learningTopics.deletedAt),
-        inArray(learningTopics.uploaderUserId, ownerIds),
-        or(eq(learningTopics.uploaderUserId, me.id), eq(learningTopics.status, "published")),
-      ),
-    )
-    .orderBy(desc(learningTopics.createdAt));
+  return topicRows.map((t) => ({ ...t, chapters: byTopic.get(t.id) ?? [] }));
 }
 
 /** How many topics this user has uploaded (draft + published) — the "My Uploads" count. */
@@ -93,8 +121,8 @@ export async function countMyUploads(me: User): Promise<number> {
 
 /**
  * The same rule `listVisibleTopics` applies in SQL, restated as a predicate for a
- * SINGLE already-loaded row — used by getTopicVideoUrl so a stale tab or a shared
- * link can never outlive the access rule just because it once had an id.
+ * SINGLE already-loaded topic — used by getChapterVideoUrl so a stale tab or a
+ * shared link can never outlive the access rule just because it once had an id.
  */
 export function canWatchTopic(
   me: User,
@@ -134,4 +162,30 @@ export async function requireMyTopic(
     .where(and(eq(learningTopics.id, topicId), isNull(learningTopics.deletedAt)));
   if (!row || row.uploaderUserId !== me.id) throw new LearningNotFoundError();
   return { me, row };
+}
+
+/**
+ * One chapter by id, IF the signed-in user owns the TOPIC it belongs to — a
+ * chapter is never independently owned. Same not-found-vs-forbidden reasoning as
+ * `requireMyTopic`.
+ */
+export async function requireMyChapter(chapterId: string): Promise<{
+  me: User;
+  chapter: typeof learningChapters.$inferSelect;
+  topic: typeof learningTopics.$inferSelect;
+}> {
+  const me = await requireDbUser();
+  const [row] = await db
+    .select({ chapter: learningChapters, topic: learningTopics })
+    .from(learningChapters)
+    .innerJoin(learningTopics, eq(learningChapters.topicId, learningTopics.id))
+    .where(
+      and(
+        eq(learningChapters.id, chapterId),
+        isNull(learningChapters.deletedAt),
+        isNull(learningTopics.deletedAt),
+      ),
+    );
+  if (!row || row.topic.uploaderUserId !== me.id) throw new LearningNotFoundError();
+  return { me, chapter: row.chapter, topic: row.topic };
 }

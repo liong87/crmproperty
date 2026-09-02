@@ -4,7 +4,8 @@ import { listVisibleTopics, countMyUploads, canUploadLearning } from "@/server/l
 import { LearningHub } from "@/components/learning/learning-hub";
 
 /**
- * Learning Hub — training videos a Team Lead shares with their own downline.
+ * Learning Hub — training videos, grouped into topics with one or more chapters,
+ * a Team Lead shares with their own downline.
  *
  * All the visibility logic lives in server/learning/access.ts; this page only calls
  * it and hands the result to the client component that renders the list and (for a
@@ -29,9 +30,13 @@ export default async function LearningPage() {
         createdAt: t.createdAt.toISOString(),
         uploaderUserId: t.uploaderUserId,
         uploaderName: t.uploaderName,
-        hasVideo: t.documentId !== null,
-        filename: t.filename,
-        size: t.size,
+        chapters: t.chapters.map((c) => ({
+          id: c.id,
+          title: c.title,
+          hasVideo: c.documentId !== null,
+          filename: c.filename,
+          size: c.size,
+        })),
       }))}
     />
   );

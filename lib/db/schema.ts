@@ -1267,8 +1267,6 @@ export const learningTopics = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     title: varchar("title", { length: 255 }).notNull(),
     description: text("description"),
-    /** The video file. Null while the draft row exists before an upload is confirmed. */
-    documentId: uuid("document_id").references(() => documents.id, { onDelete: "set null" }),
     /** draft | published. Only the uploader ever sees a draft — see access.ts. */
     status: varchar("status", { length: 20 }).notNull().default("draft"),
     ...timestamps,
@@ -1278,5 +1276,42 @@ export const learningTopics = pgTable(
   }),
 );
 
+/**
+ * One video within a topic — "Closing Masterclass" is a topic, "Handling
+ * objections" and "No-shows" are its chapters.
+ *
+ * The video pointer lives HERE, not on learning_topics, because a topic is a
+ * container: publishing, ownership and the one-level-upline visibility rule all
+ * apply to the topic as a whole (see server/learning/access.ts), while a chapter
+ * is just one of what can be several files under it. sortOrder is a plain
+ * insertion-order integer, the same pattern as deal_documents and
+ * project_resources — reordering by drag-and-drop is a UI feature nobody asked
+ * for yet, not a reason to model the list any differently today.
+ *
+ * Deleting a chapter's row is a soft delete like everywhere else, so the FK
+ * cascade below only matters for a hard delete of the topic row itself (which
+ * this app never does) — removeTopic in actions.ts explicitly soft-deletes each
+ * chapter and discards its file, rather than relying on this cascade to do it.
+ */
+export const learningChapters = pgTable(
+  "learning_chapters",
+  {
+    id: id(),
+    topicId: uuid("topic_id")
+      .notNull()
+      .references(() => learningTopics.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 255 }).notNull(),
+    /** The video file. Null while the row exists before an upload is confirmed. */
+    documentId: uuid("document_id").references(() => documents.id, { onDelete: "set null" }),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => ({
+    topicIdx: index("learning_chapters_topic_idx").on(t.topicId, t.sortOrder),
+  }),
+);
+
 export type LearningTopic = typeof learningTopics.$inferSelect;
 export type NewLearningTopic = typeof learningTopics.$inferInsert;
+export type LearningChapter = typeof learningChapters.$inferSelect;
+export type NewLearningChapter = typeof learningChapters.$inferInsert;
