@@ -5,6 +5,7 @@ import { UserButton } from "@/lib/auth/provider-components";
 import { AppNav, type NavGroup } from "@/components/nav/app-nav";
 import { countActiveWorkingLeads } from "@/server/leads/working";
 import { APP_NAME } from "@/lib/constants";
+import { COMMISSION_ENABLED } from "@/lib/features";
 import { BookOpen } from "lucide-react";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -84,7 +85,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       collapsible: true,
       links: leadOnly([
         { href: "/team", label: "My team" },
-        { href: "/settings/commission", label: "Commission" },
+        ...(COMMISSION_ENABLED ? [{ href: "/settings/commission", label: "Commission" }] : []),
       ]),
     },
     {

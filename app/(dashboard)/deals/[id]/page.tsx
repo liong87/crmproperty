@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DealChecklist } from "@/components/deal-documents/checklist";
 import { DealCommissionPanel } from "@/components/commission/deal-commission";
+import { COMMISSION_ENABLED } from "@/lib/features";
 import { formatMYR, formatBp } from "@/lib/utils";
 
 export default async function DealPage({ params }: { params: Promise<{ id: string }> }) {
@@ -53,26 +54,30 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle>Commission</CardTitle></CardHeader>
-        <CardContent>
-          <DealCommissionPanel
-            dealId={deal.id}
-            data={commission}
-            schemes={schemes.map((s) => ({
-              id: s.scheme.id, name: s.scheme.name, isDefault: s.scheme.isDefault,
-            }))}
-            dealValue={deal.value}
-            canEdit={editable}
-          />
-        </CardContent>
-      </Card>
+      {/* Hidden until the agency's formula is settled. A panel quoting confident
+          numbers from a rate nobody has agreed is worse than no panel — somebody
+          repeats one to an agent. Nothing recorded is lost; see lib/features.ts. */}
+      {COMMISSION_ENABLED && (
+        <Card>
+          <CardHeader><CardTitle>Commission</CardTitle></CardHeader>
+          <CardContent>
+            <DealCommissionPanel
+              dealId={deal.id}
+              data={commission}
+              schemes={schemes.map((s) => ({
+                id: s.scheme.id, name: s.scheme.name, isDefault: s.scheme.isDefault,
+              }))}
+              dealValue={deal.value}
+              canEdit={editable}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader><CardTitle>Deal</CardTitle></CardHeader>
         <CardContent className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
           <Detail label="Value" value={formatMYR(deal.value)} />
-          <Detail label="Commission" value={formatBp(deal.commissionPct)} />
           <Detail
             label="Expected close"
             value={

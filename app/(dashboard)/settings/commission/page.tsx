@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { COMMISSION_ENABLED } from "@/lib/features";
 import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { listSchemes } from "@/server/commission/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +10,12 @@ export const metadata = { title: "Commission" };
 export default async function CommissionSettingsPage() {
   const me = await getCurrentDbUser();
   if (!me) redirect("/sign-in");
+  /*
+   * Hidden until the agency's formula is settled. Reachable again by setting
+   * FEATURE_COMMISSION=1 — the engine and every recorded row are untouched.
+   */
+  if (!COMMISSION_ENABLED) redirect("/dashboard");
+
   // Team leads and admins only: this decides what everybody is paid.
   if (!isTeamLeadOrAbove(me)) redirect("/dashboard");
 

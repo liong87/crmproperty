@@ -6,6 +6,7 @@ import {
   BookOpen, type LucideIcon,
 } from "lucide-react";
 import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
+import { COMMISSION_ENABLED } from "@/lib/features";
 
 interface Entry { href: string; label: string; desc: string; icon: LucideIcon }
 
@@ -34,7 +35,9 @@ export default async function MorePage() {
         { href: "/team", label: "My team", desc: "Members and their activity", icon: Users2 },
         { href: "/leads-capture", label: "Leads capture", desc: "Facebook forms and sources", icon: Radio },
         { href: "/templates", label: "Templates", desc: "Reusable WhatsApp and email", icon: MessageSquareText },
-        { href: "/settings/commission", label: "Commission", desc: "Schemes, splits and stages", icon: Percent },
+        ...(COMMISSION_ENABLED
+          ? [{ href: "/settings/commission", label: "Commission", desc: "Schemes, splits and stages", icon: Percent }]
+          : []),
         { href: "/users", label: "Users", desc: "Roles, access and reporting lines", icon: UserCog },
       ]
     : [];
