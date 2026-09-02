@@ -4,13 +4,19 @@
  * Uses `fetch` against the Graph API rather than the Facebook SDK, deliberately: the
  * SDK is large, Node-only, and this has to run on Cloudflare Workers. Two env vars:
  *
- *   META_PAGE_ACCESS_TOKEN   long-lived Page token with leads_retrieval
- *   META_GRAPH_VERSION       optional, defaults below
+ * The Page token is passed in, not read from the environment: the connected Page now
+ * lives in the database (see server/lead-sources/credentials.ts), which still falls
+ * back to META_PAGE_ACCESS_TOKEN. META_GRAPH_VERSION is optional and defaults below.
  *
  * The App Secret used to verify the webhook signature lives under the existing
  * webhook convention (WEBHOOK_SECRET_META) so all inbound secrets stay in one place.
  */
-import { LeadAdsTransientError, type LeadAdRecord, type LeadAdsProvider } from "./interface";
+import {
+  LeadAdsTransientError,
+  type AdPlatformCredentials,
+  type LeadAdRecord,
+  type LeadAdsProvider,
+} from "./interface";
 
 const DEFAULT_VERSION = "v21.0";
 
@@ -43,18 +49,10 @@ interface GraphLead {
 }
 
 export class MetaLeadAdsProvider implements LeadAdsProvider {
-  isConfigured(): boolean {
-    return Boolean(process.env.META_PAGE_ACCESS_TOKEN);
-  }
-
-  async fetchLead(externalId: string): Promise<LeadAdRecord | null> {
-    const token = process.env.META_PAGE_ACCESS_TOKEN;
-    if (!token) {
-      // Configuration, not data. Treated as transient so the platform retries and the
-      // lead survives long enough for somebody to notice and fix the token.
-      throw new LeadAdsTransientError("META_PAGE_ACCESS_TOKEN is not set");
-    }
-
+  async fetchLead(
+    { token }: AdPlatformCredentials,
+    externalId: string,
+  ): Promise<LeadAdRecord | null> {
     const version = process.env.META_GRAPH_VERSION || DEFAULT_VERSION;
     const url = `https://graph.facebook.com/${version}/${encodeURIComponent(externalId)}?fields=${FIELDS}&access_token=${encodeURIComponent(token)}`;
 

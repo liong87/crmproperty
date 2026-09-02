@@ -17,6 +17,7 @@ export type {
   LeadFormsProvider,
   RemoteLeadForm,
   RemoteFormQuestion,
+  AdPlatformCredentials,
   LeadFormQuestion,
   CreateLeadFormInput,
 } from "./interface";

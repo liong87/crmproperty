@@ -11,10 +11,13 @@
  *     A draft is invisible until then, which reads as failure if you do not expect it.
  *
  * Needs a Page token with `pages_manage_ads` in addition to the `leads_retrieval` the
- * webhook already uses. Same token, more scopes — re-issue it, do not add a second one.
+ * webhook already uses. Credentials are passed in rather than read from the
+ * environment, because the connected page now lives in the database — see
+ * server/lead-sources/credentials.ts.
  */
 import {
   LeadAdsTransientError,
+  type AdPlatformCredentials,
   type CreateLeadFormInput,
   type LeadFormsProvider,
   type RemoteFormQuestion,
@@ -65,23 +68,7 @@ async function readError(res: Response): Promise<string> {
 }
 
 export class MetaLeadFormsProvider implements LeadFormsProvider {
-  private credentials(): { pageId: string; token: string } {
-    const pageId = process.env.META_PAGE_ID;
-    const token = process.env.META_PAGE_ACCESS_TOKEN;
-    if (!pageId || !token) {
-      throw new LeadAdsTransientError(
-        "META_PAGE_ID and META_PAGE_ACCESS_TOKEN must both be set before forms can be read or created.",
-      );
-    }
-    return { pageId, token };
-  }
-
-  isConfigured(): boolean {
-    return Boolean(process.env.META_PAGE_ID && process.env.META_PAGE_ACCESS_TOKEN);
-  }
-
-  async listForms(): Promise<RemoteLeadForm[]> {
-    const { pageId, token } = this.credentials();
+  async listForms({ accountId: pageId, token }: AdPlatformCredentials): Promise<RemoteLeadForm[]> {
     const url = graph(
       `${encodeURIComponent(pageId)}/leadgen_forms` +
         `?fields=id,name,status,leads_count,created_time&limit=100` +
@@ -102,8 +89,10 @@ export class MetaLeadFormsProvider implements LeadFormsProvider {
     return (data.data ?? []).map((f) => toForm(f));
   }
 
-  async listQuestions(formId: string): Promise<RemoteFormQuestion[]> {
-    const { token } = this.credentials();
+  async listQuestions(
+    { token }: AdPlatformCredentials,
+    formId: string,
+  ): Promise<RemoteFormQuestion[]> {
     const url = graph(
       `${encodeURIComponent(formId)}?fields=questions&access_token=${encodeURIComponent(token)}`,
     );
@@ -130,8 +119,10 @@ export class MetaLeadFormsProvider implements LeadFormsProvider {
       }));
   }
 
-  async createForm(input: CreateLeadFormInput): Promise<RemoteLeadForm> {
-    const { pageId, token } = this.credentials();
+  async createForm(
+    { accountId: pageId, token }: AdPlatformCredentials,
+    input: CreateLeadFormInput,
+  ): Promise<RemoteLeadForm> {
 
     // Meta wants each of these as a JSON-encoded STRING inside form-encoded params,
     // not as nested JSON. Sending real nested JSON fails with a confusing type error.

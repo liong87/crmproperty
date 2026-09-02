@@ -1,13 +1,15 @@
 import { redirect } from "next/navigation";
-import { Facebook, Globe, MessageCircle } from "lucide-react";
+import { Facebook, Globe, MessageCircle, CircleAlert, CircleCheck } from "lucide-react";
 import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
 import { listLeadFormSources } from "@/server/lead-sources/queries";
 import { listProjectOptions } from "@/server/projects/queries";
 import { LeadSourceManager } from "@/components/lead-sources/source-manager";
 import { FacebookPanel } from "@/components/lead-sources/facebook-panel";
 import { MetaFormList } from "@/components/lead-sources/meta-form-list";
-import { metaLeadForms } from "@/lib/leadads";
+import { getMetaCredentials, getConnectedMetaPage } from "@/server/lead-sources/credentials";
+import { metaOAuthConfigured } from "@/lib/leadads/meta-oauth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { STATUS } from "@/lib/chart-colors";
 
 /**
  * Leads Capture — every way a lead can reach the CRM, on one page.
@@ -17,14 +19,25 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
  * longer has to be typed — forms are read from the Page, and new ones can be created
  * here and pushed to Facebook.
  */
-export default async function LeadsCapturePage() {
+export default async function LeadsCapturePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ fb_connected?: string; fb_error?: string; fb_note?: string }>;
+}) {
   const me = await getCurrentDbUser();
   if (!me) redirect("/sign-in");
   if (!isManagerOrAbove(me)) redirect("/dashboard");
 
-  const [sources, projects] = await Promise.all([listLeadFormSources(), listProjectOptions()]);
+  const [sources, projects, cred, connectedPage, sp] = await Promise.all([
+    listLeadFormSources(),
+    listProjectOptions(),
+    getMetaCredentials(),
+    getConnectedMetaPage(),
+    searchParams,
+  ]);
   // Checked on the server so the panel never renders a button that cannot work.
-  const fbConfigured = metaLeadForms.isConfigured();
+  const fbConfigured = Boolean(cred);
+  const oauthReady = metaOAuthConfigured();
   const metaSources = sources.filter((s) => s.provider === "meta");
   const metaCount = metaSources.length;
   const unmapped = sources.filter((s) => !s.projectId).length;
@@ -37,6 +50,24 @@ export default async function LeadsCapturePage() {
           Where leads come from, and which project each source feeds.
         </p>
       </div>
+
+      {/* The OAuth round trip comes back through the query string, because a redirect
+          from facebook.com cannot carry anything else. */}
+      {sp.fb_error && (
+        <p className="flex items-start gap-2 rounded-lg border px-4 py-3 text-sm" style={{ borderColor: STATUS.critical }}>
+          <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" style={{ color: STATUS.critical }} />
+          <span>{sp.fb_error}</span>
+        </p>
+      )}
+      {sp.fb_connected && (
+        <p className="flex items-start gap-2 rounded-lg border bg-secondary/40 px-4 py-3 text-sm">
+          <CircleCheck className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <span>
+            Connected to <strong className="font-semibold">{sp.fb_connected}</strong>.
+            {sp.fb_note ? ` ${sp.fb_note}` : ""} Import its forms below.
+          </span>
+        </p>
+      )}
 
       {unmapped > 0 && (
         <p className="rounded-lg border bg-secondary/40 px-4 py-3 text-sm">
@@ -55,11 +86,16 @@ export default async function LeadsCapturePage() {
           <p className="text-sm text-muted-foreground">
             {fbConfigured
               ? `${metaCount} form${metaCount === 1 ? "" : "s"} mapped. Import what already exists on the Page, or build a new form here.`
-              : "Connect a Page to read and create lead forms without leaving the CRM."}
+              : "Sign in with Facebook to read and create lead forms without leaving the CRM."}
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <FacebookPanel configured={fbConfigured} projects={projects} />
+          <FacebookPanel
+            configured={fbConfigured}
+            oauthReady={oauthReady}
+            connectedPageName={connectedPage?.name ?? null}
+            projects={projects}
+          />
           <MetaFormList sources={metaSources} />
         </CardContent>
       </Card>

@@ -551,6 +551,50 @@ export const leadFormSources = pgTable(
   }),
 );
 
+/* ---------- connected ad-platform pages ---------- */
+
+/**
+ * A Facebook Page this agency has connected, and the token that lets us act for it.
+ *
+ * Exists so connecting is a button rather than a deploy. Before this, the Page id and
+ * token were environment variables, which meant a wrangler command to change and a
+ * redeploy to take effect — fine for a developer, useless for the person who actually
+ * runs the ads.
+ *
+ * `accessToken` is CIPHERTEXT, not a token. It is encrypted with lib/crypto/secret-box
+ * before it is written and decrypted only where it is used. A database dump therefore
+ * does not hand anyone the ability to read the agency's leads.
+ */
+export const connectedPages = pgTable(
+  "connected_pages",
+  {
+    id: id(),
+    /** meta — the only one today, but the token/expiry shape is not Meta-specific. */
+    provider: varchar("provider", { length: 20 }).notNull(),
+    /** The platform's own id for the page. */
+    externalPageId: varchar("external_page_id", { length: 255 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    /** AES-GCM ciphertext of the page access token. Never a bare token. */
+    accessToken: text("access_token").notNull(),
+    /** What the token was granted, so a missing permission is diagnosable. */
+    scopes: text("scopes"),
+    /** Null means the platform reports no expiry, which is the goal for a page token. */
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    connectedBy: uuid("connected_by").references(() => users.id, { onDelete: "set null" }),
+    active: boolean("active").notNull().default(true),
+    ...timestamps,
+  },
+  (t) => ({
+    /*
+     * One live connection per page. Scoped to deleted_at IS NULL so a page can be
+     * disconnected and reconnected later without colliding with its own history.
+     */
+    uniquePage: uniqueIndex("connected_pages_unique")
+      .on(t.provider, t.externalPageId)
+      .where(sql`deleted_at is null`),
+  }),
+);
+
 /* ---------- project lead pools and assignment history ---------- */
 
 /**

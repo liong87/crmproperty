@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { SlidersHorizontal, X } from "lucide-react";
 import { loadFormQuestions, saveFieldMap } from "@/server/lead-sources/meta-forms";
 import { MAPPABLE_FIELDS, type LeadFieldMap } from "@/lib/lead-forms/field-map";
-import type { RemoteFormQuestion } from "@/lib/leadads";
+import type { RemoteFormQuestion } from "@/lib/leadads/interface";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";

@@ -14,6 +14,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { leadFormSources, activities } from "@/lib/db/schema";
 import { metaLeadAds, LeadAdsTransientError } from "@/lib/leadads";
+import { getMetaCredentials } from "@/server/lead-sources/credentials";
 import { monitoring } from "@/lib/monitoring";
 import { createLeadFromIntake } from "./intake";
 import { mapMetaLead, type MetaMapping } from "./meta-map";
@@ -96,11 +97,25 @@ async function findMapping(formId: string | null): Promise<MetaMapping | null> {
 export async function ingestMetaLeadgen(changes: MetaLeadgenChange[]): Promise<MetaIntakeSummary> {
   const summary: MetaIntakeSummary = { received: changes.length, created: 0, deduped: 0, skipped: 0 };
 
+  /*
+   * Resolved once for the batch, and TRANSIENT when missing. A webhook that answered
+   * 200 with no token would tell Meta the leads were accepted, and Meta does not send
+   * them twice — so a disconnected Page would quietly bin every lead the agency paid
+   * for. Throwing makes Meta retry for up to 36 hours, which is long enough for
+   * somebody to reconnect.
+   */
+  const cred = await getMetaCredentials();
+  if (!cred) {
+    throw new LeadAdsTransientError(
+      "No Facebook Page is connected, so lead answers cannot be fetched.",
+    );
+  }
+
   for (const change of changes) {
     const leadgenId = change.leadgen_id!;
 
     // Transient failures propagate: Meta should retry rather than lose the lead.
-    const record = await metaLeadAds.fetchLead(leadgenId);
+    const record = await metaLeadAds.fetchLead(cred, leadgenId);
     if (!record) {
       monitoring.captureMessage("Meta leadgen not found", { leadgenId });
       summary.skipped++;

@@ -1,10 +1,12 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Facebook, Download, Plus, Trash2 } from "lucide-react";
-import { importMetaForms, createMetaForm } from "@/server/lead-sources/meta-forms";
+import Link from "next/link";
+import { Facebook, Download, Plus, Trash2, Unplug, CheckCircle2 } from "lucide-react";
+import { importMetaForms, createMetaForm, disconnectMetaPage } from "@/server/lead-sources/meta-forms";
 import { INTEREST } from "@/lib/constants";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -21,9 +23,14 @@ interface CustomQuestion { key: string; label: string; options: string }
  * typing the wrong question is a bad way to learn it.
  */
 export function FacebookPanel({
-  configured, projects,
+  configured, oauthReady, connectedPageName, projects,
 }: {
+  /** We have credentials from somewhere — a connected Page, or the env fallback. */
   configured: boolean;
+  /** The app has what Facebook Login needs, so the Connect button can work. */
+  oauthReady: boolean;
+  /** Set only when the credentials come from a Page connected through the button. */
+  connectedPageName: string | null;
   projects: { id: string; name: string }[];
 }) {
   const router = useRouter();
@@ -90,23 +97,78 @@ export function FacebookPanel({
     });
   }
 
+  function onDisconnect() {
+    setError(null); setNote(null);
+    start(async () => {
+      const res = await disconnectMetaPage();
+      if (!res.success) return setError(res.error ?? "Something went wrong.");
+      router.refresh();
+    });
+  }
+
   if (!configured) {
     return (
       <div className="rounded-lg border border-dashed p-6 text-center">
         <Facebook className="mx-auto h-6 w-6 text-muted-foreground" />
         <p className="mt-2 text-sm font-medium">Facebook is not connected</p>
-        <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-          Set <code className="font-mono text-xs">META_PAGE_ID</code> and{" "}
-          <code className="font-mono text-xs">META_PAGE_ACCESS_TOKEN</code> to read and create
-          lead forms from here. The token needs <code className="font-mono text-xs">pages_manage_ads</code>{" "}
-          as well as the <code className="font-mono text-xs">leads_retrieval</code> the webhook uses.
-        </p>
+        {oauthReady ? (
+          <>
+            <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+              Sign in with Facebook and the CRM will read your Page&rsquo;s lead forms and create
+              new ones. Your access token is encrypted before it is stored.
+            </p>
+            {/* A plain link, not a fetch: this is a full-page redirect to facebook.com.
+                Styled with buttonVariants because Button renders a real <button>. */}
+            <Link
+              href="/api/auth/facebook/start"
+              prefetch={false}
+              className={cn(buttonVariants(), "mt-4")}
+            >
+              <Facebook className="mr-2 h-4 w-4" /> Connect Facebook
+            </Link>
+          </>
+        ) : (
+          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+            Facebook login is not configured yet. It needs{" "}
+            <code className="font-mono text-xs">META_APP_ID</code>, the app secret, and{" "}
+            <code className="font-mono text-xs">APP_URL</code>. Setting{" "}
+            <code className="font-mono text-xs">META_PAGE_ID</code> and{" "}
+            <code className="font-mono text-xs">META_PAGE_ACCESS_TOKEN</code> directly also works.
+          </p>
+        )}
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      {connectedPageName ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2">
+          <span className="flex items-center gap-2 text-sm">
+            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+            Connected to <strong className="font-semibold">{connectedPageName}</strong>
+          </span>
+          <Button type="button" variant="ghost" size="sm" onClick={onDisconnect} disabled={pending}>
+            <Unplug className="mr-1.5 h-3.5 w-3.5" /> Disconnect
+          </Button>
+        </div>
+      ) : (
+        /* Credentials came from the environment rather than the button. Worth saying,
+           because "Disconnect" is absent and somebody will wonder why. */
+        <p className="rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
+          Using the Page token from the environment. Connect through Facebook instead to manage
+          it from here.
+          {oauthReady && (
+            <>
+              {" "}
+              <Link href="/api/auth/facebook/start" prefetch={false} className="text-primary underline underline-offset-2">
+                Connect Facebook
+              </Link>
+            </>
+          )}
+        </p>
+      )}
+
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="secondary" onClick={onImport} disabled={pending}>
           <Download className="mr-2 h-4 w-4" />

@@ -17,12 +17,13 @@ import { z } from "zod";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
-import { leadFormSources, type LeadFormSource } from "@/lib/db/schema";
+import { leadFormSources, connectedPages, type LeadFormSource } from "@/lib/db/schema";
 import { requireDbUser, assertRole, AuthorizationError } from "@/lib/auth";
 import { INTEREST } from "@/lib/constants";
 import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import { metaLeadForms, LeadAdsTransientError, type RemoteFormQuestion } from "@/lib/leadads";
+import { getMetaCredentials } from "./credentials";
 import { cleanFieldMap, MAPPABLE_FIELDS, type LeadFieldMap } from "@/lib/lead-forms/field-map";
 import { getLeadFormSourceById } from "./queries";
 import type { ActionResult } from "@/types";
@@ -41,13 +42,10 @@ export async function importMetaForms(): Promise<ActionResult<ImportSummary>> {
     const me = await requireDbUser();
     assertRole(me, "admin", "manager");
 
-    if (!metaLeadForms.isConfigured()) {
-      return fail(
-        "Facebook is not connected yet. Set META_PAGE_ID and META_PAGE_ACCESS_TOKEN, then try again.",
-      );
-    }
+    const cred = await getMetaCredentials();
+    if (!cred) return fail("Facebook is not connected. Open Leads capture and connect a Page first.");
 
-    const remote = await metaLeadForms.listForms();
+    const remote = await metaLeadForms.listForms(cred);
     if (remote.length === 0) {
       return ok({ found: 0, imported: 0, existing: 0 });
     }
@@ -115,11 +113,8 @@ export async function createMetaForm(input: unknown): Promise<ActionResult<LeadF
     assertRole(me, "admin", "manager");
     const d = createSchema.parse(input);
 
-    if (!metaLeadForms.isConfigured()) {
-      return fail(
-        "Facebook is not connected yet. Set META_PAGE_ID and META_PAGE_ACCESS_TOKEN, then try again.",
-      );
-    }
+    const cred = await getMetaCredentials();
+    if (!cred) return fail("Facebook is not connected. Open Leads capture and connect a Page first.");
 
     // A phone number is what makes a property lead workable, and Meta pre-fills it, so
     // there is no cost to insisting on it — a form without one produces leads nobody
@@ -127,7 +122,7 @@ export async function createMetaForm(input: unknown): Promise<ActionResult<LeadF
     const hasPhone = d.questions.some((q) => q.type === "PHONE");
     if (!hasPhone) return fail("Add the Phone question — a lead with no number cannot be followed up.");
 
-    const created = await metaLeadForms.createForm({
+    const created = await metaLeadForms.createForm(cred, {
       name: d.name,
       questions: d.questions,
       privacyPolicyUrl: d.privacyPolicyUrl,
@@ -195,11 +190,10 @@ export async function loadFormQuestions(sourceId: string): Promise<ActionResult<
     if (source.provider !== "meta") {
       return fail("Only Facebook forms can list their questions from here.");
     }
-    if (!metaLeadForms.isConfigured()) {
-      return fail("Facebook is not connected. Set META_PAGE_ID and META_PAGE_ACCESS_TOKEN.");
-    }
+    const cred = await getMetaCredentials();
+    if (!cred) return fail("Facebook is not connected. Open Leads capture and connect a Page first.");
 
-    return ok(await metaLeadForms.listQuestions(source.externalFormId));
+    return ok(await metaLeadForms.listQuestions(cred, source.externalFormId));
   } catch (err) {
     return handle(err, "loadFormQuestions");
   }
@@ -242,5 +236,31 @@ export async function saveFieldMap(input: unknown): Promise<ActionResult<LeadFie
     return ok(map);
   } catch (err) {
     return handle(err, "saveFieldMap");
+  }
+}
+
+
+/**
+ * Disconnect the Page.
+ *
+ * Soft delete, not a hard one: the row records who connected what and when, which is
+ * worth keeping, and the unique index is scoped to live rows so the same Page can be
+ * connected again immediately. The stored ciphertext goes with it — a disconnected
+ * page must not leave a usable token behind.
+ */
+export async function disconnectMetaPage(): Promise<ActionResult<void>> {
+  try {
+    const me = await requireDbUser();
+    assertRole(me, "admin", "manager");
+
+    await db
+      .update(connectedPages)
+      .set({ active: false, deletedAt: new Date(), accessToken: "" })
+      .where(and(eq(connectedPages.provider, "meta"), isNull(connectedPages.deletedAt)));
+
+    revalidatePath("/leads-capture");
+    return ok<void>(undefined);
+  } catch (err) {
+    return handle(err, "disconnectMetaPage");
   }
 }

@@ -23,8 +23,6 @@ export interface LeadAdRecord {
 }
 
 export interface LeadAdsProvider {
-  /** True when the provider has the credentials it needs. Never throws. */
-  isConfigured(): boolean;
   /**
    * Retrieve one submission.
    *
@@ -32,7 +30,7 @@ export interface LeadAdsProvider {
    * answer the webhook with a 5xx and let the platform retry. Returns null only when
    * the record genuinely does not exist, which retrying will never fix.
    */
-  fetchLead(externalId: string): Promise<LeadAdRecord | null>;
+  fetchLead(cred: AdPlatformCredentials, externalId: string): Promise<LeadAdRecord | null>;
 }
 
 /** Thrown for failures a retry might fix. */
@@ -94,11 +92,15 @@ export interface RemoteFormQuestion {
  * a webhook that must answer in seconds, while this is an admin screen. A provider
  * can implement one without the other.
  */
+export interface AdPlatformCredentials {
+  /** Page id, ad account id — whatever the platform calls the thing being acted for. */
+  accountId: string;
+  token: string;
+}
+
 export interface LeadFormsProvider {
-  /** True when the provider has the page id and token it needs. Never throws. */
-  isConfigured(): boolean;
-  listForms(): Promise<RemoteLeadForm[]>;
+  listForms(cred: AdPlatformCredentials): Promise<RemoteLeadForm[]>;
   /** The questions on one form — what a field mapping is chosen FROM. */
-  listQuestions(formId: string): Promise<RemoteFormQuestion[]>;
-  createForm(input: CreateLeadFormInput): Promise<RemoteLeadForm>;
+  listQuestions(cred: AdPlatformCredentials, formId: string): Promise<RemoteFormQuestion[]>;
+  createForm(cred: AdPlatformCredentials, input: CreateLeadFormInput): Promise<RemoteLeadForm>;
 }
