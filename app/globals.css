@@ -117,3 +117,100 @@
   .tnum { font-variant-numeric: tabular-nums; }
   .font-display { font-family: var(--font-display), Georgia, serif; }
 }
+
+/* ------------------------------------------------------------------ *
+ * Print
+ *
+ * The report is the one screen people hand to someone else, so "Save as
+ * PDF" has to produce something that reads as a document rather than a
+ * screenshot of an app.
+ *
+ * Four things browsers get wrong by default and this fixes:
+ *   1. Backgrounds are stripped, which would render the funnel blank —
+ *      the bars ARE the chart, so print-color-adjust is not decoration.
+ *   2. Dark mode follows the viewer, so a colleague's dark theme prints
+ *      white text on white paper. Print is forced light.
+ *   3. Cards split mid-table across a page break.
+ *   4. Nothing says which window and filters produced the numbers.
+ * ------------------------------------------------------------------ */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 14mm 12mm;
+  }
+
+  /* Force the light palette regardless of the viewer's theme. Printing a
+     dark-mode page wastes toner and, worse, loses the low-contrast text. */
+  :root,
+  .dark {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 35%;
+    --border: 0 0% 80%;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  /* The chart colours are the data. Without this the funnel prints empty. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .app-shell {
+    background-image: none !important;
+    background-color: #fff !important;
+  }
+
+  /* Chrome, sidebar, and every control. Anything you cannot click on paper. */
+  nav,
+  aside,
+  header nav,
+  button,
+  [role="tablist"],
+  .print\:hidden {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+  }
+
+  /* A card cut in half across two pages is unreadable; so is a split row. */
+  .break-inside-avoid,
+  table,
+  tr,
+  li {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Borders instead of shadows — a shadow prints as a grey smear. */
+  [class*="rounded-2xl"],
+  [class*="rounded-xl"] {
+    box-shadow: none !important;
+    border: 1px solid #d4d4d4 !important;
+  }
+
+  /* Expanded detail must stay expanded: somebody opened it on purpose
+     before pressing print. */
+  details > summary {
+    list-style: none;
+  }
+  details[open] > * {
+    display: revert !important;
+  }
+
+  a[href]::after {
+    content: "";
+  }
+}

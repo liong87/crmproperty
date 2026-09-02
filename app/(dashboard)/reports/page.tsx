@@ -8,7 +8,14 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { StatCard, BarList } from "@/components/reports/charts";
 import { FunnelChart, FunnelBreakdown } from "@/components/reports/funnel";
 import { TrendChart } from "@/components/reports/trend";
-import { RangeFilter, parseRangeDays, rangeLabel } from "@/components/reports/range-filter";
+import { resolveRange } from "@/lib/reports/range";
+import { ReportControls, ReportTabs, PrintHeader } from "@/components/reports/report-controls";
+import { PrintButton } from "@/components/reports/print-button";
+import { SourceTable, FollowUpTable } from "@/components/reports/source-table";
+import { CampaignTab } from "@/components/reports/campaign-tab";
+import { getLeadsBySource, getFollowUpByAgent } from "@/server/reports/by-source";
+import { listProjectOptions } from "@/server/projects/queries";
+import { OPEN_STATUSES } from "@/lib/constants";
 import { STATUS } from "@/lib/chart-colors";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { formatMYR } from "@/lib/utils";
@@ -16,35 +23,77 @@ import { formatMYR } from "@/lib/utils";
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ days?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const me = await getCurrentDbUser();
   if (!me) redirect("/sign-in");
-  const days = parseRangeDays((await searchParams).days);
+
+  const params = await searchParams;
+  const range = resolveRange(params);
+  const days = range.days;
+  const tab = params.tab === "campaign" ? "campaign" : "lead";
+
   // Weekly points, floored at 4 so a short window still draws a line, and capped so
-  // "All time" cannot render hundreds of unreadable buckets.
+  // "Maximum" cannot render hundreds of unreadable buckets.
   const weeks = Math.min(104, Math.max(4, Math.ceil(days / 7)));
-  const [r, funnel, trend, activity] = await Promise.all([
+
+  const [r, funnel, trend, activity, bySource, followUp, projects] = await Promise.all([
     getReportData(me),
     getFunnel(me, days),
     getFunnelTrend(me, weeks),
     getAgentActivity(me, days),
+    getLeadsBySource(me, {
+      sinceDays: days,
+      source: params.source ?? null,
+      projectId: params.project ?? null,
+    }),
+    getFollowUpByAgent(me, OPEN_STATUSES),
+    listProjectOptions(),
   ]);
+
+  // Offered as chips only when leads actually carry them — an empty filter row is
+  // furniture, and a filter for a source nobody uses is a dead end. Taken from
+  // availableSources rather than the filtered rows, so picking one does not remove
+  // every other chip and strand the user on it.
+  const sourceChips = bySource.availableSources;
+  const activeFilters = [
+    params.source ? `Source: ${sourceChips.find((s) => s.key === params.source)?.label ?? params.source}` : null,
+    params.project ? `Product: ${projects.find((p) => p.id === params.project)?.name ?? params.project}` : null,
+  ].filter((x): x is string => Boolean(x));
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
+      <PrintHeader
+        title={tab === "campaign" ? "Meta ads report" : "Lead performance"}
+        rangeLabel={range.label}
+        filters={activeFilters}
+      />
+
+      <div className="flex flex-wrap items-start justify-between gap-2 print:hidden">
         <div>
-          <h1 className="text-xl font-semibold">Reports</h1>
-          <p className="text-sm text-muted-foreground">{r.scope === "team" ? "Team-wide metrics." : "Your book of business."}</p>
+          <h1 className="font-display text-2xl font-bold tracking-tight">Report</h1>
+          <p className="text-sm text-muted-foreground">
+            {r.scope === "team" ? "Lead performance and campaign analytics." : "Your book of business."}
+          </p>
         </div>
-        {/* Spend is the agency's cost base, not an agent's business. */}
-        {isTeamLeadOrAbove(me) && (
-          <Link href="/reports/spend" className="text-sm font-medium underline underline-offset-4">
-            Advertising spend →
-          </Link>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <PrintButton />
+          {/* Spend is the agency's cost base, not an agent's business. */}
+          {isTeamLeadOrAbove(me) && (
+            <Link href="/reports/spend" className="text-sm font-medium underline underline-offset-4">
+              Advertising spend →
+            </Link>
+          )}
+        </div>
       </div>
+
+      <ReportTabs params={params} />
+
+      {tab === "campaign" ? (
+        <CampaignTab enabled={process.env.FEATURE_META_ADS === "1"} />
+      ) : (
+      <>
+      <ReportControls params={params} sources={sourceChips} projects={projects} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Total leads" value={String(r.totalLeads)} />
@@ -59,8 +108,7 @@ export default async function ReportsPage({
         snapshot, not a total), so windowing them would say something untrue.
       */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
-        <h2 className="text-base font-semibold">Funnel · {rangeLabel(days)}</h2>
-        <RangeFilter days={days} />
+        <h2 className="text-base font-semibold">Funnel · {range.label}</h2>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -84,6 +132,10 @@ export default async function ReportsPage({
         />
       )}
 
+      <SourceTable data={bySource} />
+
+      <FollowUpTable rows={followUp} />
+
       <Card>
         <CardHeader>
           <CardTitle>
@@ -94,7 +146,7 @@ export default async function ReportsPage({
           {/* Said plainly, because a zero here is ambiguous and someone will act on it.
               Nothing in the product dials a phone or sends a WhatsApp on its own. */}
           <p className="text-sm text-muted-foreground">
-            Calls and WhatsApp messages <em>logged</em> in the last {days} days — not calls made.
+            Calls and WhatsApp messages <em>logged</em> in {range.label.toLowerCase()} — not calls made.
             A zero means nothing was recorded, which is a reason to ask rather than a conclusion.
           </p>
 
@@ -173,6 +225,8 @@ export default async function ReportsPage({
             </Table>
           </CardContent>
         </Card>
+      )}
+      </>
       )}
     </div>
   );
