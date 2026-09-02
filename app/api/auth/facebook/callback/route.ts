@@ -10,6 +10,7 @@ import {
   exchangeCodeForUserToken,
   fetchIdentity,
   fetchPages,
+  fetchAdAccounts,
   fetchGrantedScopes,
   loginConfigId,
 } from "@/lib/capture/meta-graph";
@@ -221,6 +222,94 @@ export async function GET(req: Request) {
         subscribed: false,
       });
     }
+  }
+
+  /*
+   * Ad accounts, from the SAME login.
+   *
+   * `ads_management` is already in the login configuration, so this costs the agent no
+   * extra consent screen — connecting Facebook once gives both their Pages and their ad
+   * accounts. Making it a second "Connect" button would be asking twice for something
+   * already granted.
+   *
+   * Stored as a separate capture_accounts row with provider "meta_ads" rather than
+   * mixed in with pages: they are different things with different lifecycles, and the
+   * ownership helper filters by provider, so keeping them apart is what stops an ad
+   * account ever being mistaken for a subscribable Page by the webhook.
+   *
+   * Failures here are swallowed. A person with Pages and no ad accounts is normal, and
+   * losing a working Page connection because the ads call 404'd would be absurd.
+   */
+  try {
+    const adAccounts = await fetchAdAccounts(userToken.token);
+    if (adAccounts.length > 0) {
+      const [existingAds] = await db
+        .select({ id: captureAccounts.id })
+        .from(captureAccounts)
+        .where(
+          and(
+            eq(captureAccounts.provider, "meta_ads"),
+            eq(captureAccounts.providerUserId, identity.id),
+            eq(captureAccounts.ownerUserId, me.id),
+            isNull(captureAccounts.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      let adsAccountId = existingAds?.id;
+      if (adsAccountId) {
+        await db
+          .update(captureAccounts)
+          .set({ accessToken: cipherUserToken, tokenExpiresAt: userToken.expiresAt, status: "active", lastCheckedAt: now, updatedAt: now })
+          .where(eq(captureAccounts.id, adsAccountId));
+      } else {
+        const [inserted] = await db
+          .insert(captureAccounts)
+          .values({
+            provider: "meta_ads",
+            ownerUserId: me.id,
+            providerUserId: identity.id,
+            displayName: identity.name,
+            accessToken: cipherUserToken,
+            tokenExpiresAt: userToken.expiresAt,
+            scopes: CAPTURE_SCOPES.join(","),
+            status: "active",
+            lastCheckedAt: now,
+          })
+          .returning({ id: captureAccounts.id });
+        adsAccountId = inserted?.id;
+      }
+
+      if (adsAccountId) {
+        const knownAds = await db
+          .select({ id: capturePages.id, externalPageId: capturePages.externalPageId })
+          .from(capturePages)
+          .where(and(eq(capturePages.accountId, adsAccountId), isNull(capturePages.deletedAt)));
+        const adsByExternal = new Map(knownAds.map((a) => [a.externalPageId, a.id]));
+
+        for (const acct of adAccounts) {
+          // The ad account carries no token of its own; the user token is what reads it.
+          const label = `${acct.name}${acct.status === "active" ? "" : ` (${acct.status})`}`;
+          const existingId = adsByExternal.get(acct.id);
+          if (existingId) {
+            await db
+              .update(capturePages)
+              .set({ name: label, accessToken: cipherUserToken, updatedAt: now })
+              .where(eq(capturePages.id, existingId));
+          } else {
+            await db.insert(capturePages).values({
+              accountId: adsAccountId,
+              externalPageId: acct.id,
+              name: label,
+              accessToken: cipherUserToken,
+              subscribed: false,
+            });
+          }
+        }
+      }
+    }
+  } catch (err) {
+    monitoring.captureException(err, { where: "capture:facebook:adaccounts", userId: me.id });
   }
 
   return done({ fb_connected: identity.name, fb_pick: accountId });

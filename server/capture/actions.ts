@@ -335,3 +335,26 @@ export async function addPageForm(
     return asFailure(err);
   }
 }
+
+/**
+ * Choose which ad accounts feed the report.
+ *
+ * Deliberately NOT setPageSubscriptions. That one calls Meta to subscribe a Page to
+ * the leadgen webhook, which is meaningless for an ad account and would fail with a
+ * confusing permissions error. Here `subscribed` means only "include this in the
+ * report" — a local flag, no Graph call, nothing to go wrong at Facebook.
+ */
+export async function setAdAccountSelected(pageId: string, on: boolean): Promise<ActionResult<null>> {
+  try {
+    const { page, account } = await requireMyPage(pageId);
+    if (account.provider !== "meta_ads") return fail("That is not an ad account.");
+    await db
+      .update(capturePages)
+      .set({ subscribed: on, updatedAt: new Date() })
+      .where(eq(capturePages.id, page.id));
+    revalidatePath("/reports");
+    return ok(null);
+  } catch (err) {
+    return asFailure(err);
+  }
+}

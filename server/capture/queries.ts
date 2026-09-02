@@ -54,3 +54,24 @@ export async function listMyCaptureAccounts(provider = "facebook"): Promise<Capt
     pages: (byAccount.get(a.id) ?? []).sort((x, y) => x.name.localeCompare(y.name)),
   }));
 }
+
+export interface AdAccountView {
+  id: string;
+  externalId: string;
+  name: string;
+  selected: boolean;
+}
+
+/**
+ * The signed-in user's Meta ad accounts.
+ *
+ * Same isolation as everything else in this file: an agent sees their own ad accounts
+ * and nobody else's, admins included. Spend is commercially sensitive between agents
+ * running their own budgets, so this is not a place to make an exception.
+ */
+export async function listMyAdAccounts(): Promise<AdAccountView[]> {
+  const pages = await listMyPages("meta_ads");
+  return pages
+    .map((p) => ({ id: p.id, externalId: p.externalPageId, name: p.name, selected: p.subscribed }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}

@@ -320,3 +320,56 @@ export async function fetchGrantedScopes(userToken: string): Promise<string[]> {
     return [];
   }
 }
+
+export interface MetaAdAccount {
+  /** Meta's id, already prefixed: "act_1234567890". */
+  id: string;
+  name: string;
+  /** ACTIVE | DISABLED | UNSETTLED … as Meta's numeric status, mapped. */
+  status: string;
+  currency: string | null;
+}
+
+const AD_ACCOUNT_STATUS: Record<number, string> = {
+  1: "active",
+  2: "disabled",
+  3: "unsettled",
+  7: "pending review",
+  9: "in grace period",
+  101: "closed",
+};
+
+/**
+ * The ad accounts this person can read.
+ *
+ * Uses the SAME user token as page capture, because `ads_management` is already in the
+ * login configuration — so connecting an ad account costs the agent no extra consent
+ * screen, it is simply a second thing that login already permitted.
+ *
+ * Note `/me/adaccounts` returns accounts the person has any role on, including ones
+ * they can see but not spend from. The status is carried through rather than filtered
+ * so a disabled account is visible and explained, instead of silently missing from a
+ * list the agent expects to find it in.
+ */
+export async function fetchAdAccounts(userToken: string): Promise<MetaAdAccount[]> {
+  const res = await graph<{
+    data?: Array<{ id?: string; name?: string; account_status?: number; currency?: string }>;
+  }>(
+    `https://graph.facebook.com/${version()}/me/adaccounts?` +
+      new URLSearchParams({
+        fields: "id,name,account_status,currency",
+        limit: "100",
+        access_token: userToken,
+      }).toString(),
+    "Listing your ad accounts",
+  );
+  return (res.data ?? [])
+    .filter((a): a is { id: string; name?: string; account_status?: number; currency?: string } =>
+      Boolean(a?.id))
+    .map((a) => ({
+      id: a.id,
+      name: a.name ?? a.id,
+      status: AD_ACCOUNT_STATUS[a.account_status ?? -1] ?? "unknown",
+      currency: a.currency ?? null,
+    }));
+}
