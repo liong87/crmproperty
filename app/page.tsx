@@ -1,35 +1,42 @@
 import Link from "next/link";
 import {
   Radio, MessageSquareText, Columns3, CalendarCheck, GraduationCap, BarChart3,
-  ArrowRight, Check,
+  ArrowRight,
 } from "lucide-react";
 import { AGENCY_NAME, AGENCY_LEGAL_NAME, APP_NAME } from "@/lib/constants";
 
 /**
- * The public page.
+ * The public page — deliberately NOT a product marketing page.
  *
- * This is the one screen someone sees before they have an account — a recruit an
- * agent is trying to sign, or a negotiator deciding whether this agency is
- * organised. The old version said "Internal tool for the team" over a Sign in
- * button, which answered neither question.
+ * The CRM is internal to the agency, so the only people who reach this screen
+ * are negotiators who want the login and whoever is joining next week. That
+ * rules out the whole SaaS furniture: no anchor nav to How it works / Features /
+ * Pricing, no repeated closing CTA, no invented social proof. An anchor nav is
+ * for a stranger evaluating a purchase, and there is no such reader here — it
+ * would be three links nobody clicks, taking up the most valuable strip on the
+ * page.
  *
- * EVERY CLAIM BELOW MAPS TO SOMETHING THAT EXISTS. The feature list is the
- * actual nav: leads capture (server/capture), WhatsApp templates
- * (server/templates), the pipeline, appointments, the Learning Hub
- * (server/learning), reports. Nothing here promises an integration that is not
- * built, because the first person to click through and find it missing is
- * someone who was told this agency has its act together.
+ * What is left is what a real reader needs: the agency's name, the login, and a
+ * short honest answer to "what does the agency run on" for a first-week
+ * negotiator. If the CRM is ever sold to other agencies, the how-it-works and
+ * team-lead sections removed here are in git (commit 83c3451) rather than
+ * needing to be rewritten.
  *
- * Dark teal rather than the blue everyone else in this category uses: the
- * palette is already deep teal + amber with a serif display face
- * (app/globals.css, app/layout.tsx), and looking like the competitor is a
- * strange goal for the page whose job is to distinguish you from them.
+ * EVERY CLAIM MAPS TO SOMETHING THAT EXISTS: leads capture (server/capture),
+ * WhatsApp templates (server/templates), the pipeline, setter/closer
+ * appointments, the Learning Hub (server/learning), reports. The first person
+ * to click through and find a promised feature missing is someone who was told
+ * this agency has its act together.
+ *
+ * Deep teal rather than the blue everyone else in this category uses — the
+ * palette is already teal + amber with a serif display face (app/globals.css,
+ * app/layout.tsx), and looking like the competitor is a strange goal for the
+ * page meant to distinguish you from them.
  */
 
 export const metadata = {
-  title: `${AGENCY_NAME} — the CRM behind the agency`,
-  description:
-    "From first lead to closed sale on one screen: ad leads captured automatically, WhatsApp follow-ups, appointments, commission and team training in the same place.",
+  title: `${AGENCY_NAME} — ${APP_NAME}`,
+  description: `Internal CRM for ${AGENCY_LEGAL_NAME} negotiators. Sign in to work your leads.`,
 };
 
 const FEATURES = [
@@ -65,24 +72,6 @@ const FEATURES = [
   },
 ];
 
-const STEPS = [
-  {
-    n: "01",
-    title: "Connect the ad account",
-    body: "Sign in with the Facebook login you already use. Pick the pages and forms that matter, map each one to a project, and leads start flowing.",
-  },
-  {
-    n: "02",
-    title: "Work the lead the same day",
-    body: "New leads land in one queue with the call outcome you record — no pick up, call another time, qualified — and the follow-up scheduled from it.",
-  },
-  {
-    n: "03",
-    title: "Close it and get paid",
-    body: "Move the deal along the board, tick off the paperwork before a deadline bites, and see the commission split for every party on the deal.",
-  },
-];
-
 export default function Home() {
   return (
     <div className="min-h-dvh bg-[#07201f] text-white">
@@ -92,11 +81,6 @@ export default function Home() {
           <Link href="/" className="font-display text-xl font-semibold tracking-tight">
             {AGENCY_NAME}
           </Link>
-          <nav className="hidden items-center gap-8 text-sm text-white/70 sm:flex">
-            <a href="#how" className="transition-colors hover:text-white">How it works</a>
-            <a href="#features" className="transition-colors hover:text-white">Features</a>
-            <a href="#team" className="transition-colors hover:text-white">For team leads</a>
-          </nav>
           <div className="flex items-center gap-2">
             <Link
               href="/dashboard"
@@ -148,18 +132,18 @@ export default function Home() {
 
           <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
-              href="/sign-up"
+              href="/dashboard"
               className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[hsl(40_82%_52%)] px-7 font-semibold text-[hsl(30_50%_14%)] transition hover:brightness-110 sm:w-auto"
             >
-              Request access
+              Open the CRM
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <a
-              href="#how"
+            <Link
+              href="/sign-up"
               className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-white/15 bg-white/5 px-7 font-semibold text-white transition hover:bg-white/10 sm:w-auto"
             >
-              See how it works
-            </a>
+              Request access
+            </Link>
           </div>
 
           <p className="mt-5 text-xs text-white/45">
@@ -168,43 +152,20 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ---------- How it works ---------- */}
-      <section id="how" className="border-t border-white/10 bg-[#061a19]">
-        <div className="mx-auto max-w-6xl px-5 py-20 sm:py-24">
-          <div className="max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-teal-300/80">
-              How it works
-            </p>
-            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-              Three steps, and none of them is data entry
-            </h2>
-          </div>
-
-          <div className="mt-12 grid gap-8 sm:grid-cols-3">
-            {STEPS.map((s) => (
-              <div key={s.n} className="relative">
-                <span className="font-display text-4xl font-semibold text-white/15">{s.n}</span>
-                <h3 className="mt-3 text-lg font-semibold">{s.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-white/60">{s.body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ---------- Features ---------- */}
       <section id="features" className="border-t border-white/10">
         <div className="mx-auto max-w-6xl px-5 py-20 sm:py-24">
           <div className="max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-teal-300/80">
-              What is in it
+              What is inside
             </p>
             <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-              Built around the way a Malaysian agency actually sells
+              For whoever is joining the team next
             </h2>
             <p className="mt-4 text-white/60">
-              Not a generic sales CRM with "property" written on it. Setter and closer, project
-              sales kits, developer commission splits, PDPA consent on every lead.
+              Not a product tour — a short answer to "what does the agency run on", for a
+              negotiator on their first week. Setter and closer, project sales kits, developer
+              commission splits, PDPA consent on every lead.
             </p>
           </div>
 
@@ -218,91 +179,6 @@ export default function Home() {
                 <p className="mt-2 text-sm leading-relaxed text-white/60">{f.body}</p>
               </div>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ---------- For team leads ---------- */}
-      <section id="team" className="border-t border-white/10 bg-[#061a19]">
-        <div className="mx-auto grid max-w-6xl gap-12 px-5 py-20 sm:py-24 lg:grid-cols-2 lg:items-center">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-teal-300/80">
-              For team leads
-            </p>
-            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-              You can see who is working, without asking
-            </h2>
-            <p className="mt-4 leading-relaxed text-white/60">
-              Every call and message an agent logs rolls up to your team screen, next to the leads
-              they were given. A quiet week is visible on a Tuesday rather than at the end of the
-              month — and a zero is a prompt to ask, never a verdict on its own.
-            </p>
-            <ul className="mt-7 space-y-3">
-              {[
-                "Leads routed to the agent whose page produced them",
-                "Training videos published to your downline, drafts kept private until you publish",
-                "Commission split per deal, snapshotted so a scheme change never rewrites what was agreed",
-                "Paperwork deadlines that carry the reason for the date",
-              ].map((line) => (
-                <li key={line} className="flex gap-3 text-sm text-white/75">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-300" />
-                  <span>{line}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* A restrained mock rather than a screenshot: a real one goes stale the
-              next time the funnel card changes, and nobody updates the marketing
-              page when they ship. */}
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-            <p className="text-xs uppercase tracking-[0.12em] text-white/40">This month</p>
-            <div className="mt-5 space-y-5">
-              {[
-                { label: "Leads captured", value: "128", meta: "Meta lead forms · 3 campaigns" },
-                { label: "Appointments set", value: "41", meta: "32% of leads worked" },
-                { label: "Bookings", value: "7", meta: "RM 4.9m gross value" },
-              ].map((row) => (
-                <div key={row.label} className="border-b border-white/10 pb-4 last:border-0 last:pb-0">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-sm text-white/60">{row.label}</span>
-                    <span className="font-display text-2xl font-semibold tabular-nums">{row.value}</span>
-                  </div>
-                  <p className="mt-1 text-xs text-white/40">{row.meta}</p>
-                </div>
-              ))}
-            </div>
-            <p className="mt-5 text-[11px] leading-relaxed text-white/30">
-              Illustrative figures, shown to describe the layout.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* ---------- Closing CTA ---------- */}
-      <section className="border-t border-white/10">
-        <div className="mx-auto max-w-3xl px-5 py-20 text-center sm:py-24">
-          <h2 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-            Already with {AGENCY_NAME}?
-          </h2>
-          <p className="mx-auto mt-4 max-w-xl text-white/60">
-            Sign in and pick up your leads. If you are joining the agency, request access and an
-            administrator will activate your account.
-          </p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link
-              href="/dashboard"
-              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[hsl(40_82%_52%)] px-7 font-semibold text-[hsl(30_50%_14%)] transition hover:brightness-110 sm:w-auto"
-            >
-              Log in
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              href="/sign-up"
-              className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-white/15 bg-white/5 px-7 font-semibold text-white transition hover:bg-white/10 sm:w-auto"
-            >
-              Request access
-            </Link>
           </div>
         </div>
       </section>
