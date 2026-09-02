@@ -41,6 +41,9 @@ export function CaptureRail({
   /** Just came back from Facebook — open this one's picker straight away. */
   highlightAccountId?: string;
 }) {
+  // Placeholder until the Meta app carries WhatsApp permissions; the slot is real, the
+  // connect flow is not built yet.
+  const whatsappAccounts: CaptureAccountView[] = [];
   const pagesConnected = accounts.reduce((n, a) => n + a.pages.filter((p) => p.subscribed).length, 0);
 
   return (
@@ -99,21 +102,44 @@ export function CaptureRail({
       </section>
 
       <section className="rounded-2xl border bg-card p-4">
-        <header className="flex items-start gap-2.5">
-          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#25D366]/10">
-            <MessageCircle className="h-4 w-4 text-[#25D366]" aria-hidden />
-          </span>
-          <div>
-            <h2 className="text-sm font-semibold">WhatsApp accounts</h2>
-            <p className="text-xs text-muted-foreground">0 connected</p>
+        <header className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-2.5">
+            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#25D366]/10">
+              <MessageCircle className="h-4 w-4 text-[#25D366]" aria-hidden />
+            </span>
+            <div>
+              <h2 className="text-sm font-semibold">WhatsApp accounts</h2>
+              <p className="text-xs text-muted-foreground">
+                {whatsappAccounts.length} connected
+              </p>
+            </div>
           </div>
+          {/* Deliberately visible and deliberately disabled. Hiding the button would
+              make this look like a feature we do not have; a live button that fails
+              at Facebook would be worse. The tooltip says what is missing. */}
+          <span
+            title="Waiting on WhatsApp permissions for the Meta app"
+            className="inline-flex h-8 shrink-0 cursor-not-allowed items-center gap-1 rounded-xl border px-2.5 text-xs font-semibold text-muted-foreground"
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden />
+            Add
+          </span>
         </header>
-        <p className="mt-3 rounded-xl border border-dashed px-3 py-4 text-xs text-muted-foreground">
-          Capturing from WhatsApp needs the Cloud API — a verified Meta Business and a
-          dedicated number that leaves the normal WhatsApp app permanently. Today the CRM
-          opens a pre-filled wa.me link instead, so the agent messages from their own
-          number and the client sees the person they already know.
-        </p>
+
+        <div className="mt-3 space-y-2">
+          <p className="rounded-xl border border-dashed px-3 py-3 text-xs leading-relaxed text-muted-foreground">
+            <strong className="font-semibold text-foreground">Your own number, your own
+            leads.</strong>{" "}
+            When this is switched on, you sign up for a WhatsApp Business account from
+            inside the CRM — the same Add button, no forms to fill in elsewhere — and
+            people who message you from a Click-to-WhatsApp ad become leads in your queue
+            automatically, tagged with the ad they came from.
+          </p>
+          <p className="px-1 text-[11px] leading-relaxed text-muted-foreground">
+            One thing to know before you do it: the number you register leaves the normal
+            WhatsApp app for good. Use a spare SIM, not the phone you chat on.
+          </p>
+        </div>
       </section>
     </div>
   );
