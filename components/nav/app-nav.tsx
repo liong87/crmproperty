@@ -29,7 +29,13 @@ const ICONS: Record<string, LucideIcon> = {
   "/users": UserCog,
 };
 
-export interface NavLink { href: string; label: string }
+export interface NavLink {
+  href: string;
+  label: string;
+  /** A count on the right of the row. Zero renders NOTHING — a "0" badge is noise
+   *  that trains the eye to ignore the badge entirely, which defeats the point. */
+  badge?: number;
+}
 
 /**
  * A section of the sidebar.
@@ -47,7 +53,10 @@ export interface NavLink { href: string; label: string }
 export interface NavGroup {
   label: string | null;
   links: NavLink[];
+  /** Folds behind its heading. Workspace and Lead management never do. */
   collapsible?: boolean;
+  /** Included in the mobile strip. A phone gets what you do today, nothing else. */
+  mobile?: boolean;
 }
 
 export function AppNav({ groups, variant }: { groups: NavGroup[]; variant: "sidebar" | "bar" }) {
@@ -57,6 +66,7 @@ export function AppNav({ groups, variant }: { groups: NavGroup[]; variant: "side
 
   const item = (l: NavLink) => {
     const Icon = ICONS[l.href] ?? LayoutDashboard;
+    const isActive = active(l.href);
     return (
       <Link
         key={l.href}
@@ -64,13 +74,23 @@ export function AppNav({ groups, variant }: { groups: NavGroup[]; variant: "side
         aria-current={active(l.href) ? "page" : undefined}
         className={cn(
           "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-          active(l.href)
+          isActive
             ? "bg-brand-gradient text-primary-foreground shadow-md shadow-primary/25"
             : "text-muted-foreground hover:bg-gray-900/5 hover:text-foreground dark:hover:bg-white/10",
         )}
       >
         <Icon className="h-4 w-4 shrink-0" />
-        {l.label}
+        <span className="truncate">{l.label}</span>
+        {l.badge !== undefined && l.badge > 0 && (
+          <span
+            className={cn(
+              "ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums",
+              isActive ? "bg-white/20 text-primary-foreground" : "bg-secondary text-secondary-foreground",
+            )}
+          >
+            {l.badge}
+          </span>
+        )}
       </Link>
     );
   };
@@ -125,7 +145,7 @@ export function AppNav({ groups, variant }: { groups: NavGroup[]; variant: "side
    * edits a commission scheme.
    */
   const barLinks: NavLink[] = [
-    ...(visible.find((g) => g.label === null)?.links ?? []),
+    ...visible.filter((g) => g.label === null || g.mobile).flatMap((g) => g.links),
     { href: "/more", label: "More" },
   ];
 
@@ -145,7 +165,14 @@ export function AppNav({ groups, variant }: { groups: NavGroup[]; variant: "side
               : "text-muted-foreground",
             )}
           >
-            <Icon className="h-[18px] w-[18px]" />
+            <span className="relative">
+              <Icon className="h-[18px] w-[18px]" />
+              {l.badge !== undefined && l.badge > 0 && (
+                <span className="absolute -right-2 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-[9px] font-bold leading-[14px] text-primary-foreground">
+                  {l.badge}
+                </span>
+              )}
+            </span>
             {l.label}
           </Link>
         );

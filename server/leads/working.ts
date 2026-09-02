@@ -43,23 +43,40 @@ export interface WorkingLead {
   createdAt: Date;
 }
 
+/**
+ * The outer lead id, EXPLICITLY QUALIFIED.
+ *
+ * This is not fussiness. Interpolating `${leads.id}` renders as the bare `"id"`,
+ * because drizzle drops the table prefix when it is unambiguous at the top level of a
+ * query. Inside a correlated subquery it is NOT unambiguous: `activities` and
+ * `appointments` both have their own `id`, PostgreSQL resolves the unqualified name in
+ * the innermost scope first, and the correlation quietly becomes `ap.lead_id = ap.id`
+ * — always false. No error, just zeroes.
+ *
+ * That is the worst kind of bug: the follow-up rate, the dormancy badge and the
+ * Appointment tab all returned confident, wrong numbers. Qualifying the reference is
+ * the fix; sql.raw is safe here because nothing in it comes from user input.
+ */
+const LEAD_ID = sql.raw('"leads"."id"');
+const LEAD_PROJECT_ID = sql.raw('"leads"."project_id"');
+
 const lastTouchSql = sql<Date | null>`(
   select max(a.occurred_at) from activities a
-  where a.entity_type = 'leads' and a.entity_id = ${leads.id}
+  where a.entity_type = 'leads' and a.entity_id = ${LEAD_ID}
     and a.deleted_at is null
     and a.type in ('call','whatsapp','email','appointment','viewing')
 )`;
 
 const touchCountSql = sql<number>`(
   select count(*)::int from activities a
-  where a.entity_type = 'leads' and a.entity_id = ${leads.id}
+  where a.entity_type = 'leads' and a.entity_id = ${LEAD_ID}
     and a.deleted_at is null
     and a.type in ('call','whatsapp','email','appointment','viewing')
 )`;
 
 const openApptSql = sql<number>`(
   select count(*)::int from appointments ap
-  where ap.lead_id = ${leads.id}
+  where ap.lead_id = ${LEAD_ID}
     and ap.status = 'scheduled'
     and ap.deleted_at is null
 )`;
@@ -83,7 +100,7 @@ export async function listWorkingLeads(user: User, tab: WorkingTab): Promise<Wor
       budgetMax: leads.budgetMax,
       createdAt: leads.createdAt,
       projectName: sql<string | null>`(
-        select p.name from projects p where p.id = ${leads.projectId}
+        select p.name from projects p where p.id = ${LEAD_PROJECT_ID}
       )`,
       lastTouchAt: lastTouchSql,
       touchCount: touchCountSql,
@@ -152,10 +169,9 @@ export async function getFollowUpRate(user: User, days = 7): Promise<FollowUpRat
    * ISO string, not a Date, and cast explicitly.
    *
    * Inside a raw `sql` fragment there is no column for drizzle to infer a type from,
-   * so a Date is handed to postgres.js unconverted and it throws ERR_INVALID_ARG_TYPE
-   * while binding the parameter. Anywhere drizzle can see the column — an ordinary
-   * .where(gte(col, date)) — a Date is fine. Here it is not. Reproduced against a real
-   * PostgreSQL 16 before and after this change.
+   * so a Date is handed to postgres.js unconverted and it throws
+   * ERR_INVALID_ARG_TYPE while binding. Anywhere drizzle can see the column — a
+   * normal .where(gte(col, date)) — a Date is fine; here it is not.
    */
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
 
@@ -176,4 +192,32 @@ export async function getFollowUpRate(user: User, days = 7): Promise<FollowUpRat
   const total = row?.total ?? 0;
   const followed = row?.followed ?? 0;
   return { followed, total, pct: total > 0 ? followed / total : null, days };
+}
+
+/**
+ * Just the Active count, for the sidebar badge.
+ *
+ * Its own query rather than reusing countWorkingTabs, which runs three full list
+ * queries and materialises every row. The sidebar renders on EVERY page, so the badge
+ * has to cost one cheap count or it taxes the whole app.
+ */
+export async function countActiveWorkingLeads(user: User): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(leads)
+    .where(
+      and(
+        isNull(leads.deletedAt),
+        eq(leads.assignedTo, user.id),
+        inArray(leads.status, ["new", "contacted", "qualified"]),
+        // Active excludes anything already booked in — that lives on the Appointment tab.
+        sql`not exists (
+          select 1 from appointments ap
+          where ap.lead_id = ${LEAD_ID}
+            and ap.status = 'scheduled'
+            and ap.deleted_at is null
+        )`,
+      ),
+    );
+  return row?.n ?? 0;
 }

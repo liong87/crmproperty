@@ -3,6 +3,7 @@ import Link from "next/link";
 import { syncCurrentUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { UserButton } from "@/lib/auth/provider-components";
 import { AppNav, type NavGroup } from "@/components/nav/app-nav";
+import { countActiveWorkingLeads } from "@/server/leads/working";
 import { APP_NAME } from "@/lib/constants";
 import { BookOpen } from "lucide-react";
 
@@ -27,20 +28,22 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!user.active) redirect("/pending");
 
   const lead = isTeamLeadOrAbove(user);
+  // One cheap count; the sidebar renders on every page.
+  const activeCount = await countActiveWorkingLeads(user);
   const leadOnly = <T,>(items: T[]): T[] => (lead ? items : []);
 
   // Role filtering happens here, on the server, so a team-lead-only href is never sent
   // to an agent's browser at all.
   /**
-   * Six primary links, then everything else folded away.
+   * Grouped by what you are DOING, not by what kind of record it is.
    *
-   * The list was fifteen items under seven headings, which is a lot of reading to find
-   * the one page you want — and the headings did not help, because the eye still has to
-   * pass all of them. What an agent uses every day is now unheaded and on top; what they
-   * touch occasionally is one click away; what only a Team Lead touches is in Settings.
+   * Workspace is today's work; Lead management is where leads come from and how they
+   * are administered. That split is why Leads capture moved out of Settings — routing
+   * rules and the lead database are the same job, and burying capture next to Users
+   * made it feel like configuration rather than part of the pipeline.
    *
-   * Nothing was deleted. Every page still resolves by URL and by the links that lead to
-   * it from the pages where it matters — Contacts from Leads, Properties from Projects.
+   * Workspace and Lead management never collapse: between them they are most of what
+   * anybody opens, and a fold on the thing you use hourly is friction, not tidiness.
    */
   const groups: NavGroup[] = [
     {
@@ -48,34 +51,47 @@ export default async function DashboardLayout({ children }: { children: React.Re
       links: [
         { href: "/dashboard", label: "Dashboard" },
         { href: "/inbox", label: "Inbox" },
-        { href: "/working-leads", label: "Working leads" },
-        { href: "/leads", label: "Leads" },
-        { href: "/appointments", label: "Appointments" },
-        { href: "/pipeline", label: "Pipeline" },
-        { href: "/projects", label: "Projects" },
       ],
     },
     {
-      label: "More",
+      label: "Workspace",
+      mobile: true,
+      links: [
+        { href: "/working-leads", label: "Working leads", badge: activeCount },
+        { href: "/appointments", label: "Appointments" },
+        { href: "/pipeline", label: "Pipeline" },
+      ],
+    },
+    {
+      label: "Lead management",
+      links: [
+        { href: "/leads", label: "Leads" },
+        ...leadOnly([{ href: "/leads-capture", label: "Leads capture" }]),
+        { href: "/reports", label: "Reports" },
+      ],
+    },
+    {
+      label: "Property",
       collapsible: true,
       links: [
-        { href: "/contacts", label: "Contacts" },
         { href: "/properties", label: "Properties" },
-        { href: "/reports", label: "Reports" },
+        { href: "/projects", label: "Projects" },
+        { href: "/contacts", label: "Contacts" },
       ],
     },
     {
       label: "Team",
       collapsible: true,
-      links: leadOnly([{ href: "/team", label: "My team" }]),
+      links: leadOnly([
+        { href: "/team", label: "My team" },
+        { href: "/settings/commission", label: "Commission" },
+      ]),
     },
     {
       label: "Settings",
       collapsible: true,
       links: leadOnly([
-        { href: "/leads-capture", label: "Leads capture" },
         { href: "/templates", label: "Templates" },
-        { href: "/settings/commission", label: "Commission" },
         { href: "/users", label: "Users" },
       ]),
     },
