@@ -169,6 +169,13 @@
       "when": 1788357966653,
       "tag": "0023_gifted_donald_blake",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788360892813,
+      "tag": "0024_fearless_gamma_corps",
+      "breakpoints": true
     }
   ]
 }

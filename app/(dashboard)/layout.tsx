@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { syncCurrentUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { UserButton } from "@/lib/auth/provider-components";
-import { AppNav, type NavGroup } from "@/components/nav/app-nav";
+import { AppNav, type NavGroup, type NavLink } from "@/components/nav/app-nav";
+import { isPinnableHref, MAX_PINS } from "@/lib/nav-links";
 import { countActiveWorkingLeads } from "@/server/leads/working";
 import { APP_NAME } from "@/lib/constants";
 import { COMMISSION_ENABLED } from "@/lib/features";
@@ -72,14 +73,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
       ],
     },
     {
-      // Pinned, not folded: a Team Lead uploads here and an agent checks it the
-      // way they check Inbox, not the way they check Settings. Burying it behind
-      // the same collapse as "My team" and "Commission" would have made a video
-      // meant for today read like admin configuration nobody opens.
-      label: "Learning",
-      links: [{ href: "/learning", label: "Learning Hub" }],
-    },
-    {
       label: "Property",
       collapsible: true,
       links: [
@@ -89,12 +82,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
       ],
     },
     {
+      // Learning Hub is visible to everyone: a Team Lead uploads and publishes,
+      // their downline watches. Only "My team" and "Commission" stay lead-only —
+      // the reason this group is not wrapped in leadOnly() as a whole. Anybody
+      // who wants it out of the fold and up top can pin it (see below), which is
+      // a better answer than the layout deciding that for all three roles.
       label: "Team",
       collapsible: true,
-      links: leadOnly([
-        { href: "/team", label: "My team" },
-        ...(COMMISSION_ENABLED ? [{ href: "/settings/commission", label: "Commission" }] : []),
-      ]),
+      links: [
+        ...leadOnly([{ href: "/team", label: "My team" }]),
+        { href: "/learning", label: "Learning Hub" },
+        ...leadOnly(COMMISSION_ENABLED ? [{ href: "/settings/commission", label: "Commission" }] : []),
+      ],
     },
     {
       label: "Settings",
@@ -105,6 +104,33 @@ export default async function DashboardLayout({ children }: { children: React.Re
       ]),
     },
   ];
+
+  /*
+   * "Pinned": the rows this person lifted to the top themselves.
+   *
+   * Built by looking each saved href up in the groups ABOVE, which are already
+   * role-filtered — so a pin cannot resurrect a page the user has since lost
+   * access to (an agent who was briefly a Team Lead, say, and pinned Users).
+   * An unknown or stale href simply finds nothing and disappears.
+   *
+   * A pinned row is MOVED, not copied. Showing it twice means two rows
+   * highlight for one page and the pin looks like it did nothing.
+   */
+  const pinnedHrefs = (user.pinnedNav ?? []).filter(isPinnableHref);
+  const visibleLinks = groups.flatMap((g) => g.links);
+  const pinnedLinks = pinnedHrefs
+    .map((href) => visibleLinks.find((l) => l.href === href))
+    .filter((l): l is NavLink => l !== undefined)
+    .slice(0, MAX_PINS);
+
+  const pinnedSet = new Set(pinnedLinks.map((l) => l.href));
+  const navGroups: NavGroup[] =
+    pinnedLinks.length === 0
+      ? groups
+      : [
+          { label: "Pinned", links: pinnedLinks, mobile: true },
+          ...groups.map((g) => ({ ...g, links: g.links.filter((l) => !pinnedSet.has(l.href)) })),
+        ];
 
   return (
     <div className="app-shell min-h-dvh sm:flex">
@@ -119,7 +145,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </p>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-4">
-          <AppNav groups={groups} variant="sidebar" />
+          <AppNav groups={navGroups} variant="sidebar" pinned={[...pinnedSet]} pinnable />
         </div>
         <div className="flex items-center justify-between gap-2 border-t border-gray-200/70 px-4 py-3 dark:border-gray-800">
           <span className="truncate text-xs text-muted-foreground">{user.name}</span>
@@ -146,7 +172,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </header>
         {/* Mobile nav */}
         <div className="sticky top-[57px] z-10 border-b border-gray-200/70 bg-card/80 backdrop-blur sm:hidden">
-          <AppNav groups={groups} variant="bar" />
+          <AppNav groups={navGroups} variant="bar" />
         </div>
 
         <main className="mx-auto w-full max-w-5xl flex-1 p-4 sm:p-6">{children}</main>

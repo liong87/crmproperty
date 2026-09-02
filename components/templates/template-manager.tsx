@@ -26,6 +26,33 @@ const PREVIEW = {
   area: "Mont Kiara",
 };
 
+/**
+ * Quick-insert emoji for message bodies.
+ *
+ * A short curated row, not a full picker: this is a WhatsApp message to a
+ * property buyer, and the useful set is small and boring — a greeting, a
+ * viewing, a key, a tick. A 1,800-emoji grid would be a component to maintain
+ * and a decision to make every time somebody writes a template.
+ *
+ * Kept deliberately restrained. One or two in a message reads warm; a message
+ * built out of them reads like spam, which is the fastest way to have an agency
+ * number reported and blocked.
+ */
+const EMOJI: Array<{ char: string; label: string }> = [
+  { char: "👋", label: "Greeting" },
+  { char: "🙏", label: "Thanks" },
+  { char: "😊", label: "Friendly" },
+  { char: "📅", label: "Date" },
+  { char: "⏰", label: "Time" },
+  { char: "📍", label: "Location" },
+  { char: "🏠", label: "Property" },
+  { char: "🔑", label: "Keys" },
+  { char: "💰", label: "Price" },
+  { char: "✅", label: "Confirmed" },
+  { char: "📞", label: "Call" },
+  { char: "📄", label: "Document" },
+];
+
 const BLANK = { key: "", channel: "whatsapp", body: "", active: true };
 
 export function TemplateManager({ initial }: { initial: TemplateRow[] }) {
@@ -113,7 +140,7 @@ export function TemplateManager({ initial }: { initial: TemplateRow[] }) {
             id="body"
             className="min-h-28"
             value={form.body}
-            placeholder="Hi {{name}}, confirming our viewing at {{property}}."
+            placeholder="Hi {{name}} 👋 Confirming our viewing at {{property}} 🏠"
             onChange={(e) => setForm({ ...form, body: e.target.value })}
           />
           <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
@@ -126,6 +153,21 @@ export function TemplateManager({ initial }: { initial: TemplateRow[] }) {
                 onClick={() => setForm((f) => ({ ...f, body: `${f.body}{{${p}}}` }))}
               >
                 {`{{${p}}}`}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+            <span>Emoji:</span>
+            {EMOJI.map((e) => (
+              <button
+                key={e.char}
+                type="button"
+                title={e.label}
+                aria-label={`Insert ${e.label} emoji`}
+                className="rounded px-1 py-0.5 text-base leading-none hover:bg-secondary"
+                onClick={() => setForm((f) => ({ ...f, body: `${f.body}${e.char}` }))}
+              >
+                {e.char}
               </button>
             ))}
           </div>

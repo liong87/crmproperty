@@ -1,12 +1,15 @@
 "use client";
-import { usePathname } from "next/navigation";
+import * as React from "react";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   LayoutDashboard, Inbox, Contact, Building2, Columns3, ChevronRight, BarChart3, UserCog,
   MessageSquareText, CalendarCheck, Landmark, Radio, BookOpen, Percent, BellRing, Users2, Settings2, LayoutGrid, ListChecks, GraduationCap,
+  Pin, PinOff,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toggleNavPin } from "@/server/users/nav-pins";
 
 const ICONS: Record<string, LucideIcon> = {
   "/dashboard": LayoutDashboard,
@@ -60,45 +63,113 @@ export interface NavGroup {
   mobile?: boolean;
 }
 
-export function AppNav({ groups, variant }: { groups: NavGroup[]; variant: "sidebar" | "bar" }) {
+export function AppNav({
+  groups, variant, pinned, pinnable,
+}: {
+  groups: NavGroup[];
+  variant: "sidebar" | "bar";
+  /** Hrefs currently in the user's "Pinned" group, so each row knows its state. */
+  pinned?: string[];
+  /** Render the pin toggles. Sidebar only — the mobile strip has no room for them. */
+  pinnable?: boolean;
+}) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [pinPending, startPin] = React.useTransition();
+  const [pinError, setPinError] = React.useState<string | null>(null);
   const active = (href: string) => pathname === href || pathname.startsWith(href + "/");
   const visible = groups.filter((g) => g.links.length > 0);
+  const pinnedSet = React.useMemo(() => new Set(pinned ?? []), [pinned]);
 
+  const showPins = pinnable && variant === "sidebar";
+
+  function togglePin(href: string) {
+    setPinError(null);
+    startPin(async () => {
+      const res = await toggleNavPin(href);
+      if (!res.success) {
+        // The realistic failure is the pin cap, and a click that visibly does
+        // nothing is worse than a line of text: the user tries again, harder,
+        // and concludes the button is broken.
+        setPinError(res.error ?? "Could not change your pinned pages.");
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  /**
+   * One row.
+   *
+   * The pin button is a SIBLING of the Link, not a child: a <button> inside an
+   * <a> is invalid HTML, and browsers resolve the nesting by making the click
+   * target ambiguous — you would pin a page by trying to open it.
+   */
   const item = (l: NavLink) => {
     const Icon = ICONS[l.href] ?? LayoutDashboard;
     const isActive = active(l.href);
+    const isPinned = pinnedSet.has(l.href);
     return (
-      <Link
-        key={l.href}
-        href={l.href}
-        aria-current={active(l.href) ? "page" : undefined}
-        className={cn(
-          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-          isActive
-            ? "bg-brand-gradient text-primary-foreground shadow-md shadow-primary/25"
-            : "text-muted-foreground hover:bg-gray-900/5 hover:text-foreground dark:hover:bg-white/10",
-        )}
-      >
-        <Icon className="h-4 w-4 shrink-0" />
-        <span className="truncate">{l.label}</span>
-        {l.badge !== undefined && l.badge > 0 && (
-          <span
+      <div key={l.href} className="group/row relative flex items-center">
+        <Link
+          href={l.href}
+          aria-current={isActive ? "page" : undefined}
+          className={cn(
+            "flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+            isActive
+              ? "bg-brand-gradient text-primary-foreground shadow-md shadow-primary/25"
+              : "text-muted-foreground hover:bg-gray-900/5 hover:text-foreground dark:hover:bg-white/10",
+          )}
+        >
+          <Icon className="h-4 w-4 shrink-0" />
+          <span className="truncate">{l.label}</span>
+          {l.badge !== undefined && l.badge > 0 && (
+            <span
+              className={cn(
+                "ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums",
+                isActive ? "bg-white/20 text-primary-foreground" : "bg-secondary text-secondary-foreground",
+              )}
+            >
+              {l.badge}
+            </span>
+          )}
+        </Link>
+
+        {showPins && (
+          <button
+            type="button"
+            title={isPinned ? "Unpin from top" : "Pin to top"}
+            aria-label={isPinned ? `Unpin ${l.label}` : `Pin ${l.label} to top`}
+            aria-pressed={isPinned}
+            disabled={pinPending}
+            onClick={() => togglePin(l.href)}
             className={cn(
-              "ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums",
-              isActive ? "bg-white/20 text-primary-foreground" : "bg-secondary text-secondary-foreground",
+              // Hidden until the row is hovered or the button is focused, so a
+              // sidebar at rest is still a list of pages rather than a list of
+              // pages plus fifteen controls. An already-pinned row keeps its
+              // button visible — that is the only affordance for unpinning.
+              "absolute right-1.5 grid h-6 w-6 shrink-0 place-items-center rounded-md opacity-0 transition group-hover/row:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              isPinned && "opacity-100",
+              isActive
+                ? "text-primary-foreground hover:bg-white/20"
+                : "bg-card text-muted-foreground hover:text-foreground",
             )}
           >
-            {l.badge}
-          </span>
+            {isPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+          </button>
         )}
-      </Link>
+      </div>
     );
   };
 
   if (variant === "sidebar") {
     return (
       <nav className="flex flex-col gap-4">
+        {pinError && (
+          <p role="status" className="px-3 text-[11px] leading-snug text-destructive">
+            {pinError}
+          </p>
+        )}
         {visible.map((group) => {
           if (group.label === null) {
             return (
