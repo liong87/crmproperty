@@ -1,3 +1,4 @@
+import { PageTitle } from "@/components/ui/page-title";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
@@ -40,10 +41,7 @@ export default async function MorePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-xl font-semibold">More</h1>
-        <p className="text-sm text-muted-foreground">Everything that is not on the main menu.</p>
-      </div>
+      <PageTitle title="More">Everything that is not on the main menu.</PageTitle>
 
       <Section title="Everyday" entries={everyday} />
       {forLeads.length > 0 && <Section title="For team leads" entries={forLeads} />}

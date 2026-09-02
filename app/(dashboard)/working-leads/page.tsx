@@ -7,6 +7,8 @@ import {
 } from "@/server/leads/working";
 import { WorkingLeadCard } from "@/components/leads/working-lead-card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PageTitle } from "@/components/ui/page-title";
+import { Segmented } from "@/components/ui/segmented";
 import { STATUS } from "@/lib/chart-colors";
 import { cn } from "@/lib/utils";
 
@@ -51,37 +53,40 @@ export default async function WorkingLeadsPage({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-semibold">Working leads</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            <span className="font-semibold tabular-nums text-foreground">{counts.active}</span>{" "}
-            {counts.active === 1 ? "lead" : "leads"} to work on, quietest first.
-          </p>
-        </div>
+      <PageTitle
+        title="Working leads"
+        count={counts.active}
+        actions={
+          /* The follow-up pill. The design system puts one number and a clause in the
+             header; this is the second number the product genuinely nags you about. */
+          <div className="rounded-2xl border border-gray-100 bg-card px-4 py-2.5 dark:border-gray-800">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+              Followed up · {rate.days} days
+            </p>
+            <p className="mt-0.5 text-sm">
+              <span
+                className="text-lg font-bold tabular-nums"
+                style={pctTone ? { color: pctTone } : undefined}
+              >
+                {pctLabel}
+              </span>{" "}
+              <span className="tabular-nums text-muted-foreground">
+                {rate.followed}/{rate.total} touched
+              </span>
+            </p>
+          </div>
+        }
+      >
+        {counts.active === 1 ? "lead" : "leads"} to work on, quietest first.
+      </PageTitle>
 
-        {/* The follow-up pill. The spec makes this the primary KPI and puts it on every
-            screen — it nags you to touch leads rather than admire them. */}
-        <div className="rounded-xl border bg-card px-3.5 py-2 shadow-sm">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-muted-foreground/70">
-            Followed up · last {rate.days} days
-          </p>
-          <p className="mt-0.5 text-sm">
-            <span className="text-lg font-semibold tabular-nums" style={pctTone ? { color: pctTone } : undefined}>
-              {pctLabel}
-            </span>{" "}
-            <span className="text-muted-foreground tabular-nums">
-              {rate.followed}/{rate.total} touched
-            </span>
-          </p>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-1.5">
-        <Tab href="/working-leads" label="Active" count={counts.active} active={tab === "active"} />
-        <Tab href="/working-leads?tab=appointment" label="Appointment" count={counts.appointment} active={tab === "appointment"} />
-        <Tab href="/working-leads?tab=inactive" label="Inactive" count={counts.inactive} active={tab === "inactive"} />
-      </div>
+      <Segmented
+        items={[
+          { href: "/working-leads", label: "Active", count: counts.active, active: tab === "active" },
+          { href: "/working-leads?tab=appointment", label: "Appointment", count: counts.appointment, active: tab === "appointment" },
+          { href: "/working-leads?tab=inactive", label: "Inactive", count: counts.inactive, active: tab === "inactive" },
+        ]}
+      />
 
       {items.length === 0 ? (
         <EmptyState
@@ -115,27 +120,5 @@ export default async function WorkingLeadsPage({
         is the full database.
       </p>
     </div>
-  );
-}
-
-function Tab({
-  href, label, count, active,
-}: {
-  href: string; label: string; count: number; active: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      aria-current={active ? "page" : undefined}
-      className={cn(
-        "inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors",
-        active
-          ? "border-primary bg-primary text-primary-foreground"
-          : "border-input bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground",
-      )}
-    >
-      {label}
-      <span className={cn("tabular-nums", active ? "opacity-80" : "opacity-60")}>{count}</span>
-    </Link>
   );
 }

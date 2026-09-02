@@ -1,3 +1,4 @@
+import { PageTitle } from "@/components/ui/page-title";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Users2, Phone, MessageCircle, Inbox } from "lucide-react";
@@ -37,17 +38,13 @@ export default async function TeamPage({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="font-display text-xl font-semibold">My team</h1>
-          <p className="text-sm text-muted-foreground">
-            {members.length === 0
-              ? "Nobody reports to you yet."
-              : `${members.length} ${members.length === 1 ? "person" : "people"} reporting to you.`}
-          </p>
-        </div>
-        <RangeFilter days={days} basePath="/team" />
-      </div>
+      <PageTitle
+        title="My team"
+        count={members.length}
+        actions={<RangeFilter days={days} basePath="/team" />}
+      >
+        {members.length === 1 ? "person" : "people"} reporting to you.
+      </PageTitle>
 
       {members.length === 0 ? (
         <EmptyState

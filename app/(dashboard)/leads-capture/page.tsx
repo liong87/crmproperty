@@ -1,3 +1,4 @@
+import { PageTitle } from "@/components/ui/page-title";
 import { redirect } from "next/navigation";
 import { Facebook, Globe, MessageCircle, CircleAlert, CircleCheck } from "lucide-react";
 import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
@@ -44,12 +45,9 @@ export default async function LeadsCapturePage({
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="font-display text-xl font-semibold">Leads capture</h1>
-        <p className="text-sm text-muted-foreground">
-          Where leads come from, and which project each source feeds.
-        </p>
-      </div>
+      <PageTitle title="Leads capture" count={sources.length}>
+        {sources.length === 1 ? "source" : "sources"} feeding your projects.
+      </PageTitle>
 
       {/* The OAuth round trip comes back through the query string, because a redirect
           from facebook.com cannot carry anything else. */}

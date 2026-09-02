@@ -8,6 +8,8 @@ import { LEAD_STATUS } from "@/lib/constants";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LeadsTable } from "@/components/leads/leads-table";
+import { PageTitle } from "@/components/ui/page-title";
+import { FilterChip } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
 
 export default async function LeadsPage({
@@ -61,24 +63,23 @@ export default async function LeadsPage({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-semibold">Leads</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            <span className="font-semibold tabular-nums text-foreground">{total}</span>{" "}
-            {total === 1 ? "lead" : "leads"}
-            {status || sp.q ? " matching your filters" : " in your database"}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/leads/import" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-            <Upload className="mr-1.5 h-3.5 w-3.5" /> Import CSV
-          </Link>
-          <Link href="/leads/new" className={cn(buttonVariants({ size: "sm" }))}>
-            <Plus className="mr-1.5 h-4 w-4" /> New lead
-          </Link>
-        </div>
-      </div>
+      <PageTitle
+        title="Leads"
+        count={total}
+        actions={
+          <>
+            <Link href="/leads/import" className={cn(buttonVariants({ variant: "outline" }))}>
+              <Upload className="h-4 w-4" /> Import CSV
+            </Link>
+            <Link href="/leads/new" className={cn(buttonVariants())}>
+              <Plus className="h-4 w-4" /> Add lead
+            </Link>
+          </>
+        }
+      >
+        {total === 1 ? "lead" : "leads"}
+        {status || sp.q ? " matching your filters" : " in your database"}
+      </PageTitle>
 
       {/* Search stays a plain form: it works without JavaScript and survives a reload. */}
       <form action="/leads" className="flex flex-wrap items-center gap-2">
@@ -90,18 +91,18 @@ export default async function LeadsPage({
             name="q"
             defaultValue={sp.q ?? ""}
             placeholder="Search name, phone, email…"
-            className="h-11 w-full rounded-xl border border-input bg-card pl-9 pr-3 text-sm shadow-sm outline-none transition-shadow placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-10 w-full rounded-xl border border-input bg-card pl-9 pr-4 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
         </div>
-        <Button type="submit" variant="outline" size="sm">Search</Button>
+        <Button type="submit" variant="outline">Search</Button>
       </form>
 
       {/* Status as chips rather than a <select>: the current filter is visible without
           opening anything, and clearing it is one click. */}
       <div className="flex flex-wrap gap-1.5">
-        <Chip href={withParams({ status: undefined })} label="All" active={!status} />
+        <FilterChip href={withParams({ status: undefined })} label="All" active={!status} />
         {LEAD_STATUS.map((s) => (
-          <Chip key={s} href={withParams({ status: s })} label={s} active={status === s} />
+          <FilterChip key={s} href={withParams({ status: s })} label={s} active={status === s} />
         ))}
       </div>
 
@@ -157,22 +158,5 @@ export default async function LeadsPage({
         </div>
       )}
     </div>
-  );
-}
-
-function Chip({ href, label, active }: { href: string; label: string; active: boolean }) {
-  return (
-    <Link
-      href={href}
-      aria-current={active ? "page" : undefined}
-      className={cn(
-        "rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition-colors",
-        active
-          ? "border-primary bg-primary text-primary-foreground"
-          : "border-input bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground",
-      )}
-    >
-      {label}
-    </Link>
   );
 }

@@ -82,10 +82,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   ];
 
   return (
-    <div className="min-h-dvh sm:flex">
+    <div className="app-shell min-h-dvh sm:flex">
       {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r bg-card sm:flex">
-        <div className="border-b px-4 py-4">
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col sm:flex">
+        <div className="px-4 py-5">
           <Link href="/dashboard" className="block font-display text-lg font-semibold leading-tight text-primary">
             {APP_NAME}
           </Link>
@@ -96,7 +96,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <div className="flex-1 overflow-y-auto px-4 py-4">
           <AppNav groups={groups} variant="sidebar" />
         </div>
-        <div className="flex items-center justify-between gap-2 border-t px-4 py-3">
+        <div className="flex items-center justify-between gap-2 border-t border-gray-200/70 px-4 py-3 dark:border-gray-800">
           <span className="truncate text-xs text-muted-foreground">{user.name}</span>
           <div className="flex shrink-0 items-center gap-1">
             {/* The guide is reference, not a destination — an icon, not a nav row. */}
@@ -115,12 +115,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile top bar */}
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-card/90 px-4 py-3 backdrop-blur sm:hidden">
+        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200/70 bg-card/80 px-4 py-3 backdrop-blur sm:hidden">
           <Link href="/dashboard" className="font-display text-base font-semibold text-primary">{APP_NAME}</Link>
           <UserButton />
         </header>
         {/* Mobile nav */}
-        <div className="sticky top-[57px] z-10 border-b bg-card/90 backdrop-blur sm:hidden">
+        <div className="sticky top-[57px] z-10 border-b border-gray-200/70 bg-card/80 backdrop-blur sm:hidden">
           <AppNav groups={groups} variant="bar" />
         </div>
 

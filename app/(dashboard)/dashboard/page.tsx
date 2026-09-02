@@ -13,6 +13,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/reports/stat-tile";
 import { FunnelStrip } from "@/components/reports/funnel-strip";
 import { RangeFilter, parseRangeDays, rangeLabel } from "@/components/reports/range-filter";
+import { PageTitle } from "@/components/ui/page-title";
 import { FollowUpList } from "@/components/activities/follow-up-list";
 
 export default async function DashboardPage({
@@ -44,27 +45,23 @@ export default async function DashboardPage({
       : funnel.noShowRate > 0.15 ? STATUS.warning
       : STATUS.good;
   const firstName = user.name.split(" ")[0] ?? user.name;
+  // Malaysia time, so the greeting matches the agent's actual afternoon.
+  const hour = Number(
+    new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: "Asia/Kuala_Lumpur" })
+      .format(new Date()),
+  );
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   return (
     <div className="space-y-6">
-      {/* Greeting band. The tint is the existing secondary token, not a new colour:
-          it separates "who and when" from the numbers without adding to the palette. */}
-      <div className="rounded-xl border bg-secondary/40 px-5 py-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
-              {report.scope === "team" ? "Team overview" : "Your workspace"}
-            </p>
-            <h1 className="mt-1 font-display text-2xl font-semibold">Welcome back, {firstName}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {overdue > 0
-                ? `${overdue} follow-up${overdue > 1 ? "s are" : " is"} overdue — worth a look.`
-                : "Nothing overdue. Here's where things stand."}
-            </p>
-          </div>
-          <RangeFilter days={days} basePath="/dashboard" />
-        </div>
-      </div>
+      <PageTitle
+        title={`${greeting}, ${firstName}`}
+        actions={<RangeFilter days={days} basePath="/dashboard" />}
+      >
+        {overdue > 0
+          ? `${overdue} follow-up${overdue > 1 ? "s are" : " is"} overdue — worth a look.`
+          : "Here's how your leads are moving."}
+      </PageTitle>
 
       {docsDue.overdue > 0 && (
         <Link

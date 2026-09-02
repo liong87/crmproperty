@@ -2,39 +2,96 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * Palette from DESIGNSYSTEM.md — measured off ZIEN's computed styles, not eyeballed.
+ *
+ * The load-bearing choice is the canvas: #eef2f9, not white. White cards then read as
+ * raised without needing a shadow, which is why the whole app carries exactly one
+ * box-shadow (the active segmented tab) and still has depth.
+ *
+ * Kept in the existing HSL-token shape so every component that already reads
+ * --primary / --border keeps working; only the values moved.
+ */
 @layer base {
   :root {
-    /* Tropical estate: deep teal + warm amber on warm off-white */
-    --background: 40 33% 98%;
-    --foreground: 177 42% 11%;
+    --background: 218 43% 95%;        /* #eef2f9 canvas */
+    --foreground: 222 47% 11%;        /* slate-900 */
     --card: 0 0% 100%;
-    --card-foreground: 177 42% 11%;
-    --primary: 179 74% 19%;
-    --primary-foreground: 40 33% 97%;
-    --secondary: 176 27% 93%;
-    --secondary-foreground: 179 55% 15%;
-    --accent: 40 82% 52%;
-    --accent-foreground: 30 50% 14%;
-    --muted: 44 22% 93%;
-    --muted-foreground: 186 9% 40%;
-    --destructive: 6 63% 45%;
-    --destructive-foreground: 40 33% 97%;
-    --border: 44 22% 88%;
-    --input: 44 22% 88%;
-    --ring: 179 74% 26%;
-    --radius: 0.7rem;
+    --card-foreground: 222 47% 11%;
+    --primary: 221 83% 53%;           /* brand-600 #2563eb */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96%;         /* gray-100 */
+    --secondary-foreground: 221 39% 25%;
+    --accent: 199 89% 48%;            /* sky-500, the gradient end */
+    --accent-foreground: 0 0% 100%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;   /* gray-500 — labels, idle tabs */
+    --destructive: 0 72% 51%;         /* red-600 */
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;            /* gray-200 — controls */
+    --input: 220 13% 91%;
+    --ring: 217 91% 60%;              /* blue-500 */
+    --radius: 0.75rem;                /* 12px: buttons, inputs, pills */
   }
+
+  .dark {
+    /* Mechanical mapping from §5. Same glow, lower alpha, applied on .app-shell. */
+    --background: 222 47% 8%;
+    --foreground: 0 0% 100%;
+    --card: 221 39% 11%;
+    --card-foreground: 0 0% 100%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 215 28% 17%;
+    --secondary-foreground: 210 40% 96%;
+    --accent: 199 89% 48%;
+    --accent-foreground: 0 0% 100%;
+    --muted: 215 28% 17%;
+    --muted-foreground: 215 20% 65%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 215 28% 20%;
+    --input: 215 28% 20%;
+    --ring: 217 91% 60%;
+  }
+
   * { @apply border-border; }
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  /* Page + section titles pick up the display serif automatically. */
-  h1 { font-family: var(--font-display), Georgia, serif; letter-spacing: -0.015em; }
+  /* Headings take the display face automatically; tracking-tight does much of the work. */
+  h1 { font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif; letter-spacing: -0.02em; }
+}
+
+@layer components {
+  /**
+   * The page canvas: one soft blue glow bleeding in from off-canvas, top right.
+   * Subtle enough that you do not consciously see it, and most of why the app does
+   * not look flat.
+   */
+  .app-shell {
+    background-color: hsl(var(--background));
+    background-image: radial-gradient(
+      900px 420px at 78% -8%,
+      rgba(147, 197, 253, 0.55),
+      transparent 60%
+    );
+    background-attachment: fixed;
+  }
+  .dark .app-shell {
+    background-image: radial-gradient(
+      900px 420px at 78% -8%,
+      rgba(37, 99, 235, 0.18),
+      transparent 60%
+    );
+  }
 }
 
 @layer utilities {
   .tnum { font-variant-numeric: tabular-nums; }
-  .font-display { font-family: var(--font-display), Georgia, serif; }
+  .font-display { font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif; }
+  /* One accent, used as a gradient. Nothing else competes. */
+  .bg-brand-gradient { @apply bg-gradient-to-r from-primary to-accent; }
 }

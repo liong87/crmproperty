@@ -65,8 +65,8 @@ export function AppNav({ groups, variant }: { groups: NavGroup[]; variant: "side
         className={cn(
           "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
           active(l.href)
-            ? "bg-primary text-primary-foreground shadow-sm"
-            : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+            ? "bg-gradient-to-r from-primary to-accent text-primary-foreground shadow-md shadow-primary/25"
+            : "text-muted-foreground hover:bg-gray-900/5 hover:text-foreground dark:hover:bg-white/10",
         )}
       >
         <Icon className="h-4 w-4 shrink-0" />
@@ -140,7 +140,9 @@ export function AppNav({ groups, variant }: { groups: NavGroup[]; variant: "side
             aria-current={active(l.href) ? "page" : undefined}
             className={cn(
               "flex shrink-0 flex-col items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-medium transition-colors",
-              active(l.href) ? "bg-primary text-primary-foreground" : "text-muted-foreground",
+              active(l.href)
+              ? "bg-gradient-to-r from-primary to-accent text-primary-foreground"
+              : "text-muted-foreground",
             )}
           >
             <Icon className="h-[18px] w-[18px]" />
