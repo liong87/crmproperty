@@ -4,7 +4,7 @@
  *
  * Rules (prompt_crm_v2.md):
  *  - Qualifying creates a contact, copies all person + consent fields.
- *  - Sets leads.converted_to_contact_id and lead status = 'qualified'.
+ *  - Sets leads.converted_to_contact_id and lead status = 'closed'.
  *  - The lead row is never deleted; it becomes read-only (guarded in lead actions).
  *  - Activities on the lead stay on the lead; new activities go on the contact.
  *  - Deals can only be created against contacts.
@@ -70,7 +70,7 @@ export async function qualifyLead(
       //    rolling the whole transaction back.
       const claimed = await tx
         .update(leads)
-        .set({ status: "qualified", convertedToContactId: contactId })
+        .set({ status: "closed", convertedToContactId: contactId })
         .where(and(eq(leads.id, leadId), isNull(leads.convertedToContactId)))
         .returning({ contactId: leads.convertedToContactId });
 

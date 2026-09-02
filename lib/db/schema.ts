@@ -103,7 +103,12 @@ export const leads = pgTable(
     budgetMin: bigint("budget_min", { mode: "number" }), // MYR integer cents
     budgetMax: bigint("budget_max", { mode: "number" }),
     preferredAreas: text("preferred_areas"), // comma/JSON list of areas
-    status: varchar("status", { length: 20 }).notNull().default("new"), // new | contacted | qualified | disqualified
+    /**
+     * A CALL OUTCOME. See LEAD_STATUS_META for the list and each one's stage group;
+     * every query keys off the group, never off a name.
+     * 30 chars because "unmatched-req" and friends do not fit the old 20.
+     */
+    status: varchar("status", { length: 30 }).notNull().default("new"),
     assignedTo: uuid("assigned_to").references(() => users.id, { onDelete: "set null" }),
     consentGivenAt: timestamp("consent_given_at", { withTimezone: true }),
     consentSource: varchar("consent_source", { length: 255 }),
@@ -120,6 +125,15 @@ export const leads = pgTable(
      * sweep measures "how long has this person sat on it", not "how old is the lead".
      */
     assignedAt: timestamp("assigned_at", { withTimezone: true }),
+    /**
+     * Denormalised follow-up counters, maintained by the remark thread.
+     *
+     * Only a MANUAL remark moves these. System entries must not inflate the follow-up
+     * rate, or the number stops meaning "somebody spoke to this person" — which is the
+     * only thing it is for.
+     */
+    lastFollowUpAt: timestamp("last_follow_up_at", { withTimezone: true }),
+    followUpCount: integer("follow_up_count").notNull().default(0),
     ...timestamps,
   },
   (t) => ({
@@ -563,6 +577,44 @@ export const leadFormSources = pgTable(
   (t) => ({
     lookupIdx: index("lead_form_sources_lookup_idx").on(t.provider, t.externalFormId),
     projectIdx: index("lead_form_sources_project_idx").on(t.projectId),
+  }),
+);
+
+/* ---------- lead remarks ---------- */
+
+/**
+ * The remark thread on a lead. APPEND ONLY.
+ *
+ * A lead is worked over weeks and every call is a separate fact, so a single remark
+ * field that gets overwritten destroys the history an agent needs — and the evidence
+ * behind the follow-up rate. Nothing here is ever edited or deleted; there is no edit
+ * affordance in the UI and no update action in the server layer.
+ *
+ * `status` records the outcome applied WITH this remark. Status changes and remarks are
+ * written together, deliberately: it is not possible to move a lead without saying why,
+ * which is what keeps the history complete enough to trust.
+ */
+export const leadRemarks = pgTable(
+  "lead_remarks",
+  {
+    id: id(),
+    leadId: uuid("lead_id")
+      .notNull()
+      .references(() => leads.id, { onDelete: "cascade" }),
+    /** Null for system entries — nobody typed them. */
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    /** May be empty when only the status changed. */
+    body: text("body"),
+    /** The status applied with this remark, if any. */
+    status: varchar("status", { length: 30 }),
+    /** manual | system. Only `manual` counts as a follow-up. */
+    kind: varchar("kind", { length: 10 }).notNull().default("manual"),
+    ...timestamps,
+  },
+  (t) => ({
+    // Every read is "this lead's thread, newest first".
+    leadIdx: index("lead_remarks_lead_idx").on(t.leadId, t.createdAt),
+    userIdx: index("lead_remarks_user_idx").on(t.userId),
   }),
 );
 

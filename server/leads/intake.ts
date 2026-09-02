@@ -11,13 +11,13 @@
  *  - Log to activity + message_log
  */
 import { z } from "zod";
-import { and, eq, isNull, ne, or, asc, desc, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { leads, users, activities, assignmentCounter, leadAssignments } from "@/lib/db/schema";
 import { pickFromPool } from "./pool";
 import { messaging } from "@/lib/messaging";
 import { monitoring } from "@/lib/monitoring";
-import { LEAD_SOURCE, INTEREST } from "@/lib/constants";
+import { LEAD_SOURCE, INTEREST, DEAD_STATUSES } from "@/lib/constants";
 import type { ActionResult } from "@/types";
 import { ok, fail } from "@/lib/action-result";
 
@@ -131,7 +131,7 @@ export async function createLeadFromIntake(
         and(
           isNull(leads.deletedAt),
           isNull(leads.convertedToContactId),
-          ne(leads.status, "disqualified"),
+          notInArray(leads.status, DEAD_STATUSES),
           p.email
             ? or(eq(leads.phone, p.phone), eq(leads.email, p.email))
             : eq(leads.phone, p.phone),

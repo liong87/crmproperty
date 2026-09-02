@@ -1,13 +1,21 @@
+import { statusGroup } from "@/lib/constants";
 /** Semantic tint classes for status badges (palette-derived, not raw traffic-light). */
+/**
+ * Status chip colours, keyed by STAGE GROUP rather than by name.
+ *
+ * Nine names would be nine cases to forget; five groups is the whole vocabulary and a
+ * new status inherits a sensible colour the moment it is added to the list.
+ */
 export function leadStatusTone(status: string): string {
-  switch (status) {
+  switch (statusGroup(status)) {
     case "new": return "bg-secondary text-secondary-foreground";
-    case "contacted": return "bg-accent/15 text-accent-foreground";
-    case "qualified": return "bg-primary/10 text-primary";
-    case "disqualified": return "bg-muted text-muted-foreground";
-    default: return "bg-muted text-muted-foreground";
+    case "working": return "bg-accent/15 text-accent-foreground";
+    case "appointment": return "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200";
+    case "closed": return "bg-primary/10 text-primary";
+    case "dead": return "bg-muted text-muted-foreground";
   }
 }
+
 
 export function propertyStatusTone(status: string): string {
   switch (status) {

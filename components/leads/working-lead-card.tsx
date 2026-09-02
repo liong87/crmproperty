@@ -4,11 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Phone, MessageCircle, CalendarPlus, Check, Loader2, Clock } from "lucide-react";
 import { logActivity } from "@/server/activities/actions";
-import { updateLead } from "@/server/leads/actions";
-import { LEAD_STATUS } from "@/lib/constants";
+import { statusLabel } from "@/lib/constants";
+import { RemarkThread } from "./remark-thread";
 import type { WorkingLead } from "@/server/leads/working";
 import { Badge } from "@/components/ui/badge";
-import { Select } from "@/components/ui/select";
 import { leadStatusTone } from "@/lib/status";
 import { formatMYR, cn } from "@/lib/utils";
 import { STATUS } from "@/lib/chart-colors";
@@ -54,14 +53,7 @@ export function WorkingLeadCard({ lead, waTemplate }: { lead: WorkingLead; waTem
     });
   }
 
-  function setStatus(status: string) {
-    setError(null);
-    start(async () => {
-      const res = await updateLead({ id: lead.id, status });
-      if (!res.success) return setError(res.error ?? "Could not update.");
-      router.refresh();
-    });
-  }
+
 
   const waHref = `https://wa.me/${lead.phone.replace(/\D/g, "")}?text=${encodeURIComponent(
     waTemplate.replace("{name}", lead.name.split(" ")[0] ?? lead.name),
@@ -81,7 +73,7 @@ export function WorkingLeadCard({ lead, waTemplate }: { lead: WorkingLead; waTem
             {lead.phone}
           </a>
         </div>
-        <Badge className={leadStatusTone(lead.status)}>{lead.status}</Badge>
+        <Badge className={leadStatusTone(lead.status)}>{statusLabel(lead.status)}</Badge>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
@@ -141,17 +133,18 @@ export function WorkingLeadCard({ lead, waTemplate }: { lead: WorkingLead; waTem
           <CalendarPlus className="h-3.5 w-3.5" /> Book
         </Link>
 
-        <Select
-          aria-label={`Status for ${lead.name}`}
-          className="ml-auto h-8 w-auto min-w-[8rem] text-xs"
-          value={lead.status}
-          disabled={pending}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          {LEAD_STATUS.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </Select>
+      </div>
+
+      {/* The remark thread. Status moves only from in here, so every change carries
+          its reason and the follow-up history stays complete. */}
+      <div className="mt-3 border-t pt-2">
+        <RemarkThread
+          leadId={lead.id}
+          latest={lead.latestRemark}
+          latestAt={lead.latestRemarkAt}
+          currentStatus={lead.status}
+          onSaved={() => router.refresh()}
+        />
       </div>
 
       {error && <p className="mt-2 text-xs text-destructive">{error}</p>}

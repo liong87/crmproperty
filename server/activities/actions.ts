@@ -1,10 +1,13 @@
 "use server";
 /** Activity mutations: log, complete follow-up, delete, WhatsApp+log. */
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
-import { activities, messageLog } from "@/lib/db/schema";
+import { activities, leads, messageLog } from "@/lib/db/schema";
+
+/** Activity types that mean somebody actually contacted the client. */
+const TOUCH_TYPES: readonly string[] = ["call", "whatsapp", "email", "appointment", "viewing"];
 import { requireDbUser, canEdit, isTeamLeadOrAbove, AuthorizationError } from "@/lib/auth";
 import { messaging } from "@/lib/messaging";
 import { ACTIVITY_TYPE, ENTITY_TYPE } from "@/lib/constants";
@@ -47,6 +50,18 @@ export async function logActivity(input: unknown): Promise<ActionResult<{ id: st
         createdBy: me.id,
       })
       .returning({ id: activities.id });
+
+    /*
+     * A logged call or WhatsApp IS a follow-up, so it moves the same counters the
+     * remark thread moves. One column, written from both places — otherwise the
+     * follow-up rate would depend on which button the agent happened to press.
+     */
+    if (d.entityType === "leads" && TOUCH_TYPES.includes(d.type)) {
+      await db
+        .update(leads)
+        .set({ lastFollowUpAt: new Date(), followUpCount: sql`${leads.followUpCount} + 1` })
+        .where(eq(leads.id, d.entityId));
+    }
 
     revalidatePath(entity.href);
     revalidatePath("/inbox");

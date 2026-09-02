@@ -15,7 +15,8 @@
  * any real book, and a warning that cries wolf is worse than none — agents learn to
  * dismiss it without reading, and then miss the real one.
  */
-import { and, eq, isNull, ne, or } from "drizzle-orm";
+import { and, eq, isNull, ne, notInArray, or } from "drizzle-orm";
+import { DEAD_STATUSES } from "@/lib/constants";
 import { db } from "@/lib/db/client";
 import { leads, contacts, users } from "@/lib/db/schema";
 import { requireDbUser } from "@/lib/auth";
@@ -71,7 +72,7 @@ export async function findDuplicateClients(input: {
         // would report the same person twice.
         isNull(leads.convertedToContactId),
         // A rejected enquiry is not a live claim on the client.
-        ne(leads.status, "disqualified"),
+        notInArray(leads.status, DEAD_STATUSES),
         leadMatch,
         input.excludeLeadId ? ne(leads.id, input.excludeLeadId) : undefined,
       ),

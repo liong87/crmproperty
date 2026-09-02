@@ -131,14 +131,14 @@ export async function disqualifyLead(id: string): Promise<ActionResult<Lead>> {
 
     const [row] = await db
       .update(leads)
-      .set({ status: "disqualified" })
+      .set({ status: "not-searching" })
       .where(eq(leads.id, id))
       .returning();
     await db.insert(activities).values({
       entityType: "leads",
       entityId: id,
       type: "note",
-      body: `Lead disqualified by ${me.name}.`,
+      body: `Lead marked Not Searching by ${me.name}.`,
       createdBy: me.id,
     });
     revalidatePath("/leads");

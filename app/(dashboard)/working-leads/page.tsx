@@ -94,14 +94,14 @@ export default async function WorkingLeadsPage({
           title={
             tab === "active" ? "Nothing to work right now"
               : tab === "appointment" ? "No appointments booked"
-              : "Nothing marked disqualified"
+              : "Nothing marked dead"
           }
           hint={
             tab === "active"
               ? "Leads land here when someone assigns them to you, or when one comes in from a campaign you own."
               : tab === "appointment"
                 ? "Book one from a lead and it will appear here and on the Appointments board."
-                : "Leads you disqualify move here, so the active queue stays honest."
+                : "Leads marked Not Searching, Unmatched Requirement or Blocked move here, so the active queue stays honest."
           }
         />
       ) : (
@@ -113,7 +113,7 @@ export default async function WorkingLeadsPage({
       )}
 
       <p className="text-xs text-muted-foreground">
-        Looking for a lead that is not yours, or one you disqualified months ago?{" "}
+        Looking for a lead that is not yours, or one you closed off months ago?{" "}
         <Link href="/leads" className="text-primary underline underline-offset-2">
           Leads
         </Link>{" "}

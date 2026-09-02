@@ -22,6 +22,7 @@
  * Set PASS_ON_DRY_RUN=1 to report what would move without moving anything.
  */
 import { and, eq, isNull, ne, notInArray, sql } from "drizzle-orm";
+import { DEAD_STATUSES } from "@/lib/constants";
 import { db } from "@/lib/db/client";
 import { leads, projects, users, activities, appointments, leadAssignments } from "@/lib/db/schema";
 import { listPool, nextAfter } from "./pool";
@@ -85,8 +86,8 @@ async function findCandidates(): Promise<PassOnCandidate[]> {
         // `import` is an agent uploading their own export; neither belongs to the pool.
         notInArray(leads.source, ["manual", "import"]),
         isNull(leads.convertedToContactId),
-        ne(leads.status, "disqualified"),
-        ne(leads.status, "qualified"),
+        // Group-based: a lead that is dead, booked or won is not in the rotation.
+        notInArray(leads.status, [...DEAD_STATUSES, "closed", "appointment"]),
         isNull(projects.deletedAt),
         sql`${projects.passOnAfterDays} is not null and ${projects.passOnAfterDays} > 0`,
         // Silence measured from when THIS owner got it.

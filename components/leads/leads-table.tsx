@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatMYR, cn } from "@/lib/utils";
 import { leadStatusTone } from "@/lib/status";
+import { statusLabel } from "@/lib/constants";
 import { deleteLeads } from "@/server/leads/actions";
 import { AssignCell } from "./assign-cell";
 import type { AssignableUser } from "@/server/users/queries";
@@ -234,7 +235,7 @@ export function LeadsTable({
                   l.assigneeName ?? "Unassigned"
                 )}
               </TD>
-              <TD><Badge className={leadStatusTone(l.status)}>{l.status}</Badge></TD>
+              <TD><Badge className={leadStatusTone(l.status)}>{statusLabel(l.status)}</Badge></TD>
               <TD className="whitespace-nowrap text-xs text-muted-foreground">
                 {dayFmt.format(l.createdAt)}
               </TD>

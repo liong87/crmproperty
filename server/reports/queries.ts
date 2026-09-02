@@ -1,5 +1,6 @@
 /** Role-scoped reporting aggregates. Agents see their own book; team leads/admins see all. */
 import { and, count, eq, gte, isNull, sum } from "drizzle-orm";
+import { statusGroup } from "@/lib/constants";
 import { db } from "@/lib/db/client";
 import { leads, contacts, deals, dealStages, properties, activities, users, type User } from "@/lib/db/schema";
 import { isTeamLeadOrAbove } from "@/lib/auth";
@@ -46,9 +47,11 @@ export async function getReportData(user: User): Promise<ReportData> {
     .groupBy(leads.status);
   const leadsByStatus = leadStatusRows.map((r) => ({ label: r.status, value: r.c }));
   const totalLeads = leadsByStatus.reduce((s, r) => s + r.value, 0);
-  const byStatus = (s: string) => leadsByStatus.find((r) => r.label === s)?.value ?? 0;
-  const openLeads = byStatus("new") + byStatus("contacted");
-  const qualifiedLeads = byStatus("qualified");
+  // Summed by GROUP, so a new status lands in the right bucket without a code change.
+  const sumGroup = (...groups: string[]) =>
+    leadsByStatus.reduce((n, r) => (groups.includes(statusGroup(r.label)) ? n + r.value : n), 0);
+  const openLeads = sumGroup("new", "working");
+  const qualifiedLeads = sumGroup("appointment", "closed");
   // Conversion is measured against EVERY lead received, including disqualified ones —
   // rejecting a poor lead is part of the funnel, not something to exclude from it.
   const conversionRate = totalLeads > 0 ? qualifiedLeads / totalLeads : 0;

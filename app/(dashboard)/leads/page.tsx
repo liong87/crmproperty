@@ -4,7 +4,7 @@ import { Inbox, Search, Plus, Upload } from "lucide-react";
 import { getCurrentDbUser } from "@/lib/auth";
 import { listLeadsPaginated, parseLeadSort, type LeadStatus } from "@/server/leads/queries";
 import { listAssignableUsers } from "@/server/users/queries";
-import { LEAD_STATUS } from "@/lib/constants";
+import { LEAD_STATUS, statusLabel } from "@/lib/constants";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LeadsTable } from "@/components/leads/leads-table";
@@ -102,7 +102,7 @@ export default async function LeadsPage({
       <div className="flex flex-wrap gap-1.5">
         <FilterChip href={withParams({ status: undefined })} label="All" active={!status} />
         {LEAD_STATUS.map((s) => (
-          <FilterChip key={s} href={withParams({ status: s })} label={s} active={status === s} />
+          <FilterChip key={s} href={withParams({ status: s })} label={statusLabel(s)} active={status === s} />
         ))}
       </div>
 

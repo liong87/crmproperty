@@ -14,6 +14,7 @@
  * view, not a column nobody can prove is current.
  */
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { ACTIVE_STATUSES, OPEN_STATUSES, DEAD_STATUSES } from "@/lib/constants";
 import { db } from "@/lib/db/client";
 import { leads, type User } from "@/lib/db/schema";
 
@@ -40,6 +41,9 @@ export interface WorkingLead {
   /** Whole days since the last touch, or since the lead arrived if never touched. */
   dormantDays: number;
   openAppointments: number;
+  /** The most recent thread entry, for the collapsed remark cell. */
+  latestRemark: string | null;
+  latestRemarkAt: Date | null;
   createdAt: Date;
 }
 
@@ -74,6 +78,18 @@ const touchCountSql = sql<number>`(
     and a.type in ('call','whatsapp','email','appointment','viewing')
 )`;
 
+const latestRemarkSql = sql<string | null>`(
+  select r.body from lead_remarks r
+  where r.lead_id = ${LEAD_ID} and r.deleted_at is null
+  order by r.created_at desc limit 1
+)`;
+
+const latestRemarkAtSql = sql<Date | null>`(
+  select r.created_at from lead_remarks r
+  where r.lead_id = ${LEAD_ID} and r.deleted_at is null
+  order by r.created_at desc limit 1
+)`;
+
 const openApptSql = sql<number>`(
   select count(*)::int from appointments ap
   where ap.lead_id = ${LEAD_ID}
@@ -105,6 +121,8 @@ export async function listWorkingLeads(user: User, tab: WorkingTab): Promise<Wor
       lastTouchAt: lastTouchSql,
       touchCount: touchCountSql,
       openAppointments: openApptSql,
+      latestRemark: latestRemarkSql,
+      latestRemarkAt: latestRemarkAtSql,
     })
     .from(leads)
     .where(
@@ -112,8 +130,8 @@ export async function listWorkingLeads(user: User, tab: WorkingTab): Promise<Wor
         isNull(leads.deletedAt),
         eq(leads.assignedTo, user.id),
         tab === "inactive"
-          ? eq(leads.status, "disqualified")
-          : inArray(leads.status, ["new", "contacted", "qualified"]),
+          ? inArray(leads.status, DEAD_STATUSES)
+          : inArray(leads.status, ACTIVE_STATUSES),
       ),
     )
     // Quietest first: this screen exists to surface what has been left alone, so the
@@ -127,6 +145,7 @@ export async function listWorkingLeads(user: User, tab: WorkingTab): Promise<Wor
     return {
       ...r,
       lastTouchAt: r.lastTouchAt ? new Date(r.lastTouchAt) : null,
+      latestRemarkAt: r.latestRemarkAt ? new Date(r.latestRemarkAt) : null,
       dormantDays: Math.max(0, Math.floor((now - since) / 86_400_000)),
     };
   });
@@ -178,14 +197,16 @@ export async function getFollowUpRate(user: User, days = 7): Promise<FollowUpRat
   const [row] = await db
     .select({
       total: sql<number>`count(*)::int`,
-      followed: sql<number>`count(*) filter (where ${lastTouchSql} >= ${since}::timestamptz)::int`,
+      // The maintained column, not a re-derivation. It is written by the remark thread
+      // and by logged calls, so this is the same number the agent just moved.
+      followed: sql<number>`count(*) filter (where ${leads.lastFollowUpAt} >= ${since}::timestamptz)::int`,
     })
     .from(leads)
     .where(
       and(
         isNull(leads.deletedAt),
         eq(leads.assignedTo, user.id),
-        inArray(leads.status, ["new", "contacted", "qualified"]),
+        inArray(leads.status, OPEN_STATUSES),
       ),
     );
 
@@ -209,7 +230,7 @@ export async function countActiveWorkingLeads(user: User): Promise<number> {
       and(
         isNull(leads.deletedAt),
         eq(leads.assignedTo, user.id),
-        inArray(leads.status, ["new", "contacted", "qualified"]),
+        inArray(leads.status, OPEN_STATUSES),
         // Active excludes anything already booked in — that lives on the Appointment tab.
         sql`not exists (
           select 1 from appointments ap

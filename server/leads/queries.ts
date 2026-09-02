@@ -52,11 +52,22 @@ export async function listLeadsPaginated(
     isNull(leads.deletedAt),
     ownershipFilter(user, leads.assignedTo, teamIds),
     params.status ? eq(leads.status, params.status) : undefined,
+    /*
+     * Remark bodies are searched too, and that is the whole point of the thread:
+     * agents look a lead up by what was said on the call, not by remembering a name.
+     * EXISTS rather than a join, so a lead with twenty remarks still returns once.
+     */
     params.search
       ? or(
           ilike(leads.name, `%${params.search}%`),
           ilike(leads.phone, `%${params.search}%`),
           ilike(leads.email, `%${params.search}%`),
+          sql`exists (
+            select 1 from lead_remarks r
+            where r.lead_id = ${sql.raw('"leads"."id"')}
+              and r.deleted_at is null
+              and r.body ilike ${`%${params.search}%`}
+          )`,
         )
       : undefined,
   );

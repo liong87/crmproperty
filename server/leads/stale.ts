@@ -16,7 +16,8 @@
  * their own neglected leads before their manager raises it — which is the outcome
  * everybody would prefer.
  */
-import { and, asc, eq, isNull, ne, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, isNull, ne, notInArray, sql, type SQL } from "drizzle-orm";
+import { DEAD_STATUSES } from "@/lib/constants";
 import { db } from "@/lib/db/client";
 import { leads, users, activities, type User } from "@/lib/db/schema";
 import { ownershipFilter } from "@/lib/auth";
@@ -53,7 +54,7 @@ function staleWhere(user: User, days: number): SQL | undefined {
   return and(
     isNull(leads.deletedAt),
     isNull(leads.convertedToContactId),
-    ne(leads.status, "disqualified"),
+    notInArray(leads.status, DEAD_STATUSES),
     ownershipFilter(user, leads.assignedTo),
     // COALESCE, not a join on the latest activity: a lead with no activity at all is
     // the most neglected kind, and an inner join would exclude exactly those.

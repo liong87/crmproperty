@@ -1,4 +1,5 @@
-import { and, desc, eq, gte, isNull, lte, ne, or, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte, ne, notInArray, or, type SQL } from "drizzle-orm";
+import { DEAD_STATUSES } from "@/lib/constants";
 import { db } from "@/lib/db/client";
 import { leads, contacts, properties } from "@/lib/db/schema";
 import type { User } from "@/lib/db/schema";
@@ -124,7 +125,7 @@ export async function findBuyersForListing(
         and(
           isNull(leads.deletedAt),
           isNull(leads.convertedToContactId),
-          ne(leads.status, "disqualified"),
+          notInArray(leads.status, DEAD_STATUSES),
           interestMatch(leads.interest),
           ownershipFilter(user, leads.assignedTo),
         ),

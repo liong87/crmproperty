@@ -89,7 +89,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: "qualify", n: 5, part: "Leads", title: "Qualify or disqualify",
     blocks: [
       { kind: "p", text: "When someone is genuinely interested and can proceed, use Qualify. That converts them to a contact — carrying across their details, consent record and history — and a contact is what a deal is built on." },
-      { kind: "p", text: "When they are not a buyer, mark them disqualified rather than leaving them in your list. It keeps your numbers honest and stops the system chasing you about them." },
+      { kind: "p", text: "When they are not a buyer, give them the outcome that fits — Not Searching, Unmatched Requirement or Blocked — rather than leaving them in your list. It keeps your numbers honest and stops the system chasing you about them." },
       { kind: "note", tone: "info", text: "Disqualifying is part of the funnel, not a failure. Conversion is measured against every lead received, including the ones you rejected. Rejecting a poor lead quickly is good work." },
     ],
   },
@@ -296,10 +296,12 @@ export const HELP_SECTIONS: HelpSection[] = [
         kind: "table",
         head: ["Lead status", "Means"],
         rows: [
-          ["new", "Arrived, nobody has spoken to them"],
-          ["contacted", "You have reached them at least once"],
-          ["qualified", "Real buyer — converted to a contact"],
-          ["disqualified", "Not a buyer. Say so rather than leaving them"],
+          ["New", "Arrived, nobody has spoken to them"],
+          ["No Pick Up / Not Reachable", "You tried and could not get through"],
+          ["Follow Up / Call Another Time", "You spoke to them and it continues"],
+          ["Appointment", "Booked in to view"],
+          ["Closed", "Real buyer — converted to a contact"],
+          ["Not Searching / Unmatched Requirement / Blocked", "Not a buyer. Say so rather than leaving them"],
         ],
       },
       {

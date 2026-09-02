@@ -97,8 +97,8 @@ async function main() {
     .insert(leads)
     .values([
       { name: "Farah Aziz", phone: "+60111000001", email: "farah@example.my", source: "api", sourceDetail: "homepage-form", utmSource: "google", utmMedium: "cpc", utmCampaign: "montkiara", interest: "buy", budgetMin: 100000000, budgetMax: 150000000, preferredAreas: "Mont Kiara, Bangsar", status: "new", assignedTo: agentId(0), consentGivenAt: new Date(), consentSource: "homepage-form" },
-      { name: "Daniel Wong", phone: "+60111000002", email: "daniel@example.my", source: "webhook", sourceDetail: "tally", interest: "rent", budgetMin: 250000, budgetMax: 400000, preferredAreas: "Bangsar South", status: "contacted", assignedTo: agentId(1), consentGivenAt: new Date(), consentSource: "tally-form" },
-      { name: "Kavitha Nair", phone: "+60111000003", source: "manual", interest: "invest", budgetMin: 80000000, budgetMax: 120000000, preferredAreas: "Setia Alam, Shah Alam", status: "qualified", assignedTo: agentId(2), consentGivenAt: new Date(), consentSource: "phone" },
+      { name: "Daniel Wong", phone: "+60111000002", email: "daniel@example.my", source: "webhook", sourceDetail: "tally", interest: "rent", budgetMin: 250000, budgetMax: 400000, preferredAreas: "Bangsar South", status: "follow-up", assignedTo: agentId(1), consentGivenAt: new Date(), consentSource: "tally-form" },
+      { name: "Kavitha Nair", phone: "+60111000003", source: "manual", interest: "invest", budgetMin: 80000000, budgetMax: 120000000, preferredAreas: "Setia Alam, Shah Alam", status: "closed", assignedTo: agentId(2), consentGivenAt: new Date(), consentSource: "phone" },
       { name: "Ahmad Firdaus", phone: "+60111000004", email: "firdaus@example.my", source: "import", sourceDetail: "expo-2026", interest: "buy", budgetMin: 200000000, budgetMax: 350000000, preferredAreas: "Penang", status: "new", assignedTo: agentId(0), consentGivenAt: new Date(), consentSource: "expo-form" },
     ])
     .returning({ id: leads.id, name: leads.name, phone: leads.phone });
