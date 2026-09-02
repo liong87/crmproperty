@@ -72,6 +72,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
       ],
     },
     {
+      // Pinned, not folded: a Team Lead uploads here and an agent checks it the
+      // way they check Inbox, not the way they check Settings. Burying it behind
+      // the same collapse as "My team" and "Commission" would have made a video
+      // meant for today read like admin configuration nobody opens.
+      label: "Learning",
+      links: [{ href: "/learning", label: "Learning Hub" }],
+    },
+    {
       label: "Property",
       collapsible: true,
       links: [
@@ -81,16 +89,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
       ],
     },
     {
-      // Learning Hub is visible to everyone: a Team Lead uploads and publishes,
-      // their downline watches. Only "My team" and "Commission" stay lead-only —
-      // the reason this group can no longer be wrapped in leadOnly() as a whole.
       label: "Team",
       collapsible: true,
-      links: [
-        ...leadOnly([{ href: "/team", label: "My team" }]),
-        { href: "/learning", label: "Learning Hub" },
-        ...leadOnly(COMMISSION_ENABLED ? [{ href: "/settings/commission", label: "Commission" }] : []),
-      ],
+      links: leadOnly([
+        { href: "/team", label: "My team" },
+        ...(COMMISSION_ENABLED ? [{ href: "/settings/commission", label: "Commission" }] : []),
+      ]),
     },
     {
       label: "Settings",
