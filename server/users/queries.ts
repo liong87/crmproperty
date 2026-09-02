@@ -39,3 +39,24 @@ export async function getTeamMemberIds(teamId: string | null): Promise<string[]>
     .where(and(eq(users.teamId, teamId), isNull(users.deletedAt)));
   return rows.map((r) => r.id);
 }
+
+export interface AssignableUser {
+  id: string;
+  name: string;
+  role: string;
+}
+
+/**
+ * Who a lead can be handed to.
+ *
+ * Active users only. An inactive account is one that has left or has not been approved
+ * yet, and assigning them a lead files it somewhere nobody is looking — which reads as
+ * "assigned" on every report while nobody works it.
+ */
+export async function listAssignableUsers(): Promise<AssignableUser[]> {
+  return db
+    .select({ id: users.id, name: users.name, role: users.role })
+    .from(users)
+    .where(and(eq(users.active, true), isNull(users.deletedAt)))
+    .orderBy(asc(users.name));
+}

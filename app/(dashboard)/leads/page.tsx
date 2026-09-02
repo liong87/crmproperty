@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentDbUser } from "@/lib/auth";
 import { listLeadsPaginated, type LeadStatus } from "@/server/leads/queries";
+import { listAssignableUsers } from "@/server/users/queries";
 import { LEAD_STATUS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -21,7 +22,16 @@ export default async function LeadsPage({
     : undefined;
   const page = Number(sp.page ?? "1") || 1;
 
-  const { items, total, pageSize } = await listLeadsPaginated(me, { search: sp.q, status, page });
+  /*
+   * The assignee list is fetched only for someone who may reassign. An agent's browser
+   * therefore never receives the roster of their colleagues — the permission check and
+   * the data boundary are the same line.
+   */
+  const canAssign = me.role !== "agent";
+  const [{ items, total, pageSize }, assignees] = await Promise.all([
+    listLeadsPaginated(me, { search: sp.q, status, page }),
+    canAssign ? listAssignableUsers() : Promise.resolve([]),
+  ]);
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
@@ -55,11 +65,13 @@ export default async function LeadsPage({
           budgetMin: l.budgetMin,
           budgetMax: l.budgetMax,
           assigneeName: l.assigneeName,
+          assignedTo: l.assignedTo,
           status: l.status,
         }))}
         // Deletion is admin-only, matching deleteLead: an agent who can erase leads
         // can erase the evidence of ones they never worked.
         canDelete={me.role === "admin"}
+        assignees={assignees}
       />
       {items.length === 0 && <EmptyState icon={Inbox} title="No leads found" hint="Capture a new lead or adjust your filters." />}
 

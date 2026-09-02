@@ -21,6 +21,8 @@ import { Button } from "@/components/ui/button";
 import { formatMYR } from "@/lib/utils";
 import { leadStatusTone } from "@/lib/status";
 import { deleteLeads } from "@/server/leads/actions";
+import { AssignCell } from "./assign-cell";
+import type { AssignableUser } from "@/server/users/queries";
 
 export interface LeadRow {
   id: string;
@@ -30,17 +32,25 @@ export interface LeadRow {
   budgetMin: number | null;
   budgetMax: number | null;
   assigneeName: string | null;
+  assignedTo: string | null;
   status: string;
 }
 
 export function LeadsTable({
   rows,
   canDelete,
+  assignees = [],
 }: {
   rows: LeadRow[];
   /** Admin only. Without it this renders exactly as the table did before. */
   canDelete: boolean;
+  /**
+   * Active users a lead can be handed to. Empty for an agent, who cannot reassign —
+   * and because it is empty, the list of colleagues is never sent to their browser.
+   */
+  assignees?: AssignableUser[];
 }) {
+  const canAssign = assignees.length > 0;
   const router = useRouter();
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [armed, setArmed] = React.useState(false);
@@ -175,8 +185,17 @@ export function LeadsTable({
               <TD>{formatMYR(l.budgetMin)}{l.budgetMax ? ` – ${formatMYR(l.budgetMax)}` : ""}</TD>
               {/* Unassigned is called out rather than left blank — an empty cell reads
                   as a rendering glitch, and a lead nobody owns needs to be noticed. */}
-              <TD className={l.assigneeName ? "" : "text-destructive"}>
-                {l.assigneeName ?? "Unassigned"}
+              <TD className={canAssign ? "p-1" : l.assigneeName ? "" : "text-destructive"}>
+                {canAssign ? (
+                  <AssignCell
+                    leadId={l.id}
+                    currentName={l.assigneeName}
+                    currentId={l.assignedTo}
+                    users={assignees}
+                  />
+                ) : (
+                  l.assigneeName ?? "Unassigned"
+                )}
               </TD>
               <TD><Badge className={leadStatusTone(l.status)}>{l.status}</Badge></TD>
             </TR>
