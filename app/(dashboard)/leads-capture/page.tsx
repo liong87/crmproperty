@@ -1,156 +1,178 @@
-import { PageTitle } from "@/components/ui/page-title";
 import { redirect } from "next/navigation";
-import { Facebook, Globe, MessageCircle, CircleAlert, CircleCheck } from "lucide-react";
+import { Globe, CircleAlert, CircleCheck } from "lucide-react";
+import { PageTitle } from "@/components/ui/page-title";
 import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { listLeadFormSources } from "@/server/lead-sources/queries";
 import { listProjectOptions } from "@/server/projects/queries";
+import { listMyCaptureAccounts } from "@/server/capture/queries";
+import { captureOAuthConfigured } from "@/lib/capture/meta-graph";
+import { CaptureRail } from "@/components/lead-sources/capture-rail";
+import { FacebookFormColumn, type FormRow } from "@/components/lead-sources/facebook-form-column";
+import { WhatsAppColumn } from "@/components/lead-sources/whatsapp-column";
 import { LeadSourceManager } from "@/components/lead-sources/source-manager";
 import { FacebookPanel } from "@/components/lead-sources/facebook-panel";
-import { MetaFormList } from "@/components/lead-sources/meta-form-list";
 import { getMetaCredentials, getConnectedMetaPage } from "@/server/lead-sources/credentials";
-import { metaOAuthConfigured } from "@/lib/leadads/meta-oauth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { STATUS } from "@/lib/chart-colors";
 
 /**
- * Leads Capture — every way a lead can reach the CRM, on one page.
+ * Leads capture — every way a lead can reach the CRM, on one page.
  *
- * Previously this was "Lead sources" and did one thing: map a form id typed out of the
- * Meta console to a project. The mapping table is still the heart of it, but the id no
- * longer has to be typed — forms are read from the Page, and new ones can be created
- * here and pushed to Facebook.
+ * The shape is: SOURCES on the left, ACCOUNTS on the right. That ordering is the whole
+ * point of the rewrite. Connecting used to be a paragraph naming the environment
+ * variables an administrator had to set, which is a deploy rather than a feature and
+ * which no agent can do for themselves. Now every agent signs in with their own
+ * Facebook account from the rail, ticks their own pages, and their forms appear in the
+ * column beside it.
+ *
+ * The rail is per-user and shows only the signed-in person's connections — admins
+ * included. See server/capture/ownership.ts.
  */
 export default async function LeadsCapturePage({
   searchParams,
 }: {
-  searchParams: Promise<{ fb_connected?: string; fb_error?: string; fb_note?: string }>;
+  searchParams: Promise<{
+    fb_connected?: string;
+    fb_error?: string;
+    fb_note?: string;
+    fb_pick?: string;
+  }>;
 }) {
   const me = await getCurrentDbUser();
   if (!me) redirect("/sign-in");
-  if (!isTeamLeadOrAbove(me)) redirect("/dashboard");
 
-  const [sources, projects, cred, connectedPage, sp] = await Promise.all([
-    listLeadFormSources(),
-    listProjectOptions(),
-    getMetaCredentials(),
-    getConnectedMetaPage(),
+  // Mapping a form to a project decides whose funnel and whose budget a paid lead
+  // counts against, so it stays with team leads. Connecting your own account does not.
+  const manages = isTeamLeadOrAbove(me);
+
+  const [sources, projects, myAccounts, cred, legacyPage, sp] = await Promise.all([
+    manages ? listLeadFormSources() : Promise.resolve([]),
+    manages ? listProjectOptions() : Promise.resolve([]),
+    listMyCaptureAccounts("facebook"),
+    manages ? getMetaCredentials() : Promise.resolve(null),
+    manages ? getConnectedMetaPage() : Promise.resolve(null),
     searchParams,
   ]);
-  // Checked on the server so the panel never renders a button that cannot work.
-  const fbConfigured = Boolean(cred);
-  const oauthReady = metaOAuthConfigured();
-  const metaSources = sources.filter((s) => s.provider === "meta");
-  const metaCount = metaSources.length;
+
+  const oauthReady = captureOAuthConfigured();
+
+  // page id → name, for showing a form's connection on its own row.
+  const pageNames = new Map<string, string>();
+  for (const account of myAccounts) {
+    for (const page of account.pages) pageNames.set(page.id, page.name);
+  }
+
+  const metaForms: FormRow[] = sources
+    .filter((s) => s.provider === "meta")
+    .map((s) => ({ ...s, pageName: s.capturePageId ? pageNames.get(s.capturePageId) ?? null : null }));
+
+  const formCounts: Record<string, number> = {};
+  for (const s of sources) {
+    if (!s.capturePageId) continue;
+    formCounts[s.capturePageId] = (formCounts[s.capturePageId] ?? 0) + 1;
+  }
+
+  const connectedPages = myAccounts.reduce((n, a) => n + a.pages.filter((p) => p.subscribed).length, 0);
   const unmapped = sources.filter((s) => !s.projectId).length;
 
   return (
     <div className="space-y-5">
-      <PageTitle title="Leads capture" count={sources.length}>
-        {sources.length === 1 ? "source" : "sources"} feeding your projects.
+      <PageTitle title="Leads capture" count={connectedPages}>
+        {connectedPages === 1 ? "page" : "pages"} connected. Sign in with your own Facebook
+        account and pick which pages send leads to your CRM.
       </PageTitle>
 
       {/* The OAuth round trip comes back through the query string, because a redirect
           from facebook.com cannot carry anything else. */}
       {sp.fb_error && (
-        <p className="flex items-start gap-2 rounded-lg border px-4 py-3 text-sm" style={{ borderColor: STATUS.critical }}>
+        <p
+          className="flex items-start gap-2 rounded-xl border px-4 py-3 text-sm"
+          style={{ borderColor: STATUS.critical }}
+        >
           <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" style={{ color: STATUS.critical }} />
           <span>{sp.fb_error}</span>
         </p>
       )}
       {sp.fb_connected && (
-        <p className="flex items-start gap-2 rounded-lg border bg-secondary/40 px-4 py-3 text-sm">
+        <p className="flex items-start gap-2 rounded-xl border bg-secondary/40 px-4 py-3 text-sm">
           <CircleCheck className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
           <span>
-            Connected to <strong className="font-semibold">{sp.fb_connected}</strong>.
-            {sp.fb_note ? ` ${sp.fb_note}` : ""} Import its forms below.
+            Signed in as <strong className="font-semibold">{sp.fb_connected}</strong>. Tick the
+            pages you want sending leads, on the right.
           </span>
         </p>
       )}
 
-      {unmapped > 0 && (
-        <p className="rounded-lg border bg-secondary/40 px-4 py-3 text-sm">
-          <strong className="font-semibold">{unmapped}</strong>{" "}
-          {unmapped === 1 ? "form has" : "forms have"} no project yet. Leads from{" "}
-          {unmapped === 1 ? "it" : "them"} still arrive — they just will not count towards a
-          launch until a project is set.
-        </p>
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[1fr_1fr_20rem]">
+        <FacebookFormColumn
+          forms={metaForms}
+          projects={projects}
+          canManage={manages}
+          hasConnection={connectedPages > 0 || Boolean(cred)}
+        />
+        <WhatsAppColumn />
+        <div className="lg:col-span-2 xl:col-span-1">
+          <CaptureRail
+            accounts={myAccounts}
+            oauthReady={oauthReady}
+            formCounts={formCounts}
+            {...(sp.fb_pick ? { highlightAccountId: sp.fb_pick } : {})}
+          />
+        </div>
+      </div>
+
+      {manages && (
+        <Card id="mapped-forms">
+          <CardHeader>
+            <CardTitle>Advanced routing</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Forms from Tally, Typeform and Google Ads, and any mapping typed by hand.
+              {unmapped > 0 && (
+                <>
+                  {" "}
+                  <strong className="font-semibold text-foreground">{unmapped}</strong>{" "}
+                  {unmapped === 1 ? "form has" : "forms have"} no project yet — leads from{" "}
+                  {unmapped === 1 ? "it" : "them"} still arrive, they just will not count
+                  towards a launch.
+                </>
+              )}
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <LeadSourceManager sources={sources} projects={projects} />
+            <FacebookPanel
+              configured={Boolean(cred)}
+              oauthReady={oauthReady}
+              connectedPageName={legacyPage?.name ?? null}
+              projects={projects}
+            />
+          </CardContent>
+        </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Facebook className="h-4 w-4 text-muted-foreground" /> Facebook &amp; Instagram
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            {fbConfigured
-              ? `${metaCount} form${metaCount === 1 ? "" : "s"} mapped. Import what already exists on the Page, or build a new form here.`
-              : "Sign in with Facebook to read and create lead forms without leaving the CRM."}
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <FacebookPanel
-            configured={fbConfigured}
-            oauthReady={oauthReady}
-            connectedPageName={connectedPage?.name ?? null}
-            projects={projects}
-          />
-          <MetaFormList sources={metaSources} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Mapped forms</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Which form feeds which project. New campaigns are mapped here, not in code.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <LeadSourceManager sources={sources} projects={projects} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Globe className="h-4 w-4 text-muted-foreground" /> Website &amp; other platforms
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>
-            Landing pages, Tally, Typeform and Google Ads post straight into the CRM. Each
-            provider has its own signed endpoint:
-          </p>
-          <p className="break-all rounded-md bg-muted px-3 py-2 font-mono text-xs text-foreground">
-            https://your-domain/api/webhooks/forms/&#123;tally|typeform|googleads|generic&#125;
-          </p>
-          <p>
-            Your own landing pages can post to{" "}
-            <code className="font-mono text-xs">/api/public/leads</code> with a per-page API key
-            instead — no webhook secret needed.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageCircle className="h-4 w-4 text-muted-foreground" /> WhatsApp capture
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>
-            Not connected. Capturing leads from WhatsApp needs the Cloud API: a verified Meta
-            Business, a dedicated number that leaves the normal WhatsApp app permanently, and
-            approved message templates.
-          </p>
-          <p>
-            Today the CRM opens a pre-filled wa.me link so the agent sends from their own
-            number — no approval, no per-message cost, and the client sees the person they
-            already know.
-          </p>
-        </CardContent>
-      </Card>
+      {manages && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Globe className="h-4 w-4 text-muted-foreground" /> Website &amp; other platforms
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>
+              Landing pages, Tally, Typeform and Google Ads post straight into the CRM. Each
+              provider has its own signed endpoint:
+            </p>
+            <p className="break-all rounded-md bg-muted px-3 py-2 font-mono text-xs text-foreground">
+              https://your-domain/api/webhooks/forms/&#123;tally|typeform|googleads|generic&#125;
+            </p>
+            <p>
+              Your own landing pages can post to{" "}
+              <code className="font-mono text-xs">/api/public/leads</code> with a per-page API
+              key instead — no webhook secret needed.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

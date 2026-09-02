@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { connectedPages } from "@/lib/db/schema";
-import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
+import { captureAccounts, capturePages } from "@/lib/db/schema";
+import { getCurrentDbUser } from "@/lib/auth";
 import { encryptSecret, encryptionAvailable } from "@/lib/crypto/secret-box";
-import { exchangeCodeForPages, META_SCOPES } from "@/lib/leadads/meta-oauth";
+import {
+  CAPTURE_SCOPES,
+  appSecret,
+  exchangeCodeForUserToken,
+  fetchIdentity,
+  fetchPages,
+} from "@/lib/capture/meta-graph";
+import { STATE_COOKIE, verifyState } from "@/lib/capture/oauth-state";
 import { monitoring } from "@/lib/monitoring";
 
 export const dynamic = "force-dynamic";
@@ -13,52 +20,69 @@ function done(params: Record<string, string>): NextResponse {
   const url = new URL("/leads-capture", process.env.APP_URL);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   const res = NextResponse.redirect(url);
-  // The state cookie has done its job either way; leaving it lying around only widens
-  // the window in which it could be replayed.
-  res.cookies.delete("fb_oauth_state");
+  // Single use. Deleting the cookie here is what stops this exact URL being replayed.
+  res.cookies.delete(STATE_COOKIE);
   return res;
 }
 
+function readCookie(req: Request, name: string): string | undefined {
+  return req.headers
+    .get("cookie")
+    ?.split(";")
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(`${name}=`))
+    ?.slice(name.length + 1);
+}
+
+/**
+ * Facebook comes back here.
+ *
+ * The connection is written for the person who started it and nobody else. Note the
+ * double check: the state is signed with a user id AND the session is read again here,
+ * and the two must agree. Either alone is insufficient — a signed state alone would
+ * let a login started in one browser be completed in another's session, and a session
+ * check alone would let a crafted link attach an attacker's Facebook account to
+ * whoever happened to click it.
+ *
+ * Pages are stored but NOT subscribed. Choosing which Pages feed the CRM is an
+ * explicit step on the next screen, because subscribing to everything somebody happens
+ * to administer is how a personal Page starts dumping leads into a work CRM.
+ */
 export async function GET(req: Request) {
   const me = await getCurrentDbUser();
-  if (!me || !isTeamLeadOrAbove(me)) {
-    return NextResponse.redirect(new URL("/dashboard", process.env.APP_URL));
-  }
+  if (!me) return NextResponse.redirect(new URL("/sign-in", process.env.APP_URL));
 
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
-  const state = url.searchParams.get("state");
 
   // Facebook reports a refusal here rather than by not calling back at all.
   const denied = url.searchParams.get("error_description") ?? url.searchParams.get("error");
   if (denied) return done({ fb_error: denied });
 
-  const expected = req.headers
-    .get("cookie")
-    ?.split(";")
-    .map((c) => c.trim())
-    .find((c) => c.startsWith("fb_oauth_state="))
-    ?.slice("fb_oauth_state=".length);
+  const secret = appSecret();
+  if (!secret) return done({ fb_error: "Facebook login is not configured." });
 
-  if (!code || !state || !expected || state !== expected) {
+  const issuedTo = await verifyState(url.searchParams.get("state"), readCookie(req, STATE_COOKIE), secret);
+  if (!code || !issuedTo || issuedTo !== me.id) {
     return done({ fb_error: "That login could not be verified. Start again from Leads capture." });
   }
 
-  /*
-   * Checked BEFORE talking to Facebook. Fetching a token we would then have to store
-   * in the clear, or throw away, is worse than refusing to start.
-   */
   if (!encryptionAvailable()) {
     return done({
-      fb_error: "ENCRYPTION_KEY is not set, so a page token cannot be stored safely. Nothing was connected.",
+      fb_error: "ENCRYPTION_KEY is not set, so a Facebook token cannot be stored safely. Nothing was connected.",
     });
   }
 
-  let pages;
+  let identity: Awaited<ReturnType<typeof fetchIdentity>>;
+  let pages: Awaited<ReturnType<typeof fetchPages>>;
+  let userToken: Awaited<ReturnType<typeof exchangeCodeForUserToken>>;
   try {
-    pages = await exchangeCodeForPages(code);
+    userToken = await exchangeCodeForUserToken(code);
+    identity = await fetchIdentity(userToken.token);
+    pages = await fetchPages(userToken.token);
   } catch (err) {
-    monitoring.captureException(err, { where: "facebook:callback" });
+    // Never the token, never the code — a monitoring backend is not a secret store.
+    monitoring.captureException(err, { where: "capture:facebook:callback", userId: me.id });
     return done({ fb_error: (err as Error).message });
   }
 
@@ -68,37 +92,95 @@ export async function GET(req: Request) {
     });
   }
 
+  const cipherUserToken = await encryptSecret(userToken.token);
+  const now = new Date();
+
   /*
-   * One page, connected. An agency with several would want to choose, but choosing
-   * needs a screen that holds the tokens somewhere in the meantime — and a token
-   * parked in a session to support a picker is exactly the thing we just went to the
-   * trouble of encrypting. The first page is connected and the rest are named in the
-   * message, which is honest and needs no holding pen.
+   * A reconnect updates in place. The alternative — inserting a second row — would
+   * leave the old expired token active with the page subscriptions still pointing at
+   * it, so fixing a broken connection would appear to do nothing. The partial unique
+   * index on (provider, provider_user_id, owner_user_id) enforces this in the database
+   * as well, so a race loses rather than duplicating.
    */
-  const chosen = pages[0]!;
-  const cipher = await encryptSecret(chosen.accessToken);
+  const [existing] = await db
+    .select({ id: captureAccounts.id })
+    .from(captureAccounts)
+    .where(
+      and(
+        eq(captureAccounts.provider, "facebook"),
+        eq(captureAccounts.providerUserId, identity.id),
+        eq(captureAccounts.ownerUserId, me.id),
+        isNull(captureAccounts.deletedAt),
+      ),
+    )
+    .limit(1);
 
-  // Replace rather than accumulate: reconnecting is how somebody fixes a bad token,
-  // and leaving the old row active would mean the fix silently does nothing.
-  await db
-    .update(connectedPages)
-    .set({ active: false, deletedAt: new Date() })
-    .where(and(eq(connectedPages.provider, "meta"), isNull(connectedPages.deletedAt)));
+  let accountId: string;
+  if (existing) {
+    accountId = existing.id;
+    await db
+      .update(captureAccounts)
+      .set({
+        displayName: identity.name,
+        accessToken: cipherUserToken,
+        tokenExpiresAt: userToken.expiresAt,
+        scopes: CAPTURE_SCOPES.join(","),
+        status: "active",
+        lastCheckedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(captureAccounts.id, existing.id));
+  } else {
+    const [inserted] = await db
+      .insert(captureAccounts)
+      .values({
+        provider: "facebook",
+        ownerUserId: me.id,
+        providerUserId: identity.id,
+        displayName: identity.name,
+        accessToken: cipherUserToken,
+        tokenExpiresAt: userToken.expiresAt,
+        scopes: CAPTURE_SCOPES.join(","),
+        status: "active",
+        lastCheckedAt: now,
+      })
+      .returning({ id: captureAccounts.id });
+    if (!inserted) return done({ fb_error: "The connection could not be saved. Please try again." });
+    accountId = inserted.id;
+  }
 
-  await db.insert(connectedPages).values({
-    provider: "meta",
-    externalPageId: chosen.id,
-    name: chosen.name,
-    accessToken: cipher,
-    scopes: META_SCOPES.join(","),
-    connectedBy: me.id,
-    active: true,
-  });
+  /*
+   * Page rows are the holding pen the picker reads from, and they are safe to be one
+   * because the token in them is already ciphertext. The previous flow refused to build
+   * a picker for exactly this reason and connected the first Page instead — which was
+   * wrong the moment anybody administered two.
+   */
+  const known = await db
+    .select({ id: capturePages.id, externalPageId: capturePages.externalPageId })
+    .from(capturePages)
+    .where(and(eq(capturePages.accountId, accountId), isNull(capturePages.deletedAt)));
+  const byExternal = new Map(known.map((p) => [p.externalPageId, p.id]));
 
-  return done({
-    fb_connected: chosen.name,
-    ...(pages.length > 1
-      ? { fb_note: `${pages.length - 1} other Page(s) were not connected: ${pages.slice(1).map((p) => p.name).join(", ")}` }
-      : {}),
-  });
+  for (const page of pages) {
+    const cipher = await encryptSecret(page.accessToken);
+    const existingId = byExternal.get(page.id);
+    if (existingId) {
+      // Refresh name and token; leave `subscribed` alone. A reconnect must not silently
+      // re-subscribe a Page the user previously chose to unpick.
+      await db
+        .update(capturePages)
+        .set({ name: page.name, accessToken: cipher, updatedAt: now })
+        .where(eq(capturePages.id, existingId));
+    } else {
+      await db.insert(capturePages).values({
+        accountId,
+        externalPageId: page.id,
+        name: page.name,
+        accessToken: cipher,
+        subscribed: false,
+      });
+    }
+  }
+
+  return done({ fb_connected: identity.name, fb_pick: accountId });
 }

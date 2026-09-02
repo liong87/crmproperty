@@ -588,6 +588,22 @@ export const leadFormSources = pgTable(
      * Malay, or ask twice, or call the phone field something nobody expected.
      */
     fieldMap: jsonb("field_map").$type<LeadFieldMap>(),
+    /** The connected page this form belongs to, once captured through a connection. */
+    capturePageId: uuid("capture_page_id"),
+    /** The platform's own name for the form, as distinct from the label we gave it. */
+    formName: varchar("form_name", { length: 255 }),
+    /**
+     * Extra form answers to sweep into the lead's info blob — campaign_name and the
+     * like. Opt-in, because a form can ask a dozen questions and most are noise.
+     */
+    infoFields: jsonb("info_fields").$type<string[]>(),
+    /**
+     * Whether captured leads are auto-distributed by the pass-on rules, or sit
+     * unassigned until somebody picks them up. On is the right default: a lead nobody
+     * is told about is a lead nobody rings.
+     */
+    runSequence: boolean("run_sequence").notNull().default(true),
+    lastLeadAt: timestamp("last_lead_at", { withTimezone: true }),
     notes: text("notes"),
     ...timestamps,
   },
@@ -632,6 +648,105 @@ export const leadRemarks = pgTable(
     // Every read is "this lead's thread, newest first".
     leadIdx: index("lead_remarks_lead_idx").on(t.leadId, t.createdAt),
     userIdx: index("lead_remarks_user_idx").on(t.userId),
+  }),
+);
+
+/* ---------- capture connections (per user) ---------- */
+
+/**
+ * One person's connection to an ad platform. PRIVATE TO THAT PERSON.
+ *
+ * `ownerUserId` is the isolation key, and it is the whole point of this table: agents
+ * connect their OWN Facebook account, and one agent's credentials must be invisible to
+ * every other user — including admins, who may see that a connection exists but never
+ * the token behind it.
+ *
+ * This supersedes `connectedPages`, which held one agency-wide connection with no
+ * concept of whose it was.
+ */
+export const captureAccounts = pgTable(
+  "capture_accounts",
+  {
+    id: id(),
+    /** facebook — whatsapp later, same shape. */
+    provider: varchar("provider", { length: 20 }).notNull(),
+    /** The isolation key. Every read filters on it; see server/capture/ownership.ts. */
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** The platform's id for the person, so a reconnect updates rather than duplicates. */
+    providerUserId: varchar("provider_user_id", { length: 255 }).notNull(),
+    displayName: varchar("display_name", { length: 255 }).notNull(),
+    /** AES-GCM ciphertext of the long-lived user token. Never a bare token. */
+    accessToken: text("access_token").notNull(),
+    tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+    scopes: text("scopes"),
+    /** active | expired | revoked — an expired connection is losing leads silently. */
+    status: varchar("status", { length: 20 }).notNull().default("active"),
+    lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => ({
+    ownerIdx: index("capture_accounts_owner_idx").on(t.ownerUserId, t.provider),
+    // One live connection per platform identity per person. Reconnecting replaces.
+    uniquePerOwner: uniqueIndex("capture_accounts_unique")
+      .on(t.provider, t.providerUserId, t.ownerUserId)
+      .where(sql`deleted_at is null`),
+  }),
+);
+
+/**
+ * A page under a connection, with its own token.
+ *
+ * Chosen explicitly by the user from a picker — we never subscribe to every page
+ * somebody happens to administer.
+ */
+export const capturePages = pgTable(
+  "capture_pages",
+  {
+    id: id(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => captureAccounts.id, { onDelete: "cascade" }),
+    externalPageId: varchar("external_page_id", { length: 255 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    /** AES-GCM ciphertext of the page access token. */
+    accessToken: text("access_token").notNull(),
+    /** True only once the platform CONFIRMED the webhook subscription. */
+    subscribed: boolean("subscribed").notNull().default(false),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => ({
+    accountIdx: index("capture_pages_account_idx").on(t.accountId),
+    pageIdx: index("capture_pages_page_idx").on(t.externalPageId),
+  }),
+);
+
+/**
+ * Every inbound webhook delivery, kept whether or not it worked.
+ *
+ * Without this, "leads stopped arriving" is unanswerable — the failure is invisible on
+ * both sides. The unique index on `leadgenId` is also the idempotency guard: the
+ * platform delivers duplicates, and this is what stops a second lead being created.
+ */
+export const captureEvents = pgTable(
+  "capture_events",
+  {
+    id: id(),
+    externalPageId: varchar("external_page_id", { length: 255 }),
+    leadgenId: varchar("leadgen_id", { length: 255 }).notNull(),
+    formId: varchar("form_id", { length: 255 }),
+    rawPayload: text("raw_payload"),
+    /** received | fetched | created | duplicate | failed */
+    status: varchar("status", { length: 20 }).notNull().default("received"),
+    error: text("error"),
+    leadId: uuid("lead_id").references(() => leads.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => ({
+    uniqueLeadgen: uniqueIndex("capture_events_leadgen_unique").on(t.leadgenId),
+    recentIdx: index("capture_events_recent_idx").on(t.createdAt),
   }),
 );
 
@@ -952,6 +1067,12 @@ export type ProjectPoolMember = typeof projectPoolMembers.$inferSelect;
 export type LeadAssignment = typeof leadAssignments.$inferSelect;
 export type LeadFormSource = typeof leadFormSources.$inferSelect;
 export type NewLeadFormSource = typeof leadFormSources.$inferInsert;
+export type CaptureAccount = typeof captureAccounts.$inferSelect;
+export type NewCaptureAccount = typeof captureAccounts.$inferInsert;
+export type CapturePage = typeof capturePages.$inferSelect;
+export type NewCapturePage = typeof capturePages.$inferInsert;
+export type CaptureEvent = typeof captureEvents.$inferSelect;
+export type NewCaptureEvent = typeof captureEvents.$inferInsert;
 export type Appointment = typeof appointments.$inferSelect;
 export type NewAppointment = typeof appointments.$inferInsert;
 export type Project = typeof projects.$inferSelect;
