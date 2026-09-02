@@ -6,6 +6,9 @@ import {
   listWorkingLeads, countWorkingTabs, getFollowUpRate, type WorkingTab,
 } from "@/server/leads/working";
 import { WorkingLeadCard } from "@/components/leads/working-lead-card";
+import { FilterDropdown, ActiveFilterChip, type FilterOption } from "@/components/leads/filter-dropdown";
+import { statusLabel } from "@/lib/constants";
+import { Search } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageTitle } from "@/components/ui/page-title";
 import { Segmented } from "@/components/ui/segmented";
@@ -25,20 +28,62 @@ export const metadata = { title: "Working Leads" };
 export default async function WorkingLeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{
+    tab?: string; q?: string;
+    product?: string | string[]; status?: string | string[]; wa?: string;
+  }>;
 }) {
   const me = await getCurrentDbUser();
   if (!me) redirect("/sign-in");
 
-  const raw = (await searchParams).tab;
+  const sp = await searchParams;
   const tab: WorkingTab =
-    raw === "inactive" || raw === "appointment" ? raw : "active";
+    sp.tab === "inactive" || sp.tab === "appointment" ? sp.tab : "active";
+  const search = sp.q?.trim() || undefined;
+  const asList = (v: string | string[] | undefined): string[] =>
+    v === undefined ? [] : Array.isArray(v) ? v : [v];
+  const productSel = asList(sp.product);
+  const statusSel = asList(sp.status);
+  const waOnly = sp.wa === "1";
 
-  const [items, counts, rate] = await Promise.all([
-    listWorkingLeads(me, tab),
-    countWorkingTabs(me),
+  const [rows, counts, rate] = await Promise.all([
+    listWorkingLeads(me, tab, { search }),
+    countWorkingTabs(me, { search }),
     getFollowUpRate(me, 7),
   ]);
+
+  /*
+   * Facets come from the rows the search returned, BEFORE the chips are applied — so
+   * every option you can see is one that would actually match something, and picking
+   * one never empties the menu you picked it from.
+   */
+  const facet = (
+    pick: (r: (typeof rows)[number]) => { value: string; label: string } | null,
+  ): FilterOption[] => {
+    const seen = new Map<string, FilterOption>();
+    for (const r of rows) {
+      const v = pick(r);
+      if (!v) continue;
+      const found = seen.get(v.value);
+      if (found) found.count += 1;
+      else seen.set(v.value, { ...v, count: 1 });
+    }
+    return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
+  };
+
+  const productOptions = facet((r) =>
+    r.projectId && r.projectName ? { value: r.projectId, label: r.projectName } : null,
+  );
+  const statusOptions = facet((r) => ({ value: r.status, label: statusLabel(r.status) }));
+
+  // AND across chips, OR within one — the only combination anybody means by this UI.
+  const items = rows.filter((r) => {
+    if (productSel.length > 0 && (!r.projectId || !productSel.includes(r.projectId))) return false;
+    if (statusSel.length > 0 && !statusSel.includes(r.status)) return false;
+    if (waOnly && !r.phone.replace(/\D/g, "")) return false;
+    return true;
+  });
+  const filtered = productSel.length + statusSel.length + (waOnly ? 1 : 0) > 0 || Boolean(search);
 
   // The WhatsApp opener. A saved per-workspace template is Configuration work (spec
   // §12.6); until that exists this is a sensible default rather than a blank message.
@@ -55,7 +100,7 @@ export default async function WorkingLeadsPage({
     <div className="space-y-5">
       <PageTitle
         title="Working leads"
-        count={counts.active}
+        count={items.length}
         actions={
           /* The follow-up pill. The design system puts one number and a clause in the
              header; this is the second number the product genuinely nags you about. */
@@ -77,27 +122,69 @@ export default async function WorkingLeadsPage({
           </div>
         }
       >
-        {counts.active === 1 ? "lead" : "leads"} to work on, quietest first.
+        {items.length === 1 ? "lead" : "leads"}{" "}
+        {tab === "appointment" ? "with an appointment booked."
+          : tab === "inactive" ? "you have closed off."
+          : "to work on, quietest first."}
+        {filtered && " Filters applied."}
       </PageTitle>
 
-      <Segmented
-        items={[
-          { href: "/working-leads", label: "Active", count: counts.active, active: tab === "active" },
-          { href: "/working-leads?tab=appointment", label: "Appointment", count: counts.appointment, active: tab === "appointment" },
-          { href: "/working-leads?tab=inactive", label: "Inactive", count: counts.inactive, active: tab === "inactive" },
-        ]}
-      />
+      <div className="flex flex-wrap items-center gap-3">
+        <Segmented
+          items={[
+            { href: "/working-leads", label: "Active", count: counts.active, active: tab === "active" },
+            { href: "/working-leads?tab=appointment", label: "Appointment", count: counts.appointment, active: tab === "appointment" },
+            { href: "/working-leads?tab=inactive", label: "Inactive", count: counts.inactive, active: tab === "inactive" },
+          ]}
+        />
+
+        {/* A plain form: works without JavaScript and survives a reload. */}
+        <form action="/working-leads" className="relative min-w-[15rem] flex-1">
+          {sp.tab && <input type="hidden" name="tab" value={sp.tab} />}
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            name="q"
+            defaultValue={search ?? ""}
+            placeholder="Search name, phone, email, remarks…"
+            className="h-10 w-full rounded-xl border border-input bg-card pl-9 pr-4 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+          />
+        </form>
+      </div>
+
+      {/* Own line, horizontally scrollable, never wraps to two rows. */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <FilterDropdown param="product" label="Product" options={productOptions} />
+        {productSel.map((v) => (
+          <ActiveFilterChip
+            key={v} param="product" value={v}
+            label={productOptions.find((o) => o.value === v)?.label ?? v}
+          />
+        ))}
+
+        <FilterDropdown param="status" label="Status" options={statusOptions} />
+        {statusSel.map((v) => (
+          <ActiveFilterChip key={v} param="status" value={v} label={statusLabel(v)} />
+        ))}
+
+        <FilterDropdown
+          param="wa" label="WhatsApp"
+          options={[{ value: "1", label: "Has a WhatsApp number", count: rows.filter((r) => r.phone).length }]}
+        />
+        {waOnly && <ActiveFilterChip param="wa" value="1" label="WhatsApp" />}
+      </div>
 
       {items.length === 0 ? (
         <EmptyState
           icon={Inbox}
           title={
-            tab === "active" ? "Nothing to work right now"
+            filtered ? "No leads match those filters"
+              : tab === "active" ? "Nothing to work right now"
               : tab === "appointment" ? "No appointments booked"
               : "Nothing marked dead"
           }
           hint={
-            tab === "active"
+            filtered ? "Clear a filter or widen your search — the counts on the tabs above ignore the chips."
+              : tab === "active"
               ? "Leads land here when someone assigns them to you, or when one comes in from a campaign you own."
               : tab === "appointment"
                 ? "Book one from a lead and it will appear here and on the Appointments board."

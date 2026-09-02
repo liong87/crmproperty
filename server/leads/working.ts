@@ -13,7 +13,7 @@
  * whether somebody rang a client. If this ever gets slow, the fix is a materialised
  * view, not a column nobody can prove is current.
  */
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { ACTIVE_STATUSES, OPEN_STATUSES, DEAD_STATUSES } from "@/lib/constants";
 import { db } from "@/lib/db/client";
 import { leads, type User } from "@/lib/db/schema";
@@ -31,6 +31,7 @@ export interface WorkingLead {
   interest: string | null;
   source: string;
   sourceDetail: string | null;
+  projectId: string | null;
   projectName: string | null;
   budgetMin: number | null;
   budgetMax: number | null;
@@ -102,7 +103,17 @@ const openApptSql = sql<number>`(
  * the reports; this screen answers "what do I do next", and a shared answer to that is
  * not an answer.
  */
-export async function listWorkingLeads(user: User, tab: WorkingTab): Promise<WorkingLead[]> {
+export interface WorkingLeadFilters {
+  /** Matches name, phone, email AND remark bodies — see the note on the EXISTS below. */
+  search?: string;
+}
+
+export async function listWorkingLeads(
+  user: User,
+  tab: WorkingTab,
+  filters: WorkingLeadFilters = {},
+): Promise<WorkingLead[]> {
+  const q = filters.search?.trim();
   const rows = await db
     .select({
       id: leads.id,
@@ -115,6 +126,7 @@ export async function listWorkingLeads(user: User, tab: WorkingTab): Promise<Wor
       budgetMin: leads.budgetMin,
       budgetMax: leads.budgetMax,
       createdAt: leads.createdAt,
+      projectId: leads.projectId,
       projectName: sql<string | null>`(
         select p.name from projects p where p.id = ${LEAD_PROJECT_ID}
       )`,
@@ -132,6 +144,24 @@ export async function listWorkingLeads(user: User, tab: WorkingTab): Promise<Wor
         tab === "inactive"
           ? inArray(leads.status, DEAD_STATUSES)
           : inArray(leads.status, ACTIVE_STATUSES),
+        /*
+         * Remark bodies are searched as well as the lead's own fields, because that is
+         * how an agent looks somebody up — by what was said on the call, not by
+         * remembering how the name was spelled. EXISTS rather than a join, so a lead
+         * with twenty remarks still comes back once.
+         */
+        q
+          ? or(
+              ilike(leads.name, `%${q}%`),
+              ilike(leads.phone, `%${q}%`),
+              ilike(leads.email, `%${q}%`),
+              sql`exists (
+                select 1 from lead_remarks r
+                where r.lead_id = ${LEAD_ID} and r.deleted_at is null
+                  and r.body ilike ${`%${q}%`}
+              )`,
+            )
+          : undefined,
       ),
     )
     // Quietest first: this screen exists to surface what has been left alone, so the
@@ -159,13 +189,18 @@ export async function listWorkingLeads(user: User, tab: WorkingTab): Promise<Wor
 
 export interface TabCounts { active: number; inactive: number; appointment: number }
 
-export async function countWorkingTabs(user: User): Promise<TabCounts> {
-  const [live, dead] = await Promise.all([
-    listWorkingLeads(user, "active"),
-    listWorkingLeads(user, "inactive"),
+export async function countWorkingTabs(
+  user: User,
+  filters: WorkingLeadFilters = {},
+): Promise<TabCounts> {
+  // Counts follow the SEARCH but not the chips, so the tab numbers stay a stable
+  // frame of reference while you narrow within one of them.
+  const [live, dead, appt] = await Promise.all([
+    listWorkingLeads(user, "active", filters),
+    listWorkingLeads(user, "inactive", filters),
+    listWorkingLeads(user, "appointment", filters),
   ]);
-  const appointment = (await listWorkingLeads(user, "appointment")).length;
-  return { active: live.length, inactive: dead.length, appointment };
+  return { active: live.length, inactive: dead.length, appointment: appt.length };
 }
 
 export interface FollowUpRate {
