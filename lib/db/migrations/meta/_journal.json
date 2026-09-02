@@ -127,6 +127,13 @@
       "when": 1788279297413,
       "tag": "0017_volatile_wallflower",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788313717647,
+      "tag": "0018_blue_mojo",
+      "breakpoints": true
     }
   ]
 }

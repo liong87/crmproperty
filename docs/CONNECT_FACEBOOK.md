@@ -6,8 +6,21 @@ minutes, once.
 ## 1. Generate an encryption key
 
 ```
-openssl rand -base64 32
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
+
+On macOS or Linux, `openssl rand -base64 32` does the same. **There is no `openssl` on a
+stock Windows install**, and PowerShell's `Get-Random` is not a cryptographic generator —
+do not use it for a key. The PowerShell equivalent, if you would rather not use node:
+
+```powershell
+$b = New-Object byte[] 32
+[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
+[Convert]::ToBase64String($b)
+```
+
+Pipe it straight into `npx wrangler secret put ENCRYPTION_KEY`, which prompts without
+echoing. Do not paste it into a chat, a commit, or `.env` in a repo you push.
 
 This encrypts the Page token before it is stored. **Without it, connecting is refused
 rather than storing a token in the clear** — that is deliberate.
