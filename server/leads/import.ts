@@ -16,7 +16,7 @@
  * Budgets are read as whole Ringgit and stored as integer cents. "1,200,000",
  * "RM 850000" and "850k" all work — previously any of those rejected the whole row.
  */
-import { requireDbUser, isManagerOrAbove } from "@/lib/auth";
+import { requireDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { createLeadFromIntake } from "./intake";
 import { ok, fail } from "@/lib/action-result";
 import type { ActionResult } from "@/types";
@@ -36,7 +36,7 @@ export interface ImportSummary {
 }
 
 /**
- * @param distribute  Managers and admins only: spread the imported leads across the
+ * @param distribute  Team leads and admins only: spread the imported leads across the
  *                    team by round-robin instead of keeping them.
  *
  * Default is to assign every imported lead to the person importing. An agent
@@ -51,10 +51,10 @@ export async function importLeadsFromCsv(
 ): Promise<ActionResult<ImportSummary>> {
   try {
     // Any authenticated staff member may import, because imported leads now belong to
-    // the importer. Restricting this to managers would leave an agent with their own
+    // the importer. Restricting this to team leads would leave an agent with their own
     // ad campaign no way to get their leads into the CRM.
     const me = await requireDbUser();
-    const spreadAcrossTeam = distribute && isManagerOrAbove(me);
+    const spreadAcrossTeam = distribute && isTeamLeadOrAbove(me);
     // undefined = let intake round-robin; otherwise pin to the importer.
     const assignTo = spreadAcrossTeam ? undefined : me.id;
 

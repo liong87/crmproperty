@@ -2,7 +2,7 @@ import { and, asc, count, eq, isNull, lt } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db/client";
 import { appointments, properties, projects, contacts, leads, users, type User } from "@/lib/db/schema";
-import { ownershipFilterAny, isManagerOrAbove } from "@/lib/auth";
+import { ownershipFilterAny, isTeamLeadOrAbove } from "@/lib/auth";
 
 export interface AppointmentRow {
   id: string;
@@ -157,7 +157,7 @@ export async function listGroupedAppointments(user: User): Promise<GroupedAppoin
       (v) => !v.needsOutcome && v.scheduledAt > todayEnd && v.scheduledAt <= tomorrowEnd,
     ),
     upcoming: all.filter((v) => !v.needsOutcome && v.scheduledAt > tomorrowEnd),
-    scope: isManagerOrAbove(user) ? "team" : "own",
+    scope: isTeamLeadOrAbove(user) ? "team" : "own",
   };
 }
 
@@ -287,7 +287,7 @@ export async function listAppointmentBoard(
 
   return {
     columns,
-    scope: isManagerOrAbove(user) ? "team" : "own",
+    scope: isTeamLeadOrAbove(user) ? "team" : "own",
     noShowRate: decided > 0 ? noShow.length / decided : null,
     projectFilters,
   };

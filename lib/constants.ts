@@ -4,7 +4,7 @@ export const APP_NAME = "PropertyAgent CRM";
 export const LEAD_STATUS = ["new", "contacted", "qualified", "disqualified"] as const;
 export const INTEREST = ["buy", "rent", "sell", "invest"] as const;
 export const LEAD_SOURCE = ["api", "webhook", "manual", "import"] as const;
-export const USER_ROLE = ["admin", "manager", "agent"] as const;
+export const USER_ROLE = ["admin", "team_lead", "agent"] as const;
 export const LISTING_TYPE = ["sale", "rent"] as const;
 export const PROPERTY_TYPE = [
   "condo", "serviced-apartment", "terrace", "semi-d", "bungalow", "land", "shop", "office",

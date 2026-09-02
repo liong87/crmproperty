@@ -1,5 +1,5 @@
 /** AuthProvider contract. App code depends on this, never on Clerk directly. */
-export type Role = "admin" | "manager" | "agent";
+export type Role = "admin" | "team_lead" | "agent";
 
 export interface AuthUser {
   externalAuthId: string;

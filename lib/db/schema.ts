@@ -23,6 +23,7 @@ import {
   bigint,
   date,
   jsonb,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { LeadFieldMap } from "@/lib/lead-forms/field-map";
@@ -48,14 +49,28 @@ export const users = pgTable(
     name: varchar("name", { length: 255 }).notNull(),
     email: varchar("email", { length: 320 }).notNull().unique(),
     phone: varchar("phone", { length: 20 }), // E.164
-    role: varchar("role", { length: 20 }).notNull().default("agent"), // admin | manager | agent
+    role: varchar("role", { length: 20 }).notNull().default("agent"), // admin | team_lead | agent
     teamId: uuid("team_id"),
+    /**
+     * Which Team Lead this person reports to. Null for admins and for a Team Lead who
+     * reports to nobody.
+     *
+     * A self-reference rather than a teams table: the agency is one office with a
+     * handful of people, and "who is my lead" is the only question anybody asks of the
+     * structure. A teams table would add a join and an admin screen to store the same
+     * one fact. Depth is not enforced in the schema, but every query walks ONE level —
+     * see server/users/hierarchy.ts for why a deep tree is not wanted here.
+     */
+    teamLeadId: uuid("team_lead_id").references((): AnyPgColumn => users.id, {
+      onDelete: "set null",
+    }),
     active: boolean("active").notNull().default(true),
     ...timestamps,
   },
   (t) => ({
     externalAuthIdx: index("users_external_auth_idx").on(t.externalAuthId),
     teamIdx: index("users_team_idx").on(t.teamId),
+    teamLeadIdx: index("users_team_lead_idx").on(t.teamLeadId),
     roleIdx: index("users_role_idx").on(t.role),
   }),
 );

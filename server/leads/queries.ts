@@ -27,7 +27,7 @@ export async function listLeadsPaginated(
   const pageSize = Math.min(100, Math.max(1, params.pageSize ?? DEFAULT_PAGE_SIZE));
   const offset = (page - 1) * pageSize;
 
-  const teamIds = user.role === "manager" ? await getTeamMemberIds(user.teamId) : undefined;
+  const teamIds = user.role === "team_lead" ? await getTeamMemberIds(user.teamId) : undefined;
 
   const where = and(
     isNull(leads.deletedAt),

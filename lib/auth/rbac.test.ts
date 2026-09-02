@@ -8,7 +8,7 @@ const user = (over: Partial<User>): User =>
 
 const agent = user({ id: "agent-1", role: "agent" });
 const other = user({ id: "agent-2", role: "agent" });
-const manager = user({ id: "mgr-1", role: "manager", teamId: "team-1" });
+const teamLead = user({ id: "lead-1", role: "team_lead", teamId: "team-1" });
 const admin = user({ id: "adm-1", role: "admin" });
 
 describe("canEditAny — setter or closer", () => {
@@ -41,18 +41,18 @@ describe("canEditAny — setter or closer", () => {
     expect(canEditAny(admin, [null, null])).toBe(true);
   });
 
-  it("managers edit their team's records", () => {
-    expect(canEditAny(manager, ["agent-2", null], "team-1")).toBe(true);
-    expect(canEditAny(manager, ["agent-2", null], "team-2")).toBe(false);
-    // No team on the record: agency-wide data a manager may edit.
-    expect(canEditAny(manager, ["agent-2", null])).toBe(true);
+  it("team leads edit their team's records", () => {
+    expect(canEditAny(teamLead, ["agent-2", null], "team-1")).toBe(true);
+    expect(canEditAny(teamLead, ["agent-2", null], "team-2")).toBe(false);
+    // No team on the record: agency-wide data a team lead may edit.
+    expect(canEditAny(teamLead, ["agent-2", null])).toBe(true);
   });
 
   it("agrees with single-column canEdit when there is only one owner", () => {
     for (const owner of ["agent-1", "agent-2", null]) {
       expect(canEditAny(agent, [owner])).toBe(canEdit(agent, owner));
       expect(canEditAny(other, [owner])).toBe(canEdit(other, owner));
-      expect(canEditAny(manager, [owner])).toBe(canEdit(manager, owner));
+      expect(canEditAny(teamLead, [owner])).toBe(canEdit(teamLead, owner));
       expect(canEditAny(admin, [owner])).toBe(canEdit(admin, owner));
     }
   });

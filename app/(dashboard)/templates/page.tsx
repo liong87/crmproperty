@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
-import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
+import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { listAllTemplates } from "@/server/templates/actions";
 import { TemplateManager } from "@/components/templates/template-manager";
 
 /**
- * Message templates — managers and admins only.
+ * Message templates — team leads and admins only.
  *
  * Templates are the agency's voice to clients. Agents send them; the agency decides
  * what they say. The server actions enforce the same rule, so this redirect is
@@ -13,7 +13,7 @@ import { TemplateManager } from "@/components/templates/template-manager";
 export default async function TemplatesPage() {
   const me = await getCurrentDbUser();
   if (!me) redirect("/sign-in");
-  if (!isManagerOrAbove(me)) redirect("/dashboard");
+  if (!isTeamLeadOrAbove(me)) redirect("/dashboard");
 
   const templates = await listAllTemplates();
 

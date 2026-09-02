@@ -80,7 +80,7 @@ export default async function PipelinePage({
       {orphaned > 0 && (
         <p className="text-xs text-muted-foreground">
           {orphaned} {orphaned === 1 ? "deal is" : "deals are"} in a stage that no longer exists and
-          appear on neither board. A manager can move {orphaned === 1 ? "it" : "them"} from the contact.
+          appear on neither board. A team lead can move {orphaned === 1 ? "it" : "them"} from the contact.
         </p>
       )}
     </div>

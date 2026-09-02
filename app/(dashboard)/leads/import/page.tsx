@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation";
-import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
+import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { CsvImport } from "@/components/leads/csv-import";
 
 export default async function ImportLeadsPage() {
   const me = await getCurrentDbUser();
   if (!me) redirect("/sign-in");
-  // Only managers and admins may spread an import across the team. The server
+  // Only team leads and admins may spread an import across the team. The server
   // enforces this too — this just decides whether the option is shown.
-  const canDistribute = isManagerOrAbove(me);
+  const canDistribute = isTeamLeadOrAbove(me);
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div>

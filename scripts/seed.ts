@@ -41,7 +41,7 @@ async function main() {
     .insert(users)
     .values([
       { externalAuthId: "seed_admin", name: "Aisyah Rahman", email: "rodneyliong.igreen@gmail.com", phone: "+60123000001", role: "admin" },
-      { externalAuthId: "seed_manager", name: "Tan Wei Ming", email: "weiming@agency.my", phone: "+60123000002", role: "manager" },
+      { externalAuthId: "seed_manager", name: "Tan Wei Ming", email: "weiming@agency.my", phone: "+60123000002", role: "team_lead" },
       { externalAuthId: "seed_agent1", name: "Nurul Izzah", email: "nurul@agency.my", phone: "+60123000003", role: "agent" },
       { externalAuthId: "seed_agent2", name: "Ravi Kumar", email: "ravi@agency.my", phone: "+60123000004", role: "agent" },
       { externalAuthId: "seed_agent3", name: "Lim Siew Ling", email: "siewling@agency.my", phone: "+60123000005", role: "agent" },

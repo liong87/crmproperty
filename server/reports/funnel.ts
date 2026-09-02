@@ -9,12 +9,12 @@
  * every enquiry, including the many that never became one.
  *
  * Every figure is scoped by the caller's role, using the same ownership rules as the
- * rest of the app: an agent sees their own numbers, a manager sees the team's.
+ * rest of the app: an agent sees their own numbers, a team lead sees the team's.
  */
 import { and, count, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { leads, appointments, projects, users, type User } from "@/lib/db/schema";
-import { ownershipFilter, ownershipFilterAny, isManagerOrAbove } from "@/lib/auth";
+import { ownershipFilter, ownershipFilterAny, isTeamLeadOrAbove } from "@/lib/auth";
 
 /**
  * Bucket labels for rows with nothing to group on.
@@ -191,14 +191,14 @@ export async function getFunnel(user: User, sinceDays = 90): Promise<FunnelData>
   ];
 
   return {
-    scope: isManagerOrAbove(user) ? "team" : "own",
+    scope: isTeamLeadOrAbove(user) ? "team" : "own",
     sinceDays,
     stages,
     // Denominator is appointments that reached a verdict. Counting still-scheduled ones
     // would make every fresh appointment look like a success and dilute the rate.
     noShowRate: share(t.noShow, t.showedUp + t.noShow),
     byProject: merge(leadsByProject, apptsByProject, NO_PROJECT_LABEL),
-    byAgent: isManagerOrAbove(user)
+    byAgent: isTeamLeadOrAbove(user)
       ? await mergeAgents(leadsByAgent, apptsSetByAgent, apptsClosedByAgent)
       : [],
   };
@@ -308,7 +308,7 @@ export interface TrendPoint {
  */
 export async function getFunnelTrend(user: User, weeks = 12): Promise<TrendPoint[]> {
   const since = daysAgo(weeks * 7);
-  const own = !isManagerOrAbove(user);
+  const own = !isTeamLeadOrAbove(user);
   /**
    * Bound as an ISO STRING with an explicit cast, not as a Date.
    *

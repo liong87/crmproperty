@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
+import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { authorizeUrl, metaOAuthConfigured } from "@/lib/leadads/meta-oauth";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ function back(reason: string): NextResponse {
  */
 export async function GET() {
   const me = await getCurrentDbUser();
-  if (!me || !isManagerOrAbove(me)) {
+  if (!me || !isTeamLeadOrAbove(me)) {
     return NextResponse.redirect(new URL("/dashboard", process.env.APP_URL));
   }
   if (!metaOAuthConfigured()) {

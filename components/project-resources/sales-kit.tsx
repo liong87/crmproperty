@@ -4,7 +4,7 @@
  *
  * Read-only for agents by design — this replaces a shared spreadsheet of Drive links,
  * and the value of replacing it is that there is exactly one current price list.
- * Managers and admins get the publishing controls inline rather than on a separate
+ * Team leads and admins get the publishing controls inline rather than on a separate
  * admin screen, because the person who notices the price list is out of date is the
  * person looking at it.
  */
@@ -131,7 +131,7 @@ export function SalesKit({
           Nothing published yet.{" "}
           {canPublish
             ? "Add the price list, brochure and blank forms so agents stop asking for them."
-            : "Your manager has not published the kit for this project yet."}
+            : "Your team lead has not published the kit for this project yet."}
         </p>
       )}
 

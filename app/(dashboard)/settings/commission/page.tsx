@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
+import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { listSchemes } from "@/server/commission/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SchemeEditor } from "@/components/commission/scheme-editor";
@@ -9,8 +9,8 @@ export const metadata = { title: "Commission" };
 export default async function CommissionSettingsPage() {
   const me = await getCurrentDbUser();
   if (!me) redirect("/sign-in");
-  // Managers and admins only: this decides what everybody is paid.
-  if (!isManagerOrAbove(me)) redirect("/dashboard");
+  // Team leads and admins only: this decides what everybody is paid.
+  if (!isTeamLeadOrAbove(me)) redirect("/dashboard");
 
   const schemes = await listSchemes();
 

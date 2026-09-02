@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { Facebook, Globe, MessageCircle, CircleAlert, CircleCheck } from "lucide-react";
-import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
+import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { listLeadFormSources } from "@/server/lead-sources/queries";
 import { listProjectOptions } from "@/server/projects/queries";
 import { LeadSourceManager } from "@/components/lead-sources/source-manager";
@@ -26,7 +26,7 @@ export default async function LeadsCapturePage({
 }) {
   const me = await getCurrentDbUser();
   if (!me) redirect("/sign-in");
-  if (!isManagerOrAbove(me)) redirect("/dashboard");
+  if (!isTeamLeadOrAbove(me)) redirect("/dashboard");
 
   const [sources, projects, cred, connectedPage, sp] = await Promise.all([
     listLeadFormSources(),

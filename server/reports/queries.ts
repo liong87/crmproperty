@@ -1,8 +1,8 @@
-/** Role-scoped reporting aggregates. Agents see their own book; managers/admins see all. */
+/** Role-scoped reporting aggregates. Agents see their own book; team leads/admins see all. */
 import { and, count, eq, gte, isNull, sum } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { leads, contacts, deals, dealStages, properties, activities, users, type User } from "@/lib/db/schema";
-import { isManagerOrAbove } from "@/lib/auth";
+import { isTeamLeadOrAbove } from "@/lib/auth";
 
 export interface Count { label: string; value: number }
 export interface StageStat { label: string; count: number; value: number; isTerminal: boolean }
@@ -32,7 +32,7 @@ export interface ReportData {
 }
 
 export async function getReportData(user: User): Promise<ReportData> {
-  const mgr = isManagerOrAbove(user);
+  const mgr = isTeamLeadOrAbove(user);
   const leadOwn = mgr ? undefined : eq(leads.assignedTo, user.id);
   const dealOwn = mgr ? undefined : eq(deals.assignedTo, user.id);
   const propOwn = mgr ? undefined : eq(properties.assignedAgent, user.id);
@@ -91,7 +91,7 @@ export async function getReportData(user: User): Promise<ReportData> {
     .where(and(isNull(activities.deletedAt), gte(activities.occurredAt, weekAgo), actOwn));
   const activitiesLast7Days = actRow?.c ?? 0;
 
-  // Leaderboard (managers/admins only)
+  // Leaderboard (team leads/admins only)
   let leaderboard: AgentRow[] = [];
   if (mgr) {
     const agentRows = await db

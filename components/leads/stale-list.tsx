@@ -31,7 +31,7 @@ export function StaleLeadList({
 }: {
   leads: StaleLeadRow[];
   agents: Array<{ id: string; name: string }>;
-  /** Managers and admins only — the action enforces the same rule. */
+  /** Team leads and admins only — the action enforces the same rule. */
   canReassign: boolean;
 }) {
   const router = useRouter();

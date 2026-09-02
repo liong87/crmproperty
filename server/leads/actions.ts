@@ -44,7 +44,7 @@ export async function createLead(input: unknown): Promise<ActionResult<Lead>> {
   try {
     const me = await requireDbUser();
     const d = createSchema.parse(input);
-    // Agents may only assign to themselves; managers/admins may assign to anyone.
+    // Agents may only assign to themselves; team leads/admins may assign to anyone.
     let assignedTo = d.assignedTo ?? me.id;
     if (me.role === "agent") assignedTo = me.id;
 
@@ -91,7 +91,7 @@ export async function updateLead(input: unknown): Promise<ActionResult<Lead>> {
     assertCanEdit(me, lead.assignedTo);
     guardConverted(lead);
 
-    // Only managers/admins can reassign.
+    // Only team leads/admins can reassign.
     const assignedTo =
       d.assignedTo !== undefined && me.role !== "agent" ? d.assignedTo : lead.assignedTo;
 
@@ -168,7 +168,7 @@ export async function assignLead(
 ): Promise<ActionResult<Lead>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     const parsed = z.string().uuid().parse(assignedTo);
 
     // Read the previous owner before the update, so the note can name both ends of

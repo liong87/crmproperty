@@ -34,7 +34,7 @@ const updateSchema = baseSchema.partial().extend({ id: z.string().uuid() });
 export async function createLeadFormSource(input: unknown): Promise<ActionResult<LeadFormSource>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     const d = baseSchema.parse(input);
 
     // Checked here as well as by the unique index, so the user gets a sentence rather
@@ -74,7 +74,7 @@ export async function createLeadFormSource(input: unknown): Promise<ActionResult
 export async function updateLeadFormSource(input: unknown): Promise<ActionResult<LeadFormSource>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     const d = updateSchema.parse(input);
     const existing = await getLeadFormSourceById(d.id);
     if (!existing) return fail("Mapping not found.");
@@ -103,7 +103,7 @@ export async function updateLeadFormSource(input: unknown): Promise<ActionResult
 export async function deleteLeadFormSource(id: string): Promise<ActionResult<void>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     z.string().uuid().parse(id);
     const existing = await getLeadFormSourceById(id);
     if (!existing) return fail("Mapping not found.");

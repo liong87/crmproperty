@@ -21,7 +21,7 @@
 import { and, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { activities, users, type User } from "@/lib/db/schema";
-import { isManagerOrAbove } from "@/lib/auth";
+import { visibleUserIds } from "@/server/users/hierarchy";
 
 export interface AgentActivityRow {
   id: string;
@@ -74,7 +74,9 @@ export function summariseActivity(
 }
 
 export async function getAgentActivity(user: User, sinceDays: number): Promise<AgentActivityData> {
-  const team = isManagerOrAbove(user);
+  // Empty means admin: no restriction. Anything else is an explicit id list, so a
+  // Team Lead with no members scopes to themselves rather than to everybody.
+  const visibleIds = await visibleUserIds(user);
   const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
 
   const rows = await db
@@ -105,10 +107,13 @@ export async function getAgentActivity(user: User, sinceDays: number): Promise<A
       and(
         eq(users.active, true),
         isNull(users.deletedAt),
-        team ? undefined : eq(users.id, user.id),
+        visibleIds.length > 0 ? inArray(users.id, visibleIds) : undefined,
       ),
     )
     .groupBy(users.id, users.name, users.role);
 
-  return summariseActivity(rows, team ? "team" : "own", sinceDays);
+  // "own" only when the list is literally just this person — a Team Lead with one
+  // member is looking at a team, however small.
+  const isOwnOnly = visibleIds.length === 1 && visibleIds[0] === user.id;
+  return summariseActivity(rows, isOwnOnly ? "own" : "team", sinceDays);
 }

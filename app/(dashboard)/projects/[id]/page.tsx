@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
+import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { getProjectWithUnitTypes, listProjectPool } from "@/server/projects/queries";
 import { listAssignableAgents } from "@/server/leads/queries";
 import { PoolManager } from "@/components/projects/pool-manager";
@@ -33,7 +33,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const found = await getProjectWithUnitTypes(id);
   if (!found) notFound();
   const { project, unitTypes } = found;
-  const canEdit = isManagerOrAbove(me);
+  const canEdit = isTeamLeadOrAbove(me);
 
   return (
     <div className="space-y-4">
@@ -64,7 +64,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       </Card>
 
       {/*
-        Everyone sees the kit; only managers and admins can change it. This is the
+        Everyone sees the kit; only team leads and admins can change it. This is the
         agency publishing DOWN to its agents — the mirror of the deal checklist, which
         is a buyer's paperwork coming UP into one deal.
       */}
@@ -80,7 +80,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       </Card>
 
       {/*
-        Managers and admins only. Who is on a project's rotation, and in what order,
+        Team leads and admins only. Who is on a project's rotation, and in what order,
         is a staffing decision — and gating the card here means an agent is never
         sent the membership at all, rather than being shown it without the buttons.
       */}

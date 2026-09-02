@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { syncCurrentUser, isManagerOrAbove } from "@/lib/auth";
+import { syncCurrentUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { UserButton } from "@/lib/auth/provider-components";
 import { AppNav, type NavGroup } from "@/components/nav/app-nav";
 import { APP_NAME } from "@/lib/constants";
 
 const ROLE_LABEL: Record<string, string> = {
   admin: "Administrator",
-  manager: "Manager",
+  team_lead: "Team Lead",
   agent: "Agent",
 };
 
@@ -25,10 +25,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!user) redirect("/sign-in");
   if (!user.active) redirect("/pending");
 
-  const manager = isManagerOrAbove(user);
-  const mgrOnly = <T,>(items: T[]): T[] => (manager ? items : []);
+  const lead = isTeamLeadOrAbove(user);
+  const leadOnly = <T,>(items: T[]): T[] => (lead ? items : []);
 
-  // Role filtering happens here, on the server, so a manager-only href is never sent
+  // Role filtering happens here, on the server, so a team-lead-only href is never sent
   // to an agent's browser at all.
   const groups: NavGroup[] = [
     {
@@ -45,7 +45,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       links: [
         { href: "/leads", label: "Leads" },
         { href: "/contacts", label: "Contacts" },
-        ...mgrOnly([{ href: "/leads-capture", label: "Leads capture" }]),
+        ...leadOnly([{ href: "/leads-capture", label: "Leads capture" }]),
       ],
     },
     {
@@ -58,18 +58,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
     },
     {
       label: "Communication",
-      links: mgrOnly([{ href: "/templates", label: "Templates" }]),
+      links: leadOnly([{ href: "/templates", label: "Templates" }]),
     },
     {
       label: "Insights",
       links: [
         { href: "/reports", label: "Reports" },
-        ...mgrOnly([{ href: "/settings/commission", label: "Commission" }]),
+        ...leadOnly([{ href: "/settings/commission", label: "Commission" }]),
       ],
     },
     {
       label: "Team",
-      links: mgrOnly([{ href: "/users", label: "Users" }]),
+      links: leadOnly([
+        { href: "/team", label: "My team" },
+        { href: "/users", label: "Users" },
+      ]),
     },
     {
       label: "Support",

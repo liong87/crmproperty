@@ -7,7 +7,7 @@
  * campaign buys the cheapest clicks, and cheap leads that never turn up at a viewing
  * are the most expensive kind.
  *
- * Managers and admins only. Agents never see agency ad spend — it is commercially
+ * Team leads and admins only. Agents never see agency ad spend — it is commercially
  * sensitive, and an agent's own cost per lead is not a number they can act on.
  *
  * Attribution is last-touch on the ORIGINATING lead, which is the only chain we can
@@ -37,7 +37,7 @@
 import { and, gte, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { campaignSpend, type User } from "@/lib/db/schema";
-import { isManagerOrAbove, AuthorizationError } from "@/lib/auth";
+import { isTeamLeadOrAbove, AuthorizationError } from "@/lib/auth";
 
 export interface CampaignCostRow {
   /** "2026-08" — the calendar month in Malaysia, not UTC. */
@@ -118,7 +118,7 @@ const per = costPer;
  * @param months how many whole calendar months back to report, including this one.
  */
 export async function getCampaignCosts(user: User, months = 3): Promise<CampaignCostReport> {
-  if (!isManagerOrAbove(user)) throw new AuthorizationError();
+  if (!isTeamLeadOrAbove(user)) throw new AuthorizationError();
 
   // First day of the month, `months - 1` months ago, in Malaysian local time.
   // Parenthesised as a whole expression on purpose. Without the outer brackets a
@@ -294,7 +294,7 @@ export async function listKnownCampaigns(
   user: User,
   months = 6,
 ): Promise<Array<{ campaign: string; source: string }>> {
-  if (!isManagerOrAbove(user)) throw new AuthorizationError();
+  if (!isTeamLeadOrAbove(user)) throw new AuthorizationError();
   const rows = (await db.execute(sql`
     select distinct
       l.utm_campaign as campaign,

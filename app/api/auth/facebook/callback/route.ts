@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { connectedPages } from "@/lib/db/schema";
-import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
+import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { encryptSecret, encryptionAvailable } from "@/lib/crypto/secret-box";
 import { exchangeCodeForPages, META_SCOPES } from "@/lib/leadads/meta-oauth";
 import { monitoring } from "@/lib/monitoring";
@@ -21,7 +21,7 @@ function done(params: Record<string, string>): NextResponse {
 
 export async function GET(req: Request) {
   const me = await getCurrentDbUser();
-  if (!me || !isManagerOrAbove(me)) {
+  if (!me || !isTeamLeadOrAbove(me)) {
     return NextResponse.redirect(new URL("/dashboard", process.env.APP_URL));
   }
 

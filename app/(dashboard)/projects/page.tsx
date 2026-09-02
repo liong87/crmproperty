@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
+import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import {
   listProjectsPaginated,
   type ProjectStatus,
@@ -27,7 +27,7 @@ export default async function ProjectsPage({
   if (!me) redirect("/sign-in");
   const sp = await searchParams;
   const page = Number(sp.page ?? "1") || 1;
-  const canEdit = isManagerOrAbove(me);
+  const canEdit = isTeamLeadOrAbove(me);
 
   const { items, total, pageSize } = await listProjectsPaginated({
     search: sp.q,
@@ -86,7 +86,7 @@ export default async function ProjectsPage({
             <EmptyState
               icon={Landmark}
               title="No projects found"
-              hint={canEdit ? "Add a project or adjust your filters." : "Adjust your filters, or ask a manager to add a project."}
+              hint={canEdit ? "Add a project or adjust your filters." : "Adjust your filters, or ask a team lead to add a project."}
             />
           </div>
         )}

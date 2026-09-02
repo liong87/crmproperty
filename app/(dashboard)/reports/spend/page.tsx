@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
+import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { getCampaignCosts, listKnownCampaigns } from "@/server/reports/spend";
 import { listSpend } from "@/server/campaign-spend/actions";
 import { SpendManager } from "@/components/reports/spend-manager";
 
 /**
- * Advertising spend and cost per lead — managers and admins only.
+ * Advertising spend and cost per lead — team leads and admins only.
  *
  * The server queries assert the same rule, so this redirect is convenience rather
  * than security. Agents are sent back to the reports they may see.
@@ -14,7 +14,7 @@ import { SpendManager } from "@/components/reports/spend-manager";
 export default async function SpendPage() {
   const me = await getCurrentDbUser();
   if (!me) redirect("/sign-in");
-  if (!isManagerOrAbove(me)) redirect("/reports");
+  if (!isTeamLeadOrAbove(me)) redirect("/reports");
 
   const [report, entries, knownCampaigns] = await Promise.all([
     getCampaignCosts(me, 3),

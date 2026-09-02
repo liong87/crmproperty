@@ -94,7 +94,7 @@ export function mapMetaLead(record: LeadAdRecord, mapping: MetaMapping | null): 
   /**
    * An explicit mapping wins; the guess is the fallback.
    *
-   * Note the order matters even when a mapping exists: a manager can map the phone and
+   * Note the order matters even when a mapping exists: a team lead can map the phone and
    * leave email alone, and the unmapped half should still be guessed rather than
    * silently dropped because a mapping row exists at all.
    */

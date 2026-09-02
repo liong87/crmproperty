@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
+import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { listFollowUps } from "@/server/activities/queries";
 import { listDocumentsDue } from "@/server/deal-documents/queries";
 import { FollowUpList } from "@/components/activities/follow-up-list";
@@ -23,7 +23,7 @@ export default async function RemindersPage() {
       <div>
         <h1 className="text-xl font-semibold">Reminders</h1>
         <p className="text-sm text-muted-foreground">
-          {isManagerOrAbove(me) ? "All open follow-ups across the team." : "Your open follow-ups."}
+          {isTeamLeadOrAbove(me) ? "All open follow-ups across the team." : "Your open follow-ups."}
           {overdue > 0 && ` · ${overdue} overdue`}
         </p>
       </div>

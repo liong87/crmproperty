@@ -15,7 +15,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { appointments, contacts, leads, activities, users } from "@/lib/db/schema";
-import { requireDbUser, canEdit, canEditAny, isManagerOrAbove, AuthorizationError } from "@/lib/auth";
+import { requireDbUser, canEdit, canEditAny, isTeamLeadOrAbove, AuthorizationError } from "@/lib/auth";
 import { APPOINTMENT_STATUS, APPOINTMENT_OUTCOME } from "@/lib/constants";
 import { ok, fail } from "@/lib/action-result";
 import { notify } from "@/lib/notify";
@@ -340,12 +340,12 @@ export async function rescheduleAppointment(input: unknown): Promise<ActionResul
  *
  * Cancelling is usually the right action — it keeps the history of an appointment that
  * was made and called off, which matters when a client claims they were never shown
- * anything. Deletion is for mistakes, so it is restricted to managers.
+ * anything. Deletion is for mistakes, so it is restricted to team leads.
  */
 export async function deleteAppointment(id: string): Promise<ActionResult<void>> {
   try {
     const me = await requireDbUser();
-    if (!isManagerOrAbove(me)) throw new AuthorizationError();
+    if (!isTeamLeadOrAbove(me)) throw new AuthorizationError();
     z.string().uuid().parse(id);
 
     const [row] = await db.select().from(appointments).where(eq(appointments.id, id));

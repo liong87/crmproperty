@@ -33,7 +33,7 @@ const setActiveSchema = z.object({
 export async function listUsers(params: ListUsersParams = {}): Promise<ActionResult<Paginated<User>>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     return ok(await listUsersPaginated(params));
   } catch (err) {
     return handle(err, "listUsers");
@@ -121,4 +121,57 @@ function handle(err: unknown, where: string): ActionResult<never> {
   if (err instanceof Error && err.message === "UNAUTHENTICATED") return fail("Please sign in.");
   monitoring.captureException(err, { where });
   return fail("Something went wrong.");
+}
+
+
+const setLeadSchema = z.object({
+  userId: z.string().uuid(),
+  teamLeadId: z.string().uuid().nullable(),
+});
+
+/**
+ * Put an agent under a Team Lead.
+ *
+ * Admin only. A Team Lead choosing their own members would let them widen what they can
+ * see by adding people to themselves, which is the whole point of the boundary.
+ *
+ * Two rules enforced here rather than trusted to the UI: nobody reports to themselves,
+ * and a lead cannot be set to somebody who is not a Team Lead or admin. Both would
+ * otherwise produce a hierarchy that reads fine and scopes wrongly.
+ */
+export async function setUserTeamLead(
+  input: z.infer<typeof setLeadSchema>,
+): Promise<ActionResult<User>> {
+  try {
+    const me = await requireDbUser();
+    assertRole(me, "admin");
+    const d = setLeadSchema.parse(input);
+
+    if (d.teamLeadId === d.userId) return fail("Somebody cannot report to themselves.");
+
+    if (d.teamLeadId) {
+      const [lead] = await db
+        .select({ role: users.role, active: users.active })
+        .from(users)
+        .where(and(eq(users.id, d.teamLeadId), isNull(users.deletedAt)));
+      if (!lead) return fail("That team lead was not found.");
+      if (lead.role !== "team_lead" && lead.role !== "admin") {
+        return fail("Only a Team Lead or an admin can have people reporting to them.");
+      }
+      if (!lead.active) return fail("That team lead is not active.");
+    }
+
+    const [row] = await db
+      .update(users)
+      .set({ teamLeadId: d.teamLeadId })
+      .where(and(eq(users.id, d.userId), isNull(users.deletedAt)))
+      .returning();
+    if (!row) return fail("User not found.");
+
+    revalidatePath("/users");
+    revalidatePath("/team");
+    return ok(row);
+  } catch (err) {
+    return handle(err, "setUserTeamLead");
+  }
 }

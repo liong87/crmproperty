@@ -3,7 +3,7 @@
  * Publishing a project's sales kit.
  *
  * Permission split is deliberate and asymmetric: EVERY signed-in user reads a kit,
- * only managers and admins write to one. A sales kit that any agent can edit stops
+ * only team leads and admins write to one. A sales kit that any agent can edit stops
  * being a source of truth the moment two people disagree about the current price
  * list — and the whole point of moving off the shared spreadsheet was to have one.
  */
@@ -13,17 +13,17 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { projectResources, documents, projects } from "@/lib/db/schema";
 import { storage } from "@/lib/storage";
-import { requireDbUser, isManagerOrAbove, AuthorizationError } from "@/lib/auth";
+import { requireDbUser, isTeamLeadOrAbove, AuthorizationError } from "@/lib/auth";
 import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { RESOURCE_CATEGORIES } from "@/lib/sales-kit";
 
 
-/** Only managers and admins publish. Agents read. */
+/** Only team leads and admins publish. Agents read. */
 async function requirePublisher() {
   const me = await requireDbUser();
-  if (!isManagerOrAbove(me)) throw new AuthorizationError();
+  if (!isTeamLeadOrAbove(me)) throw new AuthorizationError();
   return me;
 }
 

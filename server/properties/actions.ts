@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db/client";
 import { properties, type Property } from "@/lib/db/schema";
-import { requireDbUser, assertCanEdit, isManagerOrAbove, AuthorizationError } from "@/lib/auth";
+import { requireDbUser, assertCanEdit, isTeamLeadOrAbove, AuthorizationError } from "@/lib/auth";
 import {
   LISTING_TYPE, PROPERTY_TYPE, TENURE, TITLE_TYPE, FURNISHING, PROPERTY_STATUS,
 } from "@/lib/constants";
@@ -48,8 +48,8 @@ export async function createProperty(input: unknown): Promise<ActionResult<Prope
   try {
     const me = await requireDbUser();
     const d = baseSchema.parse(input);
-    // Agents own what they create; managers/admins may assign.
-    const assignedAgent = isManagerOrAbove(me) && d.assignedAgent ? d.assignedAgent : me.id;
+    // Agents own what they create; team leads/admins may assign.
+    const assignedAgent = isTeamLeadOrAbove(me) && d.assignedAgent ? d.assignedAgent : me.id;
 
     const [row] = await db
       .insert(properties)
@@ -94,7 +94,7 @@ export async function updateProperty(input: unknown): Promise<ActionResult<Prope
     assertCanEdit(me, existing.assignedAgent);
 
     const assignedAgent =
-      d.assignedAgent !== undefined && isManagerOrAbove(me) ? d.assignedAgent : existing.assignedAgent;
+      d.assignedAgent !== undefined && isTeamLeadOrAbove(me) ? d.assignedAgent : existing.assignedAgent;
 
     const [row] = await db
       .update(properties)

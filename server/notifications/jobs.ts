@@ -196,7 +196,7 @@ export interface DigestFigures {
 }
 
 /**
- * The week's numbers for managers and admins.
+ * The week's numbers for team leads and admins.
  *
  * Counted over the last 7 days, agency-wide — a digest is a management summary, so it
  * deliberately ignores the per-agent ownership filters the app applies everywhere else.
@@ -241,7 +241,7 @@ export async function weeklyDigest(
     .where(and(
       eq(users.active, true),
       isNull(users.deletedAt),
-      sql`${users.role} in ('admin','manager')`,
+      sql`${users.role} in ('admin','team_lead')`,
     ));
 
   const f = result.figures;

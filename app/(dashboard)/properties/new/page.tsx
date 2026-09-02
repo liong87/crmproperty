@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
-import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
+import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { listAssignableAgents } from "@/server/leads/queries";
 import { PropertyForm } from "@/components/properties/property-form";
 
 export default async function NewPropertyPage() {
   const me = await getCurrentDbUser();
   if (!me) redirect("/sign-in");
-  const canAssign = isManagerOrAbove(me);
+  const canAssign = isTeamLeadOrAbove(me);
   const agents = canAssign ? await listAssignableAgents() : [];
   return (
     <div className="mx-auto max-w-3xl space-y-4">

@@ -7,7 +7,7 @@ import { findDuplicateClients, type DuplicateHit } from "@/server/duplicates/que
  *
  * Warns, never blocks. Genuine duplicates happen — a couple sharing a phone, a client
  * who really did enquire twice, a family using one email — and an agent with a
- * legitimate case should not have to find a manager to save a record.
+ * legitimate case should not have to find a team lead to save a record.
  *
  * Debounced, because this fires on every keystroke of a phone field.
  */

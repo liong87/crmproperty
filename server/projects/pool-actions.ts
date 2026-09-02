@@ -18,7 +18,7 @@ import type { ActionResult } from "@/types";
 export async function addPoolMember(projectId: string, userId: string): Promise<ActionResult<void>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     z.string().uuid().parse(projectId);
     z.string().uuid().parse(userId);
 
@@ -65,7 +65,7 @@ export async function addPoolMember(projectId: string, userId: string): Promise<
 export async function setPoolMemberActive(id: string, active: boolean): Promise<ActionResult<void>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     z.string().uuid().parse(id);
 
     const [row] = await db
@@ -92,7 +92,7 @@ export async function setPoolMemberActive(id: string, active: boolean): Promise<
 export async function movePoolMember(id: string, direction: "up" | "down"): Promise<ActionResult<void>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     z.string().uuid().parse(id);
     z.enum(["up", "down"]).parse(direction);
 
@@ -136,7 +136,7 @@ export async function movePoolMember(id: string, direction: "up" | "down"): Prom
 export async function removePoolMember(id: string): Promise<ActionResult<void>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     z.string().uuid().parse(id);
 
     const [row] = await db

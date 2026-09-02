@@ -57,7 +57,7 @@ function handle(err: unknown, where: string): ActionResult<never> {
 export async function saveScheme(input: unknown): Promise<ActionResult<{ id: string }>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     const d = schemeSchema.parse(input);
 
     // Both totals are checked here rather than by a constraint: a table constraint
@@ -132,7 +132,7 @@ export async function saveScheme(input: unknown): Promise<ActionResult<{ id: str
 export async function deleteScheme(id: string): Promise<ActionResult<void>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     z.string().uuid().parse(id);
 
     const [row] = await db

@@ -2,7 +2,7 @@
  * Role-based access control. Enforce in server actions AND DB queries — never UI only.
  *
  *  admin   → full access to all data
- *  manager → view all; edit team data
+ *  team_lead → view all; edit their team's data
  *  agent   → view/edit only own assigned records
  */
 import { type SQL, eq, or, inArray } from "drizzle-orm";
@@ -27,13 +27,13 @@ export function assertRole(user: User, ...allowed: Role[]): void {
 export function isAdmin(user: User): boolean {
   return user.role === "admin";
 }
-export function isManagerOrAbove(user: User): boolean {
-  return user.role === "admin" || user.role === "manager";
+export function isTeamLeadOrAbove(user: User): boolean {
+  return user.role === "admin" || user.role === "team_lead";
 }
 
 /** Can this user VIEW a record owned by ownerId (in teamId)? */
 export function canView(user: User, ownerId: string | null, teamId?: string | null): boolean {
-  if (isManagerOrAbove(user)) return true; // admin + manager view all
+  if (isTeamLeadOrAbove(user)) return true; // admin + team lead view all
   return ownerId === user.id; // agent: own only
   void teamId;
 }
@@ -41,7 +41,7 @@ export function canView(user: User, ownerId: string | null, teamId?: string | nu
 /** Can this user EDIT a record owned by ownerId (in teamId)? */
 export function canEdit(user: User, ownerId: string | null, teamId?: string | null): boolean {
   if (user.role === "admin") return true;
-  if (user.role === "manager") return teamId == null || teamId === user.teamId; // team data
+  if (user.role === "team_lead") return teamId == null || teamId === user.teamId; // team data
   return ownerId === user.id; // agent: own only
 }
 
@@ -55,7 +55,7 @@ export function assertCanEdit(user: User, ownerId: string | null, teamId?: strin
  * = no restriction) to AND into a where clause, scoped by the user's role.
  *
  * @param ownerColumn the assigned-to column on the table (e.g. leads.assignedTo)
- * @param teamMemberIds ids of users in the manager's team (optional; managers see all by default)
+ * @param teamMemberIds ids of the team lead's members (optional; team leads see all by default)
  */
 /**
  * Ownership filter across SEVERAL owner columns — a record is visible if the user
@@ -76,8 +76,8 @@ export function ownershipFilterAny(
   teamMemberIds?: string[],
 ): SQL | undefined {
   if (ownerColumns.length === 0) return undefined;
-  if (isManagerOrAbove(user)) {
-    if (user.role === "manager" && teamMemberIds && teamMemberIds.length > 0) {
+  if (isTeamLeadOrAbove(user)) {
+    if (user.role === "team_lead" && teamMemberIds && teamMemberIds.length > 0) {
       return or(
         ...ownerColumns.flatMap((c) => [inArray(c, teamMemberIds), eq(c, user.id)]),
       );
@@ -96,7 +96,7 @@ export function canEditAny(
   teamId?: string | null,
 ): boolean {
   if (user.role === "admin") return true;
-  if (user.role === "manager") return teamId == null || teamId === user.teamId;
+  if (user.role === "team_lead") return teamId == null || teamId === user.teamId;
   return ownerIds.some((id) => id != null && id === user.id);
 }
 
@@ -114,9 +114,9 @@ export function ownershipFilter(
   ownerColumn: AnyPgColumn,
   teamMemberIds?: string[],
 ): SQL | undefined {
-  if (isManagerOrAbove(user)) {
-    // Managers/admins view everything. If a team scope is provided, honour it.
-    if (user.role === "manager" && teamMemberIds && teamMemberIds.length > 0) {
+  if (isTeamLeadOrAbove(user)) {
+    // Team leads/admins view everything. If a team scope is provided, honour it.
+    if (user.role === "team_lead" && teamMemberIds && teamMemberIds.length > 0) {
       return or(inArray(ownerColumn, teamMemberIds), eq(ownerColumn, user.id));
     }
     return undefined;

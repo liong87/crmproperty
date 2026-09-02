@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
+import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { getReportData } from "@/server/reports/queries";
 import { getFunnel, getFunnelTrend } from "@/server/reports/funnel";
 import { getAgentActivity } from "@/server/reports/activity";
@@ -39,7 +39,7 @@ export default async function ReportsPage({
           <p className="text-sm text-muted-foreground">{r.scope === "team" ? "Team-wide metrics." : "Your book of business."}</p>
         </div>
         {/* Spend is the agency's cost base, not an agent's business. */}
-        {isManagerOrAbove(me) && (
+        {isTeamLeadOrAbove(me) && (
           <Link href="/reports/spend" className="text-sm font-medium underline underline-offset-4">
             Advertising spend →
           </Link>

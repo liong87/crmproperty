@@ -59,7 +59,7 @@ export function DealCommissionPanel({
     if (schemes.length === 0) {
       return (
         <p className="text-sm text-muted-foreground">
-          No commission scheme configured yet. A manager can create one under
+          No commission scheme configured yet. A team lead can create one under
           Settings → Commission.
         </p>
       );

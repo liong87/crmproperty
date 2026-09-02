@@ -10,7 +10,7 @@ export {
   canView,
   canEdit,
   isAdmin,
-  isManagerOrAbove,
+  isTeamLeadOrAbove,
   ownershipFilter,
   AuthorizationError,
 } from "./rbac";

@@ -21,8 +21,8 @@ export interface HelpSection {
   n: number;
   title: string;
   part: string;
-  /** Manager and admin only. Filtered out server-side, not hidden with CSS. */
-  managerOnly?: boolean;
+  /** Team lead and admin only. Filtered out server-side, not hidden with CSS. */
+  teamLeadOnly?: boolean;
   blocks: Block[];
 }
 
@@ -38,7 +38,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         head: ["Role", "Sees", "Can also"],
         rows: [
           ["Agent", "Their own leads, contacts, deals and appointments", "—"],
-          ["Manager", "Their team's records", "Reassign leads, create projects, manage pools, see ad spend"],
+          ["Team Lead", "Their team's records", "Reassign leads, create projects, manage pools, see ad spend, publish training"],
           ["Admin", "Everything in the agency", "All of the above, plus approving accounts and setting roles"],
         ],
       },
@@ -187,7 +187,7 @@ export const HELP_SECTIONS: HelpSection[] = [
   {
     id: "reports", n: 12, part: "Staying on top", title: "Reports",
     blocks: [
-      { kind: "p", text: "The funnel is the heart of it: Leads → Appointments set → Showed up → Booked, with the conversion rate at each step. Underneath, the same figures by project and, for managers, by agent. A trend chart plots leads, appointments and bookings week by week." },
+      { kind: "p", text: "The funnel is the heart of it: Leads → Appointments set → Showed up → Booked, with the conversion rate at each step. Underneath, the same figures by project and, for team leads, by agent. A trend chart plots leads, appointments and bookings week by week." },
       { kind: "p", text: "The period selector — 30 days, 90 days, 6 months, 12 months, All time — drives the funnel, the trend and both tables together. The four tiles at the top are not filtered: open pipeline is a snapshot of what is live right now." },
       { kind: "note", tone: "info", text: "Setting and closing are credited separately. Appointments set count for whoever booked them; show-ups and bookings for whoever ran the presentation. A setter who hands over good appointments is never shown as having converted nothing." },
     ],
@@ -196,7 +196,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: "sales-kit", n: 13, part: "Projects", title: "The sales kit",
     blocks: [
       { kind: "p", text: "Every project page has a Sales kit: the price list, brochure, layout plans, APDL and licences, the blank forms you hand a buyer, the panel lawyer, and the showroom location. One place, and always the version the agency stands behind — you never have to ask anyone which price list is current." },
-      { kind: "p", text: "You cannot change a kit. Managers and admins publish it; agents read it. That is deliberate, so that two agents can never be quoting from different copies of the same price list." },
+      { kind: "p", text: "You cannot change a kit. Team leads and admins publish it; agents read it. That is deliberate, so that two agents can never be quoting from different copies of the same price list." },
       {
         kind: "list",
         items: [
@@ -210,7 +210,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    id: "publishing-kit", n: 14, part: "For managers", title: "Publishing a sales kit", managerOnly: true,
+    id: "publishing-kit", n: 14, part: "For team leads", title: "Publishing a sales kit", teamLeadOnly: true,
     blocks: [
       { kind: "p", text: "Kit items are added from the project page itself, so the person who notices the price list is out of date is the person who can replace it." },
       {
@@ -228,16 +228,16 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    id: "projects", n: 15, part: "For managers", title: "Projects and unit types", managerOnly: true,
+    id: "projects", n: 15, part: "For team leads", title: "Projects and unit types", teamLeadOnly: true,
     blocks: [
       { kind: "p", text: "Projects → New Project. Name, developer, state and area are the minimum. Also worth setting: developer commission rate, expected VP date, gallery address, and the pass-on window in days." },
       { kind: "p", text: "Then add unit types — label, built-up, beds, baths, parking, list price and the nett price after rebate. This is the level agents quote at. Every field stays editable, and editing keeps the type's identity, so any lead or booking pointing at it is not orphaned." },
       { kind: "note", tone: "info", text: "The price range on the project card is calculated, never typed. It comes from the unit types every time the card is drawn, using the nett price where one exists." },
-      { kind: "p", text: "Projects belong to the agency, not to an agent. Every agent views them; only managers and admins create, edit or delete. That differs from Properties on purpose — a listing belongs to the agent who won it." },
+      { kind: "p", text: "Projects belong to the agency, not to an agent. Every agent views them; only team leads and admins create, edit or delete. That differs from Properties on purpose — a listing belongs to the agent who won it." },
     ],
   },
   {
-    id: "pools", n: 16, part: "For managers", title: "Lead pools and pass-on", managerOnly: true,
+    id: "pools", n: 16, part: "For team leads", title: "Lead pools and pass-on", teamLeadOnly: true,
     blocks: [
       { kind: "p", text: "On a project page, Lead pool decides who receives that project's leads and in what order. New leads go round the list in rotation, so over any stretch of time everyone gets the same number. Position is a seat at the table, not a ranking." },
       {
@@ -254,7 +254,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    id: "lead-form-mapping", n: 17, part: "For managers", title: "Leads capture", managerOnly: true,
+    id: "lead-form-mapping", n: 17, part: "For team leads", title: "Leads capture", teamLeadOnly: true,
     blocks: [
       { kind: "p", text: "Every way a lead can reach the CRM, on one page. The heart of it is the mapping table: which form feeds which project. Leads from a mapped form arrive already attached to the project, which is what makes per-project reporting work." },
       { kind: "p", text: "Connect Facebook signs you in and links your Page. The access token is encrypted before it is stored, and Disconnect removes it. Once connected, Import forms from Facebook reads the Page and adds anything new, unmapped — you then set the project. New form on Facebook builds a form here and pushes it to the Page in one step." },
@@ -264,7 +264,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    id: "users", n: 18, part: "For managers", title: "Users and templates", managerOnly: true,
+    id: "users", n: 18, part: "For team leads", title: "Users and templates", teamLeadOnly: true,
     blocks: [
       { kind: "p", text: "Users is where new sign-ups are approved. Somebody who has signed up appears inactive and can see nothing until you activate them and set their role." },
       { kind: "note", tone: "warn", text: "Deactivate somebody the day they leave. Their sign-in keeps working until you do." },
@@ -272,7 +272,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    id: "spend", n: 19, part: "For managers", title: "Advertising spend", managerOnly: true,
+    id: "spend", n: 19, part: "For team leads", title: "Advertising spend", teamLeadOnly: true,
     blocks: [
       { kind: "p", text: "Reports → Advertising spend. Record what each campaign cost and the report divides it by what the campaign produced. Agents never see agency ad spend." },
       {
@@ -348,6 +348,6 @@ export const HELP_SECTIONS: HelpSection[] = [
 ];
 
 /** Sections this user may see. Filtered here, not hidden in the browser. */
-export function sectionsFor(isManager: boolean): HelpSection[] {
-  return HELP_SECTIONS.filter((s) => isManager || !s.managerOnly);
+export function sectionsFor(isTeamLead: boolean): HelpSection[] {
+  return HELP_SECTIONS.filter((s) => isTeamLead || !s.teamLeadOnly);
 }

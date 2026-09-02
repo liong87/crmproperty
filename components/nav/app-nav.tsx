@@ -3,7 +3,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   LayoutDashboard, Inbox, Contact, Building2, Columns3, Bell, BarChart3, UserCog,
-  MessageSquareText, CalendarCheck, Landmark, Radio, BookOpen, Percent, BellRing,
+  MessageSquareText, CalendarCheck, Landmark, Radio, BookOpen, Percent, BellRing, Users2,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/settings/commission": Percent,
   "/leads-capture": Radio,
   "/templates": MessageSquareText,
+  "/team": Users2,
   "/users": UserCog,
 };
 

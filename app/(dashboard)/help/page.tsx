@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
+import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { sectionsFor, type Block } from "@/lib/help/content";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
@@ -72,7 +72,7 @@ export default async function HelpPage() {
   const me = await getCurrentDbUser();
   if (!me) redirect("/sign-in");
 
-  const sections = sectionsFor(isManagerOrAbove(me));
+  const sections = sectionsFor(isTeamLeadOrAbove(me));
   const parts = [...new Set(sections.map((s) => s.part))];
 
   return (

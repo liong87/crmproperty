@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
+import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { listStaleLeads, STALE_AFTER_DAYS } from "@/server/leads/stale";
 import { listAssignableAgents } from "@/server/leads/queries";
 import { StaleLeadList } from "@/components/leads/stale-list";
@@ -8,7 +8,7 @@ import { StaleLeadList } from "@/components/leads/stale-list";
 /**
  * Leads going cold.
  *
- * Scoped by role like everything else: an agent sees their own, a manager sees the
+ * Scoped by role like everything else: an agent sees their own, a team lead sees the
  * team's. Nothing here reassigns automatically — see server/leads/stale.ts.
  */
 /**
@@ -34,7 +34,7 @@ export default async function StaleLeadsPage({
   if (!me) redirect("/sign-in");
 
   const days = parseDays((await searchParams).days);
-  const canReassign = isManagerOrAbove(me);
+  const canReassign = isTeamLeadOrAbove(me);
   const [leads, agents] = await Promise.all([
     listStaleLeads(me, days),
     canReassign ? listAssignableAgents() : Promise.resolve([]),
@@ -52,7 +52,7 @@ export default async function StaleLeadsPage({
           coldest first.
           {canReassign
             ? " Reassigning records who moved it and why, on the lead itself."
-            : " Chase them, or ask your manager to move them on."}
+            : " Chase them, or ask your team lead to move them on."}
         </p>
 
         <div className="mt-2 flex flex-wrap items-center gap-1 text-xs">

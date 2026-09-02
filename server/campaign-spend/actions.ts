@@ -2,7 +2,7 @@
 /**
  * Recording monthly advertising spend.
  *
- * Managers and admins only, enforced here and not merely in the page — this is the
+ * Team leads and admins only, enforced here and not merely in the page — this is the
  * agency's cost base, and the report built on it drives budget decisions.
  */
 import { z } from "zod";
@@ -10,7 +10,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { campaignSpend, users } from "@/lib/db/schema";
-import { requireDbUser, isManagerOrAbove, AuthorizationError } from "@/lib/auth";
+import { requireDbUser, isTeamLeadOrAbove, AuthorizationError } from "@/lib/auth";
 import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import { ringgitToCents } from "@/server/leads/csv";
@@ -50,7 +50,7 @@ const schema = z.object({
 export async function recordSpend(input: unknown): Promise<ActionResult<{ id: string }>> {
   try {
     const me = await requireDbUser();
-    if (!isManagerOrAbove(me)) throw new AuthorizationError();
+    if (!isTeamLeadOrAbove(me)) throw new AuthorizationError();
 
     const parsed = schema.safeParse(input);
     if (!parsed.success) return fail(parsed.error.issues.map((i) => i.message).join("; "));
@@ -88,7 +88,7 @@ export async function recordSpend(input: unknown): Promise<ActionResult<{ id: st
     revalidatePath("/reports/spend");
     return ok({ id: row!.id });
   } catch (err) {
-    if (err instanceof AuthorizationError) return fail("Managers and admins only.");
+    if (err instanceof AuthorizationError) return fail("Team leads and admins only.");
     if (err instanceof Error && err.message === "UNAUTHENTICATED") return fail("Please sign in.");
     monitoring.captureException(err, { where: "recordSpend" });
     return fail("Could not save that figure.");
@@ -99,7 +99,7 @@ export async function recordSpend(input: unknown): Promise<ActionResult<{ id: st
 export async function deleteSpend(id: unknown): Promise<ActionResult<null>> {
   try {
     const me = await requireDbUser();
-    if (!isManagerOrAbove(me)) throw new AuthorizationError();
+    if (!isTeamLeadOrAbove(me)) throw new AuthorizationError();
     if (typeof id !== "string") return fail("Missing record.");
 
     await db
@@ -110,7 +110,7 @@ export async function deleteSpend(id: unknown): Promise<ActionResult<null>> {
     revalidatePath("/reports/spend");
     return ok(null);
   } catch (err) {
-    if (err instanceof AuthorizationError) return fail("Managers and admins only.");
+    if (err instanceof AuthorizationError) return fail("Team leads and admins only.");
     monitoring.captureException(err, { where: "deleteSpend" });
     return fail("Could not remove that figure.");
   }
@@ -119,7 +119,7 @@ export async function deleteSpend(id: unknown): Promise<ActionResult<null>> {
 /** Everything entered, newest month first, for the management table. */
 export async function listSpend(): Promise<SpendRow[]> {
   const me = await requireDbUser();
-  if (!isManagerOrAbove(me)) throw new AuthorizationError();
+  if (!isTeamLeadOrAbove(me)) throw new AuthorizationError();
 
   return db
     .select({

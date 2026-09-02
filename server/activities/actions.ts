@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { activities, messageLog } from "@/lib/db/schema";
-import { requireDbUser, canEdit, isManagerOrAbove, AuthorizationError } from "@/lib/auth";
+import { requireDbUser, canEdit, isTeamLeadOrAbove, AuthorizationError } from "@/lib/auth";
 import { messaging } from "@/lib/messaging";
 import { ACTIVITY_TYPE, ENTITY_TYPE } from "@/lib/constants";
 import { ok, fail } from "@/lib/action-result";
@@ -62,7 +62,7 @@ export async function completeFollowUp(activityId: string): Promise<ActionResult
     z.string().uuid().parse(activityId);
     const [a] = await db.select().from(activities).where(eq(activities.id, activityId));
     if (!a) return fail("Activity not found.");
-    if (!isManagerOrAbove(me) && a.createdBy !== me.id) throw new AuthorizationError();
+    if (!isTeamLeadOrAbove(me) && a.createdBy !== me.id) throw new AuthorizationError();
 
     await db.update(activities).set({ followUpDoneAt: new Date() }).where(eq(activities.id, activityId));
     if (isEntityType(a.entityType)) {

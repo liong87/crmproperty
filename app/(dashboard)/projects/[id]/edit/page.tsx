@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { getCurrentDbUser, isManagerOrAbove } from "@/lib/auth";
+import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { getProjectById } from "@/server/projects/queries";
 import { ProjectForm, type ProjectFormValues } from "@/components/projects/project-form";
 import { bpToPercent } from "@/lib/utils";
@@ -18,7 +18,7 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
   const me = await getCurrentDbUser();
   if (!me) redirect("/sign-in");
   const { id } = await params;
-  if (!isManagerOrAbove(me)) redirect(`/projects/${id}`);
+  if (!isTeamLeadOrAbove(me)) redirect(`/projects/${id}`);
 
   const project = await getProjectById(id);
   if (!project) notFound();

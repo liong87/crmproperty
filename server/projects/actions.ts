@@ -76,7 +76,7 @@ const toDate = (v: string | null | undefined) => (v ? new Date(v) : null);
 export async function createProject(input: unknown): Promise<ActionResult<Project>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     const d = projectSchema.parse(input);
 
     const [row] = await db
@@ -114,7 +114,7 @@ export async function createProject(input: unknown): Promise<ActionResult<Projec
 export async function updateProject(input: unknown): Promise<ActionResult<Project>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     const d = projectUpdateSchema.parse(input);
     const existing = await getProjectById(d.id);
     if (!existing) return fail("Project not found.");
@@ -162,7 +162,7 @@ export async function changeProjectStatus(
 ): Promise<ActionResult<Project>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     z.string().uuid().parse(id);
     z.enum(PROJECT_STATUS).parse(status);
     const existing = await getProjectById(id);
@@ -180,7 +180,7 @@ export async function changeProjectStatus(
 export async function deleteProject(id: string): Promise<ActionResult<void>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     z.string().uuid().parse(id);
     const existing = await getProjectById(id);
     if (!existing) return fail("Project not found.");
@@ -204,7 +204,7 @@ export async function deleteProject(id: string): Promise<ActionResult<void>> {
 export async function createUnitType(input: unknown): Promise<ActionResult<ProjectUnitType>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     const d = unitTypeSchema.parse(input);
     const project = await getProjectById(d.projectId);
     if (!project) return fail("Project not found.");
@@ -236,7 +236,7 @@ export async function createUnitType(input: unknown): Promise<ActionResult<Proje
 export async function updateUnitType(input: unknown): Promise<ActionResult<ProjectUnitType>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     const d = unitTypeUpdateSchema.parse(input);
     const existing = await getUnitTypeById(d.id);
     if (!existing) return fail("Unit type not found.");
@@ -270,7 +270,7 @@ export async function updateUnitType(input: unknown): Promise<ActionResult<Proje
 export async function deleteUnitType(id: string): Promise<ActionResult<void>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     z.string().uuid().parse(id);
     const existing = await getUnitTypeById(id);
     if (!existing) return fail("Unit type not found.");

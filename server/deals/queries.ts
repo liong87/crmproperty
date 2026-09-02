@@ -41,7 +41,7 @@ export async function listStages(pipeline?: DealPipeline): Promise<DealStage[]> 
  * to — visible, un-droppable and confusing.
  */
 export async function getBoard(user: User, pipeline: DealPipeline = "resale"): Promise<BoardColumn[]> {
-  const teamIds = user.role === "manager" ? await getTeamMemberIds(user.teamId) : undefined;
+  const teamIds = user.role === "team_lead" ? await getTeamMemberIds(user.teamId) : undefined;
 
   const stages = await listStages(pipeline);
   const stageIds = new Set(stages.map((s) => s.id));
@@ -85,7 +85,7 @@ export async function getBoard(user: User, pipeline: DealPipeline = "resale"): P
 
 /** Deals whose stage belongs to no current pipeline — orphaned by a stage deletion. */
 export async function countOrphanedDeals(user: User): Promise<number> {
-  const teamIds = user.role === "manager" ? await getTeamMemberIds(user.teamId) : undefined;
+  const teamIds = user.role === "team_lead" ? await getTeamMemberIds(user.teamId) : undefined;
   const stages = await listStages();
   const known = new Set(stages.map((s) => s.id));
   const rows = await db

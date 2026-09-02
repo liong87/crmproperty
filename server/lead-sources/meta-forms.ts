@@ -40,7 +40,7 @@ export interface ImportSummary {
 export async function importMetaForms(): Promise<ActionResult<ImportSummary>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
 
     const cred = await getMetaCredentials();
     if (!cred) return fail("Facebook is not connected. Open Leads capture and connect a Page first.");
@@ -110,7 +110,7 @@ const createSchema = z.object({
 export async function createMetaForm(input: unknown): Promise<ActionResult<LeadFormSource>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     const d = createSchema.parse(input);
 
     const cred = await getMetaCredentials();
@@ -182,7 +182,7 @@ function handle(err: unknown, where: string): ActionResult<never> {
 export async function loadFormQuestions(sourceId: string): Promise<ActionResult<RemoteFormQuestion[]>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     z.string().uuid().parse(sourceId);
 
     const source = await getLeadFormSourceById(sourceId);
@@ -207,7 +207,7 @@ const fieldMapSchema = z.object({
 export async function saveFieldMap(input: unknown): Promise<ActionResult<LeadFieldMap>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
     const d = fieldMapSchema.parse(input);
 
     const source = await getLeadFormSourceById(d.id);
@@ -251,7 +251,7 @@ export async function saveFieldMap(input: unknown): Promise<ActionResult<LeadFie
 export async function disconnectMetaPage(): Promise<ActionResult<void>> {
   try {
     const me = await requireDbUser();
-    assertRole(me, "admin", "manager");
+    assertRole(me, "admin", "team_lead");
 
     await db
       .update(connectedPages)

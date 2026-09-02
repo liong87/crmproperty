@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { getCurrentDbUser, canEdit, isManagerOrAbove } from "@/lib/auth";
+import { getCurrentDbUser, canEdit, isTeamLeadOrAbove } from "@/lib/auth";
 import { getLeadById, listAssignableAgents } from "@/server/leads/queries";
 import { listProjectOptions } from "@/server/projects/queries";
 import { LeadForm } from "@/components/leads/lead-form";
@@ -12,7 +12,7 @@ export default async function EditLeadPage({ params }: { params: Promise<{ id: s
   if (!lead) notFound();
   if (!canEdit(me, lead.assignedTo) || lead.convertedToContactId) redirect(`/leads/${id}`);
 
-  const canAssign = isManagerOrAbove(me);
+  const canAssign = isTeamLeadOrAbove(me);
   const agents = canAssign ? await listAssignableAgents() : [];
   const projects = await listProjectOptions();
 

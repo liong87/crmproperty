@@ -27,7 +27,7 @@ export default async function PendingPage() {
       <h1 className="font-display text-2xl font-semibold">Account pending approval</h1>
       <p className="text-sm text-muted-foreground">
         Your account has been created but needs an administrator to activate it before you can access
-        the CRM. Please contact your manager — you&apos;ll be in as soon as they approve you.
+        the CRM. Please contact your team lead — you&apos;ll be in as soon as they approve you.
       </p>
       <SignOutAction />
     </main>

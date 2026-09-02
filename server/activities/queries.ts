@@ -2,7 +2,7 @@
 import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { activities, users, type User } from "@/lib/db/schema";
-import { isManagerOrAbove } from "@/lib/auth";
+import { isTeamLeadOrAbove } from "@/lib/auth";
 import { resolveEntitiesBatch, type EntityType } from "./entity";
 
 export interface TimelineItem {
@@ -48,7 +48,7 @@ export interface FollowUp {
 
 /**
  * Open follow-ups (follow_up_at set, not yet done).
- * Agents see the ones they created; managers/admins see all.
+ * Agents see the ones they created; team leads/admins see all.
  *
  * Two fixes over the original, both of which showed up as a slow dashboard:
  *
@@ -64,7 +64,7 @@ export async function listFollowUps(user: User, limit = 50): Promise<FollowUp[]>
     isNull(activities.deletedAt),
     isNotNull(activities.followUpAt),
     isNull(activities.followUpDoneAt),
-    isManagerOrAbove(user) ? undefined : eq(activities.createdBy, user.id),
+    isTeamLeadOrAbove(user) ? undefined : eq(activities.createdBy, user.id),
   );
 
   const rows = await db
@@ -119,7 +119,7 @@ export async function countOpenFollowUps(user: User): Promise<number> {
         isNull(activities.deletedAt),
         isNotNull(activities.followUpAt),
         isNull(activities.followUpDoneAt),
-        isManagerOrAbove(user) ? undefined : eq(activities.createdBy, user.id),
+        isTeamLeadOrAbove(user) ? undefined : eq(activities.createdBy, user.id),
       ),
     );
   return row?.n ?? 0;

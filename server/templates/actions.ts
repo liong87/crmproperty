@@ -3,7 +3,7 @@
  * Message template management.
  *
  * Reading is open to any active staff member — agents need the list to send from.
- * Writing is restricted to managers and admins: templates are the agency's voice to
+ * Writing is restricted to team leads and admins: templates are the agency's voice to
  * clients, and letting fifteen agents each edit the shared wording defeats the point
  * of having them.
  */
@@ -12,7 +12,7 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { messageTemplates } from "@/lib/db/schema";
-import { requireDbUser, isManagerOrAbove, AuthorizationError } from "@/lib/auth";
+import { requireDbUser, isTeamLeadOrAbove, AuthorizationError } from "@/lib/auth";
 import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
@@ -62,7 +62,7 @@ export async function listActiveTemplates(channel = "whatsapp"): Promise<Templat
 /** Every template including inactive ones — for the management screen. */
 export async function listAllTemplates(): Promise<TemplateRow[]> {
   const me = await requireDbUser();
-  if (!isManagerOrAbove(me)) throw new AuthorizationError();
+  if (!isTeamLeadOrAbove(me)) throw new AuthorizationError();
   return db
     .select({
       id: messageTemplates.id,
@@ -79,7 +79,7 @@ export async function listAllTemplates(): Promise<TemplateRow[]> {
 export async function createTemplate(input: unknown): Promise<ActionResult<{ id: string }>> {
   try {
     const me = await requireDbUser();
-    if (!isManagerOrAbove(me)) throw new AuthorizationError();
+    if (!isTeamLeadOrAbove(me)) throw new AuthorizationError();
     const d = schema.parse(input);
 
     const [row] = await db
@@ -97,7 +97,7 @@ export async function createTemplate(input: unknown): Promise<ActionResult<{ id:
 export async function updateTemplate(input: unknown): Promise<ActionResult<void>> {
   try {
     const me = await requireDbUser();
-    if (!isManagerOrAbove(me)) throw new AuthorizationError();
+    if (!isTeamLeadOrAbove(me)) throw new AuthorizationError();
     const d = schema.extend({ id: z.string().uuid() }).parse(input);
 
     await db
@@ -119,7 +119,7 @@ export async function updateTemplate(input: unknown): Promise<ActionResult<void>
 export async function deleteTemplate(id: string): Promise<ActionResult<void>> {
   try {
     const me = await requireDbUser();
-    if (!isManagerOrAbove(me)) throw new AuthorizationError();
+    if (!isTeamLeadOrAbove(me)) throw new AuthorizationError();
     z.string().uuid().parse(id);
 
     await db
@@ -136,7 +136,7 @@ export async function deleteTemplate(id: string): Promise<ActionResult<void>> {
 
 function handle(err: unknown, where: string): ActionResult<never> {
   if (err instanceof AuthorizationError) {
-    return fail("Only managers and administrators can change templates.");
+    return fail("Only team leads and administrators can change templates.");
   }
   if (err instanceof z.ZodError) return fail(err.issues.map((i) => i.message).join("; "));
   if (err instanceof Error && err.message === "UNAUTHENTICATED") return fail("Please sign in.");
