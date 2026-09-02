@@ -86,9 +86,18 @@ export async function GET(req: Request) {
     return done({ fb_error: (err as Error).message });
   }
 
+  /*
+   * Zero pages does NOT reliably mean the person administers none. Facebook Login for
+   * Business asks separately which Pages to share, and that step is skipped whenever
+   * Facebook decides the app was already granted — so a re-connect can come back
+   * authorised, with an empty page list, and the old message ("administers no Pages")
+   * then blames the user for something they cannot see. The message has to name the
+   * actual recovery, which is removing the app so the picker is shown again.
+   */
   if (pages.length === 0) {
     return done({
-      fb_error: "That Facebook account administers no Pages, so there is nothing to connect.",
+      fb_error:
+        "Facebook shared no Pages with the CRM. This usually means the Page-selection step was skipped, not that you have no Pages. Fix it by opening facebook.com → Settings & privacy → Settings → Apps and websites, removing PropertyAgent CRM, then clicking Add here again — Facebook will ask which Pages to share, and you must tick the one you run ads on.",
     });
   }
 
