@@ -129,7 +129,7 @@ export async function GET(req: Request) {
      * "Edit settings" one beside it is the fix. Naming the button is the whole message.
      */
     return done({
-      fb_error: `${detail} Every permission was granted, so only the Page selection is missing. When Facebook asks "Continue as ...?", click the grey EDIT SETTINGS button rather than the blue Continue — Continue reuses your previous choice, which shared no Pages. On the screen that follows, tick the Page you run ads on.`,
+      fb_error: `${detail} Every permission was granted and no Pages came back from either your personal Pages or your businesses. If you have just re-granted, click Add once more — business_management was added to the permission list and an older grant will not have it.`,
     });
   }
 

@@ -39,6 +39,9 @@ export const CAPTURE_SCOPES = [
   "pages_manage_metadata",
   "pages_manage_ads",
   "ads_management",
+  // Needed to enumerate the Business Portfolios a person belongs to, which is the only
+  // way to reach a Page the BUSINESS owns rather than the person. See fetchPages.
+  "business_management",
 ] as const;
 
 function version(): string {
@@ -190,16 +193,74 @@ export interface MetaPageGrant {
   accessToken: string;
 }
 
-/** Every Page the person administers, each with its own token. */
+interface RawPage {
+  id?: string;
+  name?: string;
+  access_token?: string;
+}
+
+const usable = (rows: RawPage[]): MetaPageGrant[] =>
+  rows
+    .filter((p): p is { id: string; name?: string; access_token: string } =>
+      Boolean(p?.id && p?.access_token))
+    .map((p) => ({ id: p.id, name: p.name ?? "(unnamed Page)", accessToken: p.access_token }));
+
+/**
+ * Every Page this person can hand us, each with its own token.
+ *
+ * TWO SOURCES, AND THE SECOND IS NOT OPTIONAL. `/me/accounts` lists Pages the PERSON
+ * holds a role on. A Page owned by a Business Portfolio is not one of those, so it
+ * comes back empty — even when the person has just ticked that exact Page on
+ * Facebook's own "Choose the Pages you want ... to access" screen. The grant is real;
+ * the endpoint simply does not report it.
+ *
+ * That combination is vicious to debug: consent succeeded, every permission is
+ * granted, the Page was explicitly selected, and the API answers with an empty array
+ * and no error. Any agency Page worth connecting is business-owned, so this fallback
+ * is the normal path rather than an edge case.
+ */
 export async function fetchPages(userToken: string): Promise<MetaPageGrant[]> {
-  const pages = await graph<{ data?: Array<{ id?: string; name?: string; access_token?: string }> }>(
+  const direct = await graph<{ data?: RawPage[] }>(
     `https://graph.facebook.com/${version()}/me/accounts?` +
       new URLSearchParams({ fields: "id,name,access_token", limit: "100", access_token: userToken }).toString(),
     "Listing your Pages",
   );
-  return (pages.data ?? [])
-    .filter((p): p is { id: string; name?: string; access_token: string } => Boolean(p?.id && p?.access_token))
-    .map((p) => ({ id: p.id, name: p.name ?? "(unnamed Page)", accessToken: p.access_token }));
+  const personal = usable(direct.data ?? []);
+  if (personal.length > 0) return personal;
+
+  // Business-owned. Failures here are swallowed per business: one portfolio we cannot
+  // read must not hide the Pages of another that we can.
+  let businesses: Array<{ id?: string }> = [];
+  try {
+    const res = await graph<{ data?: Array<{ id?: string }> }>(
+      `https://graph.facebook.com/${version()}/me/businesses?` +
+        new URLSearchParams({ fields: "id,name", limit: "50", access_token: userToken }).toString(),
+      "Listing your businesses",
+    );
+    businesses = res.data ?? [];
+  } catch {
+    return [];
+  }
+
+  const found = new Map<string, MetaPageGrant>();
+  for (const business of businesses) {
+    if (!business.id) continue;
+    // owned_pages: the business holds the Page. client_pages: another business owns it
+    // and shares it with this one — an agency running a developer's Page is exactly that.
+    for (const edge of ["owned_pages", "client_pages"] as const) {
+      try {
+        const res = await graph<{ data?: RawPage[] }>(
+          `https://graph.facebook.com/${version()}/${business.id}/${edge}?` +
+            new URLSearchParams({ fields: "id,name,access_token", limit: "100", access_token: userToken }).toString(),
+          `Listing ${edge.replace("_", " ")}`,
+        );
+        for (const page of usable(res.data ?? [])) found.set(page.id, page);
+      } catch {
+        /* This business, this edge, no access. Keep going. */
+      }
+    }
+  }
+  return [...found.values()];
 }
 
 /**
