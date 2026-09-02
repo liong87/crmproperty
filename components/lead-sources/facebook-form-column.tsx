@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Search, GitBranch, ChevronRight } from "lucide-react";
-import { updateLeadFormSource } from "@/server/lead-sources/actions";
+import { Search, Trash2 } from "lucide-react";
+import { updateLeadFormSource, deleteLeadFormSource } from "@/server/lead-sources/actions";
 import { AddFormDialog } from "./add-form-dialog";
 import { FieldMapDialog } from "./field-map-dialog";
 import type { LeadFormSourceRow } from "@/server/lead-sources/queries";
@@ -112,23 +112,6 @@ export function FacebookFormColumn({
         ))}
       </div>
 
-      {canManage && (
-        <a
-          href="#mapped-forms"
-          className="mt-3 flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition hover:bg-muted/50"
-        >
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted">
-            <GitBranch className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-xs font-semibold">Advanced routing</span>
-            <span className="block text-[11px] text-muted-foreground">
-              Forms from other providers, and manual mappings
-            </span>
-          </span>
-          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-        </a>
-      )}
     </section>
   );
 }
@@ -145,6 +128,16 @@ function FormCard({
   const router = useRouter();
   const [pending, start] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
+  const [confirming, setConfirming] = React.useState(false);
+
+  function remove() {
+    setError(null);
+    start(async () => {
+      const res = await deleteLeadFormSource(form.id);
+      if (!res.success) return setError(res.error ?? "Something went wrong.");
+      router.refresh();
+    });
+  }
 
   function patch(fields: Record<string, unknown>) {
     setError(null);
@@ -202,6 +195,36 @@ function FormCard({
               />
             </button>
             <FieldMapDialog sourceId={form.id} label={form.label} current={form.fieldMap ?? null} />
+            {/* Confirm-in-place rather than a dialog: removing one form is small, and a
+                modal for it would be more ceremony than the action deserves. */}
+            {confirming ? (
+              <span className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={remove}
+                  disabled={pending}
+                  className="rounded-lg bg-destructive px-2 py-1 text-[11px] font-semibold text-destructive-foreground"
+                >
+                  Remove
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirming(false)}
+                  className="rounded-lg px-1.5 py-1 text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirming(true)}
+                aria-label="Remove this form"
+                className="shrink-0 rounded-md p-1 text-muted-foreground transition hover:bg-muted hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            )}
           </div>
         )}
       </div>

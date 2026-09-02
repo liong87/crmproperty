@@ -19,17 +19,25 @@ const DEFAULT_VERSION = "v21.0";
  *   pages_show_list        list the Pages the person administers, for the picker
  *   pages_read_engagement  read Page metadata (name) without ads permissions
  *   pages_manage_metadata  subscribe the app to the Page's leadgen webhook
- *   ads_management         read the form and its ad, for attribution
+ *   pages_manage_ads       LIST the Page's lead forms, and create one
+ *   ads_management         read the ad behind a lead, for attribution
  *
- * `leads_retrieval` and `ads_management` require App Review and Business Verification.
- * Until that is granted, only people added to the app as Testers/Developers get them —
- * which is exactly the interim plan.
+ * `pages_manage_ads` is not optional and is easy to leave out, because nothing about
+ * the name suggests "read the forms on this page". Without it `/{page-id}/leadgen_forms`
+ * answers `(#200) Requires pages_manage_ads permission to manage the object` — the
+ * connection succeeds, the page subscribes, and only the form picker fails. It was
+ * missing from the first cut of this list for exactly that reason.
+ *
+ * `leads_retrieval`, `pages_manage_ads` and `ads_management` require App Review and
+ * Business Verification. Until that is granted, only people added to the app as
+ * Testers/Developers get them — which is exactly the interim plan.
  */
 export const CAPTURE_SCOPES = [
   "leads_retrieval",
   "pages_show_list",
   "pages_read_engagement",
   "pages_manage_metadata",
+  "pages_manage_ads",
   "ads_management",
 ] as const;
 
@@ -57,6 +65,13 @@ export function captureAuthorizeUrl(state: string): string {
     state,
     scope: CAPTURE_SCOPES.join(","),
     response_type: "code",
+    /*
+     * Forces the permission dialog even when the person has connected before. Without
+     * it Facebook silently reuses the previously granted set, so adding a scope to the
+     * list above would change nothing for anyone already connected — they would keep
+     * hitting the same permission error with no way to fix it from the UI.
+     */
+    auth_type: "rerequest",
   });
   // The "for Business" dialog. A Page owned by a Business Portfolio — which is how any
   // real agency holds one — cannot be granted through the plain consumer dialog.

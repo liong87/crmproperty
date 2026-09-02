@@ -9,9 +9,6 @@ import { captureOAuthConfigured } from "@/lib/capture/meta-graph";
 import { CaptureRail } from "@/components/lead-sources/capture-rail";
 import { FacebookFormColumn, type FormRow } from "@/components/lead-sources/facebook-form-column";
 import { WhatsAppColumn } from "@/components/lead-sources/whatsapp-column";
-import { LeadSourceManager } from "@/components/lead-sources/source-manager";
-import { FacebookPanel } from "@/components/lead-sources/facebook-panel";
-import { getMetaCredentials, getConnectedMetaPage } from "@/server/lead-sources/credentials";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { STATUS } from "@/lib/chart-colors";
 
@@ -45,12 +42,10 @@ export default async function LeadsCapturePage({
   // counts against, so it stays with team leads. Connecting your own account does not.
   const manages = isTeamLeadOrAbove(me);
 
-  const [sources, projects, myAccounts, cred, legacyPage, sp] = await Promise.all([
+  const [sources, projects, myAccounts, sp] = await Promise.all([
     manages ? listLeadFormSources() : Promise.resolve([]),
     manages ? listProjectOptions() : Promise.resolve([]),
     listMyCaptureAccounts("facebook"),
-    manages ? getMetaCredentials() : Promise.resolve(null),
-    manages ? getConnectedMetaPage() : Promise.resolve(null),
     searchParams,
   ]);
 
@@ -73,7 +68,6 @@ export default async function LeadsCapturePage({
   }
 
   const connectedPages = myAccounts.reduce((n, a) => n + a.pages.filter((p) => p.subscribed).length, 0);
-  const unmapped = sources.filter((s) => !s.projectId).length;
 
   return (
     <div className="space-y-5">
@@ -108,7 +102,7 @@ export default async function LeadsCapturePage({
           forms={metaForms}
           projects={projects}
           canManage={manages}
-          hasConnection={connectedPages > 0 || Boolean(cred)}
+          hasConnection={connectedPages > 0}
         />
         <WhatsAppColumn />
         <div className="lg:col-span-2 xl:col-span-1">
@@ -120,35 +114,6 @@ export default async function LeadsCapturePage({
           />
         </div>
       </div>
-
-      {manages && (
-        <Card id="mapped-forms">
-          <CardHeader>
-            <CardTitle>Advanced routing</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Forms from Tally, Typeform and Google Ads, and any mapping typed by hand.
-              {unmapped > 0 && (
-                <>
-                  {" "}
-                  <strong className="font-semibold text-foreground">{unmapped}</strong>{" "}
-                  {unmapped === 1 ? "form has" : "forms have"} no project yet — leads from{" "}
-                  {unmapped === 1 ? "it" : "them"} still arrive, they just will not count
-                  towards a launch.
-                </>
-              )}
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <LeadSourceManager sources={sources} projects={projects} />
-            <FacebookPanel
-              configured={Boolean(cred)}
-              oauthReady={oauthReady}
-              connectedPageName={legacyPage?.name ?? null}
-              projects={projects}
-            />
-          </CardContent>
-        </Card>
-      )}
 
       {manages && (
         <Card>
