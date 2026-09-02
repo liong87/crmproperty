@@ -5,11 +5,11 @@ import Link from "next/link";
 import {
   LayoutDashboard, Inbox, Contact, Building2, Columns3, ChevronRight, BarChart3, UserCog,
   MessageSquareText, CalendarCheck, Landmark, Radio, BookOpen, Percent, BellRing, Users2, Settings2, LayoutGrid, ListChecks, GraduationCap,
-  Pin, PinOff,
+  PanelLeftClose, PanelLeftOpen,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toggleNavPin } from "@/server/users/nav-pins";
+import { setSidebarCollapsed } from "@/server/preferences/sidebar";
 
 const ICONS: Record<string, LucideIcon> = {
   "/dashboard": LayoutDashboard,
@@ -64,112 +64,94 @@ export interface NavGroup {
 }
 
 export function AppNav({
-  groups, variant, pinned, pinnable,
+  groups, variant, collapsed,
 }: {
   groups: NavGroup[];
   variant: "sidebar" | "bar";
-  /** Hrefs currently in the user's "Pinned" group, so each row knows its state. */
-  pinned?: string[];
-  /** Render the pin toggles. Sidebar only — the mobile strip has no room for them. */
-  pinnable?: boolean;
+  /** Icons-only rail. Sidebar variant only; the mobile strip is always icons. */
+  collapsed?: boolean;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [pinPending, startPin] = React.useTransition();
-  const [pinError, setPinError] = React.useState<string | null>(null);
   const active = (href: string) => pathname === href || pathname.startsWith(href + "/");
   const visible = groups.filter((g) => g.links.length > 0);
-  const pinnedSet = React.useMemo(() => new Set(pinned ?? []), [pinned]);
 
-  const showPins = pinnable && variant === "sidebar";
-
-  function togglePin(href: string) {
-    setPinError(null);
-    startPin(async () => {
-      const res = await toggleNavPin(href);
-      if (!res.success) {
-        // The realistic failure is the pin cap, and a click that visibly does
-        // nothing is worse than a line of text: the user tries again, harder,
-        // and concludes the button is broken.
-        setPinError(res.error ?? "Could not change your pinned pages.");
-        return;
-      }
-      router.refresh();
-    });
-  }
-
-  /**
-   * One row.
-   *
-   * The pin button is a SIBLING of the Link, not a child: a <button> inside an
-   * <a> is invalid HTML, and browsers resolve the nesting by making the click
-   * target ambiguous — you would pin a page by trying to open it.
-   */
   const item = (l: NavLink) => {
     const Icon = ICONS[l.href] ?? LayoutDashboard;
     const isActive = active(l.href);
-    const isPinned = pinnedSet.has(l.href);
     return (
-      <div key={l.href} className="group/row relative flex items-center">
-        <Link
-          href={l.href}
-          aria-current={isActive ? "page" : undefined}
-          className={cn(
-            "flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-            isActive
-              ? "bg-brand-gradient text-primary-foreground shadow-md shadow-primary/25"
-              : "text-muted-foreground hover:bg-gray-900/5 hover:text-foreground dark:hover:bg-white/10",
-          )}
-        >
-          <Icon className="h-4 w-4 shrink-0" />
-          <span className="truncate">{l.label}</span>
-          {l.badge !== undefined && l.badge > 0 && (
+      <Link
+        key={l.href}
+        href={l.href}
+        aria-current={active(l.href) ? "page" : undefined}
+        // The title is what makes the collapsed rail usable: an icon alone is a
+        // guess, and a rail you have to expand to read is a rail nobody keeps
+        // collapsed. Native title rather than a tooltip component — it costs
+        // nothing and works before hydration.
+        title={collapsed ? l.label : undefined}
+        className={cn(
+          "flex items-center rounded-lg text-sm font-medium transition-colors",
+          collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2",
+          isActive
+            ? "bg-brand-gradient text-primary-foreground shadow-md shadow-primary/25"
+            : "text-muted-foreground hover:bg-gray-900/5 hover:text-foreground dark:hover:bg-white/10",
+        )}
+      >
+        <span className="relative shrink-0">
+          <Icon className="h-4 w-4" />
+          {/* Collapsed, there is no room for a number, so the badge becomes a
+              dot — it still says "something is waiting here", which is the only
+              part that has to survive the loss of the label. */}
+          {collapsed && l.badge !== undefined && l.badge > 0 && (
             <span
+              aria-hidden="true"
               className={cn(
-                "ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums",
-                isActive ? "bg-white/20 text-primary-foreground" : "bg-secondary text-secondary-foreground",
+                "absolute -right-1 -top-1 h-2 w-2 rounded-full ring-2",
+                isActive ? "bg-white ring-primary" : "bg-primary ring-card",
               )}
-            >
-              {l.badge}
-            </span>
+            />
           )}
-        </Link>
-
-        {showPins && (
-          <button
-            type="button"
-            title={isPinned ? "Unpin from top" : "Pin to top"}
-            aria-label={isPinned ? `Unpin ${l.label}` : `Pin ${l.label} to top`}
-            aria-pressed={isPinned}
-            disabled={pinPending}
-            onClick={() => togglePin(l.href)}
+        </span>
+        {!collapsed && <span className="truncate">{l.label}</span>}
+        {!collapsed && l.badge !== undefined && l.badge > 0 && (
+          <span
             className={cn(
-              // Hidden until the row is hovered or the button is focused, so a
-              // sidebar at rest is still a list of pages rather than a list of
-              // pages plus fifteen controls. An already-pinned row keeps its
-              // button visible — that is the only affordance for unpinning.
-              "absolute right-1.5 grid h-6 w-6 shrink-0 place-items-center rounded-md opacity-0 transition group-hover/row:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              isPinned && "opacity-100",
-              isActive
-                ? "text-primary-foreground hover:bg-white/20"
-                : "bg-card text-muted-foreground hover:text-foreground",
+              "ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums",
+              isActive ? "bg-white/20 text-primary-foreground" : "bg-secondary text-secondary-foreground",
             )}
           >
-            {isPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-          </button>
+            {l.badge}
+          </span>
         )}
-      </div>
+      </Link>
     );
   };
+
+  /*
+   * Collapsed: one flat column of icons, no headings and no folds.
+   *
+   * Group headings are the first thing to go — "LEAD MANAGEMENT" does not fit,
+   * and truncating it to "LEA…" is worse than nothing. The folds go too: a
+   * <details> summary you cannot read is a control nobody can use, and hiding
+   * half the icons behind it would make the rail actively worse than the full
+   * sidebar it replaced. A thin rule between groups keeps the grouping legible
+   * without needing words for it.
+   */
+  if (variant === "sidebar" && collapsed) {
+    return (
+      <nav className="flex flex-col gap-1">
+        {visible.map((group, i) => (
+          <div key={group.label ?? "primary"} className="flex flex-col gap-1">
+            {i > 0 && <div aria-hidden="true" className="mx-auto my-1 h-px w-6 bg-gray-200/70 dark:bg-gray-800" />}
+            {group.links.map((l) => item(l))}
+          </div>
+        ))}
+      </nav>
+    );
+  }
 
   if (variant === "sidebar") {
     return (
       <nav className="flex flex-col gap-4">
-        {pinError && (
-          <p role="status" className="px-3 text-[11px] leading-snug text-destructive">
-            {pinError}
-          </p>
-        )}
         {visible.map((group) => {
           if (group.label === null) {
             return (
@@ -250,5 +232,37 @@ export function AppNav({
         );
       })}
     </nav>
+  );
+}
+
+/**
+ * The collapse toggle, at the foot of the sidebar.
+ *
+ * Writes a cookie through a server action and then refreshes, rather than
+ * flipping a class locally: the width has to be right on the NEXT first paint
+ * too, and a client-only toggle forgets by the next full page load. The refresh
+ * is what makes the server re-read the cookie it just set.
+ */
+export function SidebarToggle({ collapsed }: { collapsed: boolean }) {
+  const router = useRouter();
+  const [pending, start] = React.useTransition();
+
+  return (
+    <button
+      type="button"
+      title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      aria-expanded={!collapsed}
+      disabled={pending}
+      onClick={() =>
+        start(async () => {
+          await setSidebarCollapsed(!collapsed);
+          router.refresh();
+        })
+      }
+      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
+    >
+      {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+    </button>
   );
 }

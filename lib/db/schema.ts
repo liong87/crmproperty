@@ -65,18 +65,6 @@ export const users = pgTable(
       onDelete: "set null",
     }),
     active: boolean("active").notNull().default(true),
-    /**
-     * Sidebar rows this person lifted to a "Pinned" section at the top, in the
-     * order they pinned them. Null and [] both mean "nothing pinned".
-     *
-     * A per-user display preference, deliberately stored as one jsonb array
-     * rather than a user_nav_pins table: it is read on EVERY page (the sidebar
-     * renders in the shell), it is never queried by href, and a join per page
-     * load to learn six strings is not a trade anybody wants. Validated against
-     * lib/nav-links.ts on the way in, and resolved against the role-filtered
-     * nav on the way out, so what is stored here can never widen access.
-     */
-    pinnedNav: jsonb("pinned_nav").$type<string[]>(),
     ...timestamps,
   },
   (t) => ({

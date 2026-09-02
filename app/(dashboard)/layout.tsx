@@ -2,10 +2,11 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { syncCurrentUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { UserButton } from "@/lib/auth/provider-components";
-import { AppNav, type NavGroup, type NavLink } from "@/components/nav/app-nav";
-import { isPinnableHref, MAX_PINS } from "@/lib/nav-links";
+import { AppNav, SidebarToggle, type NavGroup } from "@/components/nav/app-nav";
+import { getSidebarCollapsed } from "@/lib/sidebar-pref";
 import { countActiveWorkingLeads } from "@/server/leads/working";
 import { APP_NAME } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import { COMMISSION_ENABLED } from "@/lib/features";
 import { BookOpen } from "lucide-react";
 
@@ -32,6 +33,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const lead = isTeamLeadOrAbove(user);
   // One cheap count; the sidebar renders on every page.
   const activeCount = await countActiveWorkingLeads(user);
+  // Read before the first paint, so a collapsed rail never renders wide and
+  // then snap to narrow — see server/preferences/sidebar.ts.
+  const collapsed = await getSidebarCollapsed();
   const leadOnly = <T,>(items: T[]): T[] => (lead ? items : []);
 
   // Role filtering happens here, on the server, so a team-lead-only href is never sent
@@ -105,51 +109,42 @@ export default async function DashboardLayout({ children }: { children: React.Re
     },
   ];
 
-  /*
-   * "Pinned": the rows this person lifted to the top themselves.
-   *
-   * Built by looking each saved href up in the groups ABOVE, which are already
-   * role-filtered — so a pin cannot resurrect a page the user has since lost
-   * access to (an agent who was briefly a Team Lead, say, and pinned Users).
-   * An unknown or stale href simply finds nothing and disappears.
-   *
-   * A pinned row is MOVED, not copied. Showing it twice means two rows
-   * highlight for one page and the pin looks like it did nothing.
-   */
-  const pinnedHrefs = (user.pinnedNav ?? []).filter(isPinnableHref);
-  const visibleLinks = groups.flatMap((g) => g.links);
-  const pinnedLinks = pinnedHrefs
-    .map((href) => visibleLinks.find((l) => l.href === href))
-    .filter((l): l is NavLink => l !== undefined)
-    .slice(0, MAX_PINS);
-
-  const pinnedSet = new Set(pinnedLinks.map((l) => l.href));
-  const navGroups: NavGroup[] =
-    pinnedLinks.length === 0
-      ? groups
-      : [
-          { label: "Pinned", links: pinnedLinks, mobile: true },
-          ...groups.map((g) => ({ ...g, links: g.links.filter((l) => !pinnedSet.has(l.href)) })),
-        ];
-
   return (
     <div className="app-shell min-h-dvh sm:flex">
       {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col sm:flex">
-        <div className="px-4 py-5">
-          <Link href="/dashboard" className="block font-display text-lg font-semibold leading-tight text-primary">
-            {APP_NAME}
+      <aside
+        className={cn(
+          "sticky top-0 hidden h-dvh shrink-0 flex-col sm:flex",
+          collapsed ? "w-16" : "w-60",
+        )}
+      >
+        <div className={cn("py-5", collapsed ? "px-2 text-center" : "px-4")}>
+          <Link
+            href="/dashboard"
+            title={collapsed ? APP_NAME : undefined}
+            className="block truncate font-display font-semibold leading-tight text-primary"
+          >
+            {/* Collapsed, the wordmark becomes its initial — the logo slot still
+                reads as "home", which is what people click it for. */}
+            {collapsed ? <span className="text-xl">{APP_NAME.charAt(0)}</span> : <span className="text-lg">{APP_NAME}</span>}
           </Link>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {user.name} · {ROLE_LABEL[user.role] ?? user.role}
-          </p>
+          {!collapsed && (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {user.name} · {ROLE_LABEL[user.role] ?? user.role}
+            </p>
+          )}
         </div>
-        <div className="flex-1 overflow-y-auto px-4 py-4">
-          <AppNav groups={navGroups} variant="sidebar" pinned={[...pinnedSet]} pinnable />
+        <div className={cn("flex-1 overflow-y-auto py-4", collapsed ? "px-2" : "px-4")}>
+          <AppNav groups={groups} variant="sidebar" collapsed={collapsed} />
         </div>
-        <div className="flex items-center justify-between gap-2 border-t border-gray-200/70 px-4 py-3 dark:border-gray-800">
-          <span className="truncate text-xs text-muted-foreground">{user.name}</span>
-          <div className="flex shrink-0 items-center gap-1">
+        <div
+          className={cn(
+            "border-t border-gray-200/70 py-3 dark:border-gray-800",
+            collapsed ? "flex flex-col items-center gap-1 px-2" : "flex items-center justify-between gap-2 px-4",
+          )}
+        >
+          {!collapsed && <span className="truncate text-xs text-muted-foreground">{user.name}</span>}
+          <div className={cn("flex shrink-0 items-center gap-1", collapsed && "flex-col")}>
             {/* The guide is reference, not a destination — an icon, not a nav row. */}
             <Link
               href="/help"
@@ -159,6 +154,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             >
               <BookOpen className="h-4 w-4" />
             </Link>
+            <SidebarToggle collapsed={collapsed} />
             <UserButton />
           </div>
         </div>
@@ -172,7 +168,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </header>
         {/* Mobile nav */}
         <div className="sticky top-[57px] z-10 border-b border-gray-200/70 bg-card/80 backdrop-blur sm:hidden">
-          <AppNav groups={navGroups} variant="bar" />
+          <AppNav groups={groups} variant="bar" />
         </div>
 
         <main className="mx-auto w-full max-w-5xl flex-1 p-4 sm:p-6">{children}</main>

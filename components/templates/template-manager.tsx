@@ -27,30 +27,43 @@ const PREVIEW = {
 };
 
 /**
- * Quick-insert emoji for message bodies.
+ * Quick-insert emoji, grouped.
  *
- * A short curated row, not a full picker: this is a WhatsApp message to a
- * property buyer, and the useful set is small and boring — a greeting, a
- * viewing, a key, a tick. A 1,800-emoji grid would be a component to maintain
- * and a decision to make every time somebody writes a template.
+ * Hand-written rather than an emoji-picker dependency: the whole set below is
+ * about 2 KB of strings, where a picker library is hundreds of kilobytes of
+ * component plus a sprite sheet or a font — and this Worker has a 10 MB
+ * compressed budget for the entire app (see .github/workflows/deploy-cloudflare.yml).
+ * Nobody writing a viewing confirmation needs to search 1,800 emoji; they need
+ * the twenty that come up in property messages and a few faces.
  *
- * Kept deliberately restrained. One or two in a message reads warm; a message
- * built out of them reads like spam, which is the fastest way to have an agency
- * number reported and blocked.
+ * Grouped because a flat grid of ninety is worse than twelve: with headings the
+ * eye goes to a section, without them it scans everything every time.
  */
-const EMOJI: Array<{ char: string; label: string }> = [
-  { char: "👋", label: "Greeting" },
-  { char: "🙏", label: "Thanks" },
-  { char: "😊", label: "Friendly" },
-  { char: "📅", label: "Date" },
-  { char: "⏰", label: "Time" },
-  { char: "📍", label: "Location" },
-  { char: "🏠", label: "Property" },
-  { char: "🔑", label: "Keys" },
-  { char: "💰", label: "Price" },
-  { char: "✅", label: "Confirmed" },
-  { char: "📞", label: "Call" },
-  { char: "📄", label: "Document" },
+const EMOJI_GROUPS: Array<{ label: string; chars: string[] }> = [
+  {
+    label: "Greetings & tone",
+    chars: ["👋", "🙏", "😊", "🙂", "😄", "🥳", "🤝", "👍", "👌", "💪", "🎉", "✨", "❤️", "🔥", "🙌", "😉"],
+  },
+  {
+    label: "Property",
+    chars: ["🏠", "🏡", "🏢", "🏘️", "🔑", "🚪", "🛋️", "🛏️", "🛁", "🚿", "🍳", "🌳", "🏊", "🅿️", "🏗️", "📐"],
+  },
+  {
+    label: "Money & documents",
+    chars: ["💰", "💵", "💳", "🏦", "📄", "📝", "✍️", "🧾", "📊", "📈", "📉", "🔖", "📋", "🗂️", "✒️", "💼"],
+  },
+  {
+    label: "Time & place",
+    chars: ["📅", "🗓️", "⏰", "⏳", "🕐", "📍", "🗺️", "🚗", "🚇", "🚉", "☀️", "🌙", "⭐", "🌤️", "🧭", "🚦"],
+  },
+  {
+    label: "Contact",
+    chars: ["📞", "☎️", "📱", "💬", "📧", "✉️", "📢", "🔔", "📷", "🎥", "🔗", "📎", "🖨️", "💻", "🖥️", "📨"],
+  },
+  {
+    label: "Status",
+    chars: ["✅", "❌", "⚠️", "❗", "❓", "🆕", "🔴", "🟢", "🟡", "⏸️", "▶️", "🔄", "🎯", "🏆", "⭕", "☑️"],
+  },
 ];
 
 const BLANK = { key: "", channel: "whatsapp", body: "", active: true };
@@ -65,6 +78,7 @@ export function TemplateManager({ initial }: { initial: TemplateRow[] }) {
     active: boolean;
   }>(BLANK);
   const [error, setError] = React.useState<string | null>(null);
+  const [emojiOpen, setEmojiOpen] = React.useState(false);
   const [pending, start] = React.useTransition();
 
   function edit(t: TemplateRow) {
@@ -156,20 +170,44 @@ export function TemplateManager({ initial }: { initial: TemplateRow[] }) {
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-            <span>Emoji:</span>
-            {EMOJI.map((e) => (
-              <button
-                key={e.char}
-                type="button"
-                title={e.label}
-                aria-label={`Insert ${e.label} emoji`}
-                className="rounded px-1 py-0.5 text-base leading-none hover:bg-secondary"
-                onClick={() => setForm((f) => ({ ...f, body: `${f.body}${e.char}` }))}
-              >
-                {e.char}
-              </button>
-            ))}
+          <div className="space-y-1.5">
+            <button
+              type="button"
+              aria-expanded={emojiOpen}
+              onClick={() => setEmojiOpen((v) => !v)}
+              className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              {emojiOpen ? "Hide emoji" : "Add emoji 😊"}
+            </button>
+
+            {emojiOpen && (
+              <div className="max-h-56 space-y-2 overflow-y-auto rounded-md border bg-card p-2">
+                {EMOJI_GROUPS.map((group) => (
+                  <div key={group.label}>
+                    <p className="px-0.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.09em] text-muted-foreground/70">
+                      {group.label}
+                    </p>
+                    <div className="flex flex-wrap gap-0.5">
+                      {group.chars.map((char) => (
+                        <button
+                          key={char}
+                          type="button"
+                          aria-label={`Insert ${char}`}
+                          className="grid h-8 w-8 place-items-center rounded text-lg leading-none hover:bg-secondary"
+                          onClick={() => setForm((f) => ({ ...f, body: `${f.body}${char}` }))}
+                        >
+                          {char}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <p className="px-0.5 pt-1 text-[11px] text-muted-foreground">
+                  One or two reads warm. A message built out of emoji is how an agency number gets
+                  reported and blocked.
+                </p>
+              </div>
+            )}
           </div>
           {used.length > 0 && (
             <p className="text-xs text-muted-foreground">
