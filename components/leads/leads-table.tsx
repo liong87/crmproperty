@@ -15,10 +15,11 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowUpDown } from "lucide-react";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatMYR } from "@/lib/utils";
+import { formatMYR, cn } from "@/lib/utils";
 import { leadStatusTone } from "@/lib/status";
 import { deleteLeads } from "@/server/leads/actions";
 import { AssignCell } from "./assign-cell";
@@ -28,18 +29,28 @@ export interface LeadRow {
   id: string;
   name: string;
   phone: string;
+  email: string | null;
+  source: string;
+  sourceDetail: string | null;
   interest: string | null;
   budgetMin: number | null;
   budgetMax: number | null;
   assigneeName: string | null;
   assignedTo: string | null;
   status: string;
+  createdAt: Date;
 }
+
+const dayFmt = new Intl.DateTimeFormat("en-MY", {
+  day: "numeric", month: "short", timeZone: "Asia/Kuala_Lumpur",
+});
 
 export function LeadsTable({
   rows,
   canDelete,
   assignees = [],
+  sort,
+  sortHref,
 }: {
   rows: LeadRow[];
   /** Admin only. Without it this renders exactly as the table did before. */
@@ -49,6 +60,9 @@ export function LeadsTable({
    * and because it is empty, the list of colleagues is never sent to their browser.
    */
   assignees?: AssignableUser[];
+  sort?: string;
+  /** Built by the page so sorting keeps the search and status filters. */
+  sortHref?: (sort: string) => string;
 }) {
   const canAssign = assignees.length > 0;
   const router = useRouter();
@@ -142,6 +156,7 @@ export function LeadsTable({
         </p>
       )}
 
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
       <Table>
         <THead>
           <TR>
@@ -160,7 +175,13 @@ export function LeadsTable({
                 />
               </TH>
             )}
-            <TH>Name</TH><TH>Phone</TH><TH>Interest</TH><TH>Budget</TH><TH>Assigned to</TH><TH>Status</TH>
+            <SortTH label="Lead" sortKey="name" sort={sort} href={sortHref} />
+            <TH>Source</TH>
+            <TH>Interest</TH>
+            <TH>Budget</TH>
+            <TH>Assigned to</TH>
+            <SortTH label="Status" sortKey="status" sort={sort} href={sortHref} />
+            <SortTH label="Added" sortKey="newest" sort={sort} href={sortHref} />
           </TR>
         </THead>
         <TBody>
@@ -177,11 +198,23 @@ export function LeadsTable({
                   />
                 </TD>
               )}
-              <TD className="font-medium">
-                <Link href={`/leads/${l.id}`} className="hover:underline">{l.name}</Link>
+              {/* Name and phone stacked in one cell: they are read together, and two
+                  columns for one identity wastes the width the table actually needs. */}
+              <TD>
+                <Link href={`/leads/${l.id}`} className="block font-medium hover:underline">
+                  {l.name}
+                </Link>
+                <span className="block text-xs tabular-nums text-muted-foreground">{l.phone}</span>
               </TD>
-              <TD className="text-muted-foreground">{l.phone}</TD>
-              <TD>{l.interest ?? "—"}</TD>
+              <TD>
+                <span className="block text-sm capitalize">{l.source}</span>
+                {l.sourceDetail && (
+                  <span className="block max-w-[14rem] truncate text-xs text-muted-foreground">
+                    {l.sourceDetail}
+                  </span>
+                )}
+              </TD>
+              <TD className="capitalize">{l.interest ?? "—"}</TD>
               <TD>{formatMYR(l.budgetMin)}{l.budgetMax ? ` – ${formatMYR(l.budgetMax)}` : ""}</TD>
               {/* Unassigned is called out rather than left blank — an empty cell reads
                   as a rendering glitch, and a lead nobody owns needs to be noticed. */}
@@ -198,10 +231,46 @@ export function LeadsTable({
                 )}
               </TD>
               <TD><Badge className={leadStatusTone(l.status)}>{l.status}</Badge></TD>
+              <TD className="whitespace-nowrap text-xs text-muted-foreground">
+                {dayFmt.format(l.createdAt)}
+              </TD>
             </TR>
           ))}
         </TBody>
       </Table>
+      </div>
     </div>
+  );
+}
+
+/**
+ * A sortable column heading.
+ *
+ * Renders as plain text when the page did not supply a link builder, so the table still
+ * works anywhere it is reused without sorting.
+ */
+function SortTH({
+  label, sortKey, sort, href,
+}: {
+  label: string;
+  sortKey: string;
+  sort?: string;
+  href?: (s: string) => string;
+}) {
+  if (!href) return <TH>{label}</TH>;
+  // "Added" toggles between newest and oldest; the others are one direction, because a
+  // reverse-alphabetical lead list is not a thing anybody wants.
+  const target = sortKey === "newest" ? (sort === "newest" ? "oldest" : "newest") : sortKey;
+  const active = sort === sortKey || (sortKey === "newest" && sort === "oldest");
+  return (
+    <TH className="p-0">
+      <Link
+        href={href(target)}
+        className="flex h-10 items-center gap-1 px-3 transition-colors hover:text-foreground"
+      >
+        {label}
+        <ArrowUpDown className={cn("h-3 w-3", active ? "opacity-100" : "opacity-30")} />
+      </Link>
+    </TH>
   );
 }

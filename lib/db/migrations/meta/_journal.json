@@ -134,6 +134,13 @@
       "when": 1788313717647,
       "tag": "0018_blue_mojo",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788321488112,
+      "tag": "0019_tough_carnage",
+      "breakpoints": true
     }
   ]
 }

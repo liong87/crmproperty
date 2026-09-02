@@ -31,14 +31,14 @@ export async function listUsersPaginated(params: ListUsersParams = {}): Promise<
   return { items, page, pageSize, total: countRows[0]?.count ?? 0 };
 }
 
-export async function getTeamMemberIds(teamId: string | null): Promise<string[]> {
-  if (!teamId) return [];
-  const rows = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(and(eq(users.teamId, teamId), isNull(users.deletedAt)));
-  return rows.map((r) => r.id);
-}
+/**
+ * REMOVED — see server/users/hierarchy.ts `visibleUserIds`.
+ *
+ * This grouped by `users.team_id`, a bare uuid with no table behind it and no way to
+ * say who led the team. Scoping now follows `team_lead_id`, which is the fact the
+ * agency actually maintains.
+ */
+
 
 export interface AssignableUser {
   id: string;

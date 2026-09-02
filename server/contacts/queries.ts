@@ -3,7 +3,7 @@ import { and, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { contacts, type Contact, type User } from "@/lib/db/schema";
 import { ownershipFilter } from "@/lib/auth";
-import { getTeamMemberIds } from "@/server/users/queries";
+import { visibleUserIds } from "@/server/users/hierarchy";
 import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
 import type { Paginated } from "@/types";
 
@@ -21,7 +21,7 @@ export async function listContactsPaginated(
   const pageSize = Math.min(100, Math.max(1, params.pageSize ?? DEFAULT_PAGE_SIZE));
   const offset = (page - 1) * pageSize;
 
-  const teamIds = user.role === "team_lead" ? await getTeamMemberIds(user.teamId) : undefined;
+  const teamIds = user.role === "team_lead" ? await visibleUserIds(user) : undefined;
 
   const where = and(
     isNull(contacts.deletedAt),

@@ -4,7 +4,7 @@ import { db } from "@/lib/db/client";
 import { deals, dealStages, contacts, properties, projects, type Deal, type DealStage, type User } from "@/lib/db/schema";
 import { DEAL_PIPELINE } from "@/lib/constants";
 import { ownershipFilter } from "@/lib/auth";
-import { getTeamMemberIds } from "@/server/users/queries";
+import { visibleUserIds } from "@/server/users/hierarchy";
 
 export type DealPipeline = (typeof DEAL_PIPELINE)[number];
 
@@ -41,7 +41,7 @@ export async function listStages(pipeline?: DealPipeline): Promise<DealStage[]> 
  * to — visible, un-droppable and confusing.
  */
 export async function getBoard(user: User, pipeline: DealPipeline = "resale"): Promise<BoardColumn[]> {
-  const teamIds = user.role === "team_lead" ? await getTeamMemberIds(user.teamId) : undefined;
+  const teamIds = user.role === "team_lead" ? await visibleUserIds(user) : undefined;
 
   const stages = await listStages(pipeline);
   const stageIds = new Set(stages.map((s) => s.id));
@@ -85,7 +85,7 @@ export async function getBoard(user: User, pipeline: DealPipeline = "resale"): P
 
 /** Deals whose stage belongs to no current pipeline — orphaned by a stage deletion. */
 export async function countOrphanedDeals(user: User): Promise<number> {
-  const teamIds = user.role === "team_lead" ? await getTeamMemberIds(user.teamId) : undefined;
+  const teamIds = user.role === "team_lead" ? await visibleUserIds(user) : undefined;
   const stages = await listStages();
   const known = new Set(stages.map((s) => s.id));
   const rows = await db

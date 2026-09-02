@@ -3,7 +3,7 @@ import { and, asc, desc, eq, getTableColumns, ilike, isNull, or, sql } from "dri
 import { db } from "@/lib/db/client";
 import { leads, users, type Lead, type User } from "@/lib/db/schema";
 import { ownershipFilter } from "@/lib/auth";
-import { getTeamMemberIds } from "@/server/users/queries";
+import { visibleUserIds } from "@/server/users/hierarchy";
 import { DEFAULT_PAGE_SIZE, LEAD_STATUS } from "@/lib/constants";
 import type { Paginated } from "@/types";
 
@@ -14,10 +14,29 @@ export interface ListLeadsParams {
   pageSize?: number;
   search?: string;
   status?: LeadStatus;
+  sort?: LeadSort;
 }
 
 /** A lead row plus the name of whoever currently owns it. */
 export type LeadWithAssignee = Lead & { assigneeName: string | null };
+
+/**
+ * Sort orders the list offers. Kept as a closed set rather than a column name from the
+ * query string, because a column name from the query string is an injection waiting to
+ * be written by somebody in a hurry.
+ */
+export const LEAD_SORTS = {
+  newest: () => desc(leads.createdAt),
+  oldest: () => asc(leads.createdAt),
+  name: () => asc(leads.name),
+  status: () => asc(leads.status),
+} as const;
+
+export type LeadSort = keyof typeof LEAD_SORTS;
+
+export function parseLeadSort(raw: string | undefined): LeadSort {
+  return raw && raw in LEAD_SORTS ? (raw as LeadSort) : "newest";
+}
 
 export async function listLeadsPaginated(
   user: User,
@@ -27,7 +46,7 @@ export async function listLeadsPaginated(
   const pageSize = Math.min(100, Math.max(1, params.pageSize ?? DEFAULT_PAGE_SIZE));
   const offset = (page - 1) * pageSize;
 
-  const teamIds = user.role === "team_lead" ? await getTeamMemberIds(user.teamId) : undefined;
+  const teamIds = user.role === "team_lead" ? await visibleUserIds(user) : undefined;
 
   const where = and(
     isNull(leads.deletedAt),
@@ -50,7 +69,7 @@ export async function listLeadsPaginated(
       .from(leads)
       .leftJoin(users, eq(users.id, leads.assignedTo))
       .where(where)
-      .orderBy(desc(leads.createdAt))
+      .orderBy(LEAD_SORTS[params.sort ?? "newest"]())
       .limit(pageSize)
       .offset(offset),
     db.select({ count: sql<number>`count(*)::int` }).from(leads).where(where),
