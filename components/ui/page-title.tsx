@@ -26,7 +26,7 @@ export function PageTitle({
       <div className="flex items-stretch gap-3">
         <div
           aria-hidden="true"
-          className="w-1 shrink-0 self-stretch rounded-full bg-gradient-to-b from-primary to-accent"
+          className="w-1 shrink-0 self-stretch rounded-full bg-[linear-gradient(to_bottom,hsl(var(--primary)),hsl(var(--primary-2)))]"
         />
         <div className="min-w-0">
           <h1 className="font-display text-2xl font-bold tracking-tight">{title}</h1>

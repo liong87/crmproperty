@@ -9,7 +9,7 @@ const buttonVariants = cva(
       variant: {
         // One gradient for every primary action, brightened on hover rather than
         // swapped for a second colour — one thing to maintain, and nothing competes.
-        default: "bg-gradient-to-r from-primary to-accent text-primary-foreground hover:brightness-110",
+        default: "bg-brand-gradient text-primary-foreground hover:brightness-110",
         destructive: "bg-destructive text-destructive-foreground hover:brightness-110",
         outline:
           "border border-input bg-card text-muted-foreground hover:border-gray-300 hover:bg-gray-50 hover:text-foreground dark:hover:bg-gray-800",

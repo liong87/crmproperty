@@ -1,17 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Space_Grotesk } from "next/font/google";
+import { Inter, Fraunces } from "next/font/google";
 import "./globals.css";
 import { APP_NAME } from "@/lib/constants";
 import { AuthUIProvider } from "@/lib/auth/provider-components";
 
-const sans = Geist({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
-// Space Grotesk on headings only. On an H1 with tight tracking it is doing most of
-// the work of not looking like a bootstrap app.
-const display = Space_Grotesk({
+const sans = Inter({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
+// Fraunces on headings only. The serif is the most distinctive thing about this app
+// and the competitor teardown was explicit that it stays.
+const display = Fraunces({
   subsets: ["latin"],
   variable: "--font-display",
   display: "swap",
-  weight: ["500", "600", "700"],
+  weight: ["400", "500", "600"],
 });
 
 export const metadata: Metadata = {

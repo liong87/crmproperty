@@ -24,7 +24,7 @@ export function Segmented({ items }: { items: SegmentItem[] }) {
           className={cn(
             "flex h-[30px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-[13px] font-semibold transition",
             t.active
-              ? "bg-gradient-to-r from-primary to-accent text-primary-foreground shadow-md shadow-primary/25"
+              ? "bg-brand-gradient text-primary-foreground shadow-md shadow-primary/25"
               : "text-muted-foreground hover:bg-gray-900/5 hover:text-foreground dark:hover:bg-white/10",
           )}
         >
@@ -53,7 +53,7 @@ export function FilterChip({
       className={cn(
         "flex shrink-0 items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition",
         active
-          ? "border-transparent bg-gradient-to-r from-primary to-accent text-primary-foreground"
+          ? "border-transparent bg-brand-gradient text-primary-foreground"
           : "border-input bg-card text-muted-foreground hover:border-gray-300 hover:text-foreground",
       )}
     >

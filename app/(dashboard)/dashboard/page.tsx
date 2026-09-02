@@ -11,7 +11,7 @@ import { countDocumentsDue } from "@/server/deal-documents/queries";
 import { STATUS } from "@/lib/chart-colors";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/reports/stat-tile";
-import { FunnelStrip } from "@/components/reports/funnel-strip";
+import { FunnelBand } from "@/components/dashboard/funnel-band";
 import { RangeFilter, parseRangeDays, rangeLabel } from "@/components/reports/range-filter";
 import { PageTitle } from "@/components/ui/page-title";
 import { FollowUpList } from "@/components/activities/follow-up-list";
@@ -80,8 +80,22 @@ export default async function DashboardPage({
       )}
 
       {/* The funnel first, because it is the question the dashboard exists to answer:
-          where are people falling out. The tiles below are the day's workload. */}
-      <FunnelStrip stages={funnel.stages} periodLabel={`Last ${rangeLabel(days).toLowerCase()}`} />
+          where are people falling out. The tiles below are the day's workload.
+
+          Drawn as one tapering band rather than tiles: you see where it narrows before
+          you read a number, which is the whole point and something separate tiles
+          cannot do. */}
+      <Card>
+        <CardHeader className="flex-row items-baseline justify-between pb-0">
+          <CardTitle>Your funnel</CardTitle>
+          <span className="text-xs text-muted-foreground">
+            Last {rangeLabel(days).toLowerCase()}
+          </span>
+        </CardHeader>
+        <FunnelBand
+          stages={funnel.stages.map((st) => ({ label: st.label, value: st.count }))}
+        />
+      </Card>
 
       {/* Four tiles, not six: booked and appointments now live in the strip above, and
           repeating them here taught the eye to skip the row. */}

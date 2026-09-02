@@ -3,56 +3,76 @@
 @tailwind utilities;
 
 /**
- * Palette from DESIGNSYSTEM.md — measured off ZIEN's computed styles, not eyeballed.
+ * Tropical estate: deep teal + warm amber on a warm off-white. This is OUR identity and
+ * it stays — the competitor teardown contributed structure, not colour.
  *
- * The load-bearing choice is the canvas: #eef2f9, not white. White cards then read as
- * raised without needing a shadow, which is why the whole app carries exactly one
- * box-shadow (the active segmented tab) and still has depth.
- *
- * Kept in the existing HSL-token shape so every component that already reads
- * --primary / --border keeps working; only the values moved.
+ * What was taken from it: a tinted canvas so white cards read as raised without a
+ * shadow, a closed 8/12/16 radius scale, and fixed control heights. What was rejected:
+ * their blue, and their geometric sans on headings. The serif display face is the
+ * single most distinctive thing about this app.
  */
 @layer base {
   :root {
-    --background: 218 43% 95%;        /* #eef2f9 canvas */
-    --foreground: 222 47% 11%;        /* slate-900 */
+    /* Canvas is tinted, not white — that is what lets cards drop their shadow. */
+    --background: 42 30% 96%;
+    --foreground: 177 42% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --primary: 221 83% 53%;           /* brand-600 #2563eb */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 96%;         /* gray-100 */
-    --secondary-foreground: 221 39% 25%;
-    --accent: 199 89% 48%;            /* sky-500, the gradient end */
-    --accent-foreground: 0 0% 100%;
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;   /* gray-500 — labels, idle tabs */
-    --destructive: 0 72% 51%;         /* red-600 */
-    --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 91%;            /* gray-200 — controls */
-    --input: 220 13% 91%;
-    --ring: 217 91% 60%;              /* blue-500 */
-    --radius: 0.75rem;                /* 12px: buttons, inputs, pills */
+    --card-foreground: 177 42% 11%;
+    --primary: 179 74% 19%;
+    /* Gradient end for primary surfaces. A lighter teal, never the amber — green to
+       amber across a button reads as a warning, not a brand. */
+    --primary-2: 172 52% 31%;
+    --primary-foreground: 40 33% 97%;
+    --secondary: 176 27% 93%;
+    --secondary-foreground: 179 55% 15%;
+    --accent: 40 82% 52%;
+    --accent-foreground: 30 50% 14%;
+    --muted: 44 22% 93%;
+    --muted-foreground: 186 9% 40%;
+    --destructive: 6 63% 45%;
+    --destructive-foreground: 40 33% 97%;
+    --border: 44 22% 88%;
+    --input: 44 22% 88%;
+    --ring: 179 74% 26%;
+    --radius: 0.75rem;
+
+    /* Hairline between funnel columns and inside divided strips. */
+    --line-soft: 44 22% 90%;
+
+    /*
+     * Funnel stage ramp — neutral to brand green across five stages.
+     *
+     * Deliberately NOT the competitor's amber/red mid-funnel: drop-off between stages
+     * is normal, and colouring it as alarm makes a healthy funnel look broken. Each
+     * stage has a fill and a darker ink for text that sits on or under it.
+     */
+    --stage-1: #d3d8d0; --stage-2: #bcd2c4; --stage-3: #8fbba6; --stage-4: #4a9280; --stage-5: #12564a;
+    --stage-1-ink: #5f6b64; --stage-2-ink: #4e7a65; --stage-3-ink: #2f7d6c; --stage-4-ink: #217566; --stage-5-ink: #12564a;
   }
 
   .dark {
-    /* Mechanical mapping from §5. Same glow, lower alpha, applied on .app-shell. */
-    --background: 222 47% 8%;
-    --foreground: 0 0% 100%;
-    --card: 221 39% 11%;
-    --card-foreground: 0 0% 100%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 215 28% 17%;
-    --secondary-foreground: 210 40% 96%;
-    --accent: 199 89% 48%;
-    --accent-foreground: 0 0% 100%;
-    --muted: 215 28% 17%;
-    --muted-foreground: 215 20% 65%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 215 28% 20%;
-    --input: 215 28% 20%;
-    --ring: 217 91% 60%;
+    --background: 180 30% 6%;
+    --foreground: 40 20% 96%;
+    --card: 180 25% 9%;
+    --card-foreground: 40 20% 96%;
+    --primary: 172 52% 38%;
+    --primary-2: 168 45% 48%;
+    --primary-foreground: 180 40% 6%;
+    --secondary: 180 18% 16%;
+    --secondary-foreground: 40 20% 92%;
+    --accent: 40 75% 55%;
+    --accent-foreground: 30 50% 12%;
+    --muted: 180 18% 16%;
+    --muted-foreground: 180 8% 62%;
+    --destructive: 6 63% 52%;
+    --destructive-foreground: 40 33% 97%;
+    --border: 180 14% 20%;
+    --input: 180 14% 20%;
+    --ring: 172 52% 45%;
+    --line-soft: 180 14% 20%;
+
+    --stage-1: #3a4742; --stage-2: #375349; --stage-3: #3a6e5e; --stage-4: #3d8e79; --stage-5: #63c3ab;
+    --stage-1-ink: #9aa9a2; --stage-2-ink: #7fbba6; --stage-3-ink: #77c7af; --stage-4-ink: #6ecdb2; --stage-5-ink: #7fd3bc;
   }
 
   * { @apply border-border; }
@@ -61,21 +81,20 @@
     font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  /* Headings take the display face automatically; tracking-tight does much of the work. */
-  h1 { font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif; letter-spacing: -0.02em; }
+  h1 { font-family: var(--font-display), Georgia, serif; letter-spacing: -0.015em; }
 }
 
 @layer components {
   /**
-   * The page canvas: one soft blue glow bleeding in from off-canvas, top right.
-   * Subtle enough that you do not consciously see it, and most of why the app does
-   * not look flat.
+   * One soft glow bleeding in from off-canvas, top right — in our green rather than
+   * their blue. Subtle enough not to be seen consciously, and most of why the page
+   * does not look flat now that cards carry no shadow.
    */
   .app-shell {
     background-color: hsl(var(--background));
     background-image: radial-gradient(
       900px 420px at 78% -8%,
-      rgba(147, 197, 253, 0.55),
+      hsl(176 40% 72% / 0.45),
       transparent 60%
     );
     background-attachment: fixed;
@@ -83,15 +102,18 @@
   .dark .app-shell {
     background-image: radial-gradient(
       900px 420px at 78% -8%,
-      rgba(37, 99, 235, 0.18),
+      hsl(172 52% 38% / 0.16),
       transparent 60%
     );
+  }
+
+  /* One gradient for primary surfaces, so there is a single thing to maintain. */
+  .bg-brand-gradient {
+    background-image: linear-gradient(to right, hsl(var(--primary)), hsl(var(--primary-2)));
   }
 }
 
 @layer utilities {
   .tnum { font-variant-numeric: tabular-nums; }
-  .font-display { font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif; }
-  /* One accent, used as a gradient. Nothing else competes. */
-  .bg-brand-gradient { @apply bg-gradient-to-r from-primary to-accent; }
+  .font-display { font-family: var(--font-display), Georgia, serif; }
 }
