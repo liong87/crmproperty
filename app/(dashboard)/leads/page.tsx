@@ -4,6 +4,7 @@ import { Inbox, Search, Plus, Upload } from "lucide-react";
 import { getCurrentDbUser } from "@/lib/auth";
 import { listLeadsPaginated, parseLeadSort, type LeadStatus } from "@/server/leads/queries";
 import { listAssignableUsers } from "@/server/users/queries";
+import { listProjectOptions } from "@/server/projects/queries";
 import { LEAD_STATUS, statusLabel } from "@/lib/constants";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -32,9 +33,10 @@ export default async function LeadsPage({
    * the data boundary are the same line.
    */
   const canAssign = me.role !== "agent";
-  const [{ items, total, pageSize }, assignees] = await Promise.all([
+  const [{ items, total, pageSize }, assignees, projects] = await Promise.all([
     listLeadsPaginated(me, { search: sp.q, status, page, sort }),
     canAssign ? listAssignableUsers() : Promise.resolve([]),
+    listProjectOptions(),
   ]);
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -128,15 +130,39 @@ export default async function LeadsPage({
             assignedTo: l.assignedTo,
             status: l.status,
             createdAt: l.createdAt,
+            utmCampaign: l.utmCampaign,
+            utmContent: l.utmContent,
+            utmTerm: l.utmTerm,
+            info: l.info,
+            projectId: l.projectId,
+            projectName: l.projectName,
+            recycleCount: l.recycleCount,
+            /*
+             * Days since anybody touched this lead, falling back to how long it has
+             * existed when nobody ever has. Read from the maintained column rather
+             * than re-derived, so it is the same number the follow-up rate uses.
+             */
+            dormantDays: Math.max(
+              0,
+              Math.floor(
+                (Date.now() - (l.lastFollowUpAt ?? l.createdAt).getTime()) / 86_400_000,
+              ),
+            ),
           }))}
           // Deletion is admin-only, matching deleteLead: an agent who can erase leads
           // can erase the evidence of ones they never worked.
           canDelete={me.role === "admin"}
           assignees={assignees}
+          projects={projects}
           sort={sort}
           sortHrefs={sortHrefs}
         />
       )}
+
+      <p className="text-xs tabular-nums text-muted-foreground">
+        {items.length} of {total} {total === 1 ? "lead" : "leads"}
+        {status || sp.q ? " · filters applied" : ""}
+      </p>
 
       {pages > 1 && (
         <div className="flex items-center justify-between text-sm">

@@ -1,7 +1,7 @@
 "use server";
 /** Lead mutations. Authn + RBAC + Zod + ActionResult on every action. */
 import { z } from "zod";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db/client";
@@ -27,6 +27,17 @@ const createSchema = z.object({
   projectId: z.string().uuid().optional().nullable(),
   assignedTo: z.string().uuid().optional().nullable(),
   consentGiven: z.boolean().optional(),
+  /**
+   * Freeform lead info — the answers a form asked that have no column of their own.
+   * Ours is narrower than the competitor's single blob because interest, budget and
+   * preferred areas are structured fields here, which is the point.
+   */
+  info: z.string().max(4000).optional().nullable(),
+  /** Where it came from, in the shape the edit modal offers. */
+  sourceDetail: z.string().max(255).optional().nullable(),
+  utmCampaign: z.string().max(255).optional().nullable(),
+  utmContent: z.string().max(255).optional().nullable(),
+  utmTerm: z.string().max(255).optional().nullable(),
 });
 
 const updateSchema = createSchema.partial().extend({
@@ -107,6 +118,11 @@ export async function updateLead(input: unknown): Promise<ActionResult<Lead>> {
         preferredAreas: d.preferredAreas !== undefined ? d.preferredAreas : lead.preferredAreas,
         projectId: d.projectId !== undefined ? d.projectId : lead.projectId,
         status: d.status ?? lead.status,
+        info: d.info !== undefined ? d.info : lead.info,
+        sourceDetail: d.sourceDetail !== undefined ? d.sourceDetail : lead.sourceDetail,
+        utmCampaign: d.utmCampaign !== undefined ? d.utmCampaign : lead.utmCampaign,
+        utmContent: d.utmContent !== undefined ? d.utmContent : lead.utmContent,
+        utmTerm: d.utmTerm !== undefined ? d.utmTerm : lead.utmTerm,
         assignedTo,
       })
       .where(eq(leads.id, d.id))
@@ -180,7 +196,12 @@ export async function assignLead(
 
     const [row] = await db
       .update(leads)
-      .set({ assignedTo: parsed })
+      .set({
+        assignedTo: parsed,
+        // Counted here because this is the only path ownership changes through, and
+        // each reassignment otherwise overwrites all trace of the last one.
+        recycleCount: sql`${leads.recycleCount} + 1`,
+      })
       .where(and(eq(leads.id, id), isNull(leads.deletedAt)))
       .returning();
     if (!row) return fail("Lead not found.");

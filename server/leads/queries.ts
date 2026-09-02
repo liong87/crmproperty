@@ -18,7 +18,10 @@ export interface ListLeadsParams {
 }
 
 /** A lead row plus the name of whoever currently owns it. */
-export type LeadWithAssignee = Lead & { assigneeName: string | null };
+export type LeadWithAssignee = Lead & {
+  assigneeName: string | null;
+  projectName: string | null;
+};
 
 /**
  * Sort orders the list offers. Kept as a closed set rather than a column name from the
@@ -95,7 +98,13 @@ export async function listLeadsPaginated(
     // Left join, not inner: an unassigned lead must still appear in the list. Losing
     // sight of a lead nobody owns is the worst possible outcome for this screen.
     db
-      .select({ ...getTableColumns(leads), assigneeName: users.name })
+      .select({
+        ...getTableColumns(leads),
+        assigneeName: users.name,
+        projectName: sql<string | null>`(
+          select p.name from projects p where p.id = ${sql.raw('"leads"."project_id"')}
+        )`,
+      })
       .from(leads)
       .leftJoin(users, eq(users.id, leads.assignedTo))
       .where(where)

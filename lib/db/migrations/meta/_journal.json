@@ -148,6 +148,13 @@
       "when": 1788331264197,
       "tag": "0020_fast_maelstrom",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788337189220,
+      "tag": "0021_supreme_wallop",
+      "breakpoints": true
     }
   ]
 }

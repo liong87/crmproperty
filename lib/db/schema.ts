@@ -132,6 +132,23 @@ export const leads = pgTable(
      * rate, or the number stops meaning "somebody spoke to this person" — which is the
      * only thing it is for.
      */
+    /**
+     * Freeform lead info: the answers a capture form asked that have no column here —
+     * "wants a corner lot, viewing weekends only".
+     *
+     * Deliberately NARROWER than the competitor's single blob. Interest, budget and
+     * preferred areas are structured fields on this table precisely so they can be
+     * filtered and matched on; this is only for what does not fit them.
+     */
+    info: text("info"),
+    /**
+     * How many times this lead has been handed to somebody new.
+     *
+     * A high count with no progress is the signal that a lead is being passed around
+     * rather than worked — which no other field on this table can tell you, because
+     * each reassignment overwrites the last.
+     */
+    recycleCount: integer("recycle_count").notNull().default(0),
     lastFollowUpAt: timestamp("last_follow_up_at", { withTimezone: true }),
     followUpCount: integer("follow_up_count").notNull().default(0),
     ...timestamps,

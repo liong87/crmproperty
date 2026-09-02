@@ -24,6 +24,8 @@ import { leadStatusTone } from "@/lib/status";
 import { statusLabel } from "@/lib/constants";
 import { deleteLeads } from "@/server/leads/actions";
 import { AssignCell } from "./assign-cell";
+import { LeadRowActions } from "./row-actions";
+import { StatusCell } from "./status-cell";
 import type { AssignableUser } from "@/server/users/queries";
 
 export interface LeadRow {
@@ -33,6 +35,15 @@ export interface LeadRow {
   email: string | null;
   source: string;
   sourceDetail: string | null;
+  utmCampaign: string | null;
+  utmContent: string | null;
+  utmTerm: string | null;
+  info: string | null;
+  projectId: string | null;
+  projectName: string | null;
+  /** Times reassigned, and days since the last touch — the two neglect signals. */
+  recycleCount: number;
+  dormantDays: number;
   interest: string | null;
   budgetMin: number | null;
   budgetMax: number | null;
@@ -45,6 +56,9 @@ export interface LeadRow {
 const dayFmt = new Intl.DateTimeFormat("en-MY", {
   day: "numeric", month: "short", timeZone: "Asia/Kuala_Lumpur",
 });
+const timeFmt = new Intl.DateTimeFormat("en-MY", {
+  hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kuala_Lumpur",
+});
 
 export function LeadsTable({
   rows,
@@ -52,6 +66,7 @@ export function LeadsTable({
   assignees = [],
   sort,
   sortHrefs,
+  projects = [],
 }: {
   rows: LeadRow[];
   /** Admin only. Without it this renders exactly as the table did before. */
@@ -68,6 +83,8 @@ export function LeadsTable({
    * from a Server Component to a Client Component.
    */
   sortHrefs?: Record<string, string>;
+  /** Products for the edit modal. Empty for an agent, who cannot reassign a product. */
+  projects?: { id: string; name: string }[];
 }) {
   const canAssign = assignees.length > 0;
   const router = useRouter();
@@ -182,16 +199,23 @@ export function LeadsTable({
             )}
             <SortTH label="Lead" sortKey="name" sort={sort} hrefs={sortHrefs} />
             <TH>Source</TH>
+            <TH>Info</TH>
+            <TH>Product</TH>
             <TH>Interest</TH>
             <TH>Budget</TH>
             <TH>Assigned to</TH>
             <SortTH label="Status" sortKey="status" sort={sort} hrefs={sortHrefs} />
             <SortTH label="Added" sortKey="newest" sort={sort} hrefs={sortHrefs} />
+            {/* Two narrow columns that between them say which leads are being
+                neglected and which are being shuffled without progress. */}
+            <TH className="text-center" title="Times reassigned">&#8635;</TH>
+            <TH className="text-center" title="Days since the last touch">D</TH>
+            <TH className="w-20" />
           </TR>
         </THead>
         <TBody>
           {rows.map((l) => (
-            <TR key={l.id} className={selected.has(l.id) ? "bg-muted/50" : undefined}>
+            <TR key={l.id} className={cn("group", selected.has(l.id) && "bg-muted/50")}>
               {canDelete && (
                 <TD>
                   <input
@@ -219,6 +243,16 @@ export function LeadsTable({
                   </span>
                 )}
               </TD>
+              <TD className="max-w-[12rem]">
+                {l.info
+                  ? <span className="line-clamp-1 text-xs text-muted-foreground">{l.info}</span>
+                  : <span className="text-muted-foreground">—</span>}
+              </TD>
+              <TD>
+                {l.projectName
+                  ? <Badge variant="secondary">{l.projectName}</Badge>
+                  : <span className="text-muted-foreground">—</span>}
+              </TD>
               <TD className="capitalize">{l.interest ?? "—"}</TD>
               <TD>{formatMYR(l.budgetMin)}{l.budgetMax ? ` – ${formatMYR(l.budgetMax)}` : ""}</TD>
               {/* Unassigned is called out rather than left blank — an empty cell reads
@@ -235,9 +269,31 @@ export function LeadsTable({
                   l.assigneeName ?? "Unassigned"
                 )}
               </TD>
-              <TD><Badge className={leadStatusTone(l.status)}>{statusLabel(l.status)}</Badge></TD>
+              <TD>
+                <StatusCell leadId={l.id} leadName={l.name} status={l.status} />
+              </TD>
               <TD className="whitespace-nowrap text-xs text-muted-foreground">
-                {dayFmt.format(l.createdAt)}
+                <span className="block">{dayFmt.format(l.createdAt)}</span>
+                <span className="block tabular-nums opacity-70">{timeFmt.format(l.createdAt)}</span>
+              </TD>
+              <TD className="text-center text-xs tabular-nums text-muted-foreground">
+                {l.recycleCount > 0 ? `↻ ${l.recycleCount}×` : "—"}
+              </TD>
+              <TD className="text-center text-xs tabular-nums text-muted-foreground">
+                {l.dormantDays}d
+              </TD>
+              <TD>
+                <LeadRowActions
+                  lead={{
+                    id: l.id, name: l.name, phone: l.phone, email: l.email,
+                    source: l.source, sourceDetail: l.sourceDetail,
+                    utmCampaign: l.utmCampaign, utmContent: l.utmContent, utmTerm: l.utmTerm,
+                    interest: l.interest, budgetMin: l.budgetMin, budgetMax: l.budgetMax,
+                    projectId: l.projectId, info: l.info, createdAt: l.createdAt,
+                  }}
+                  projects={projects}
+                  canDelete={canDelete}
+                />
               </TD>
             </TR>
           ))}
