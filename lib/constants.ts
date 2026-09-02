@@ -55,6 +55,7 @@ export const ACTIVE_STATUSES = byGroup("new", "working", "appointment");
  * Finished with, one way or another. Every "skip this lead" query uses THIS, so adding
  * a tenth status can never quietly reopen a dead lead to the chase list.
  */
+export const APPOINTMENT_STATUSES = byGroup("appointment");
 export const DEAD_STATUSES = byGroup("dead");
 export const isDeadStatus = (status: string): boolean => statusGroup(status) === "dead";
 export const INTEREST = ["buy", "rent", "sell", "invest"] as const;

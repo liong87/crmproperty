@@ -38,6 +38,24 @@ export function parseLeadSort(raw: string | undefined): LeadSort {
   return raw && raw in LEAD_SORTS ? (raw as LeadSort) : "newest";
 }
 
+/**
+ * Phone search that survives how people actually type numbers.
+ *
+ * Stored numbers are E.164 (+60178899011). Agents type "017-889 9011", "0178899011"
+ * or paste "+60 17-889 9011". A plain ILIKE on the stored string matches none of
+ * those, so the search looked broken for the one field it is used on most.
+ *
+ * Both sides are reduced to digits, and a leading Malaysian 0 is dropped so a local
+ * number matches its E.164 form: 0178899011 -> 178899011, which is a suffix of
+ * 60178899011.
+ */
+const phoneClause = (q: string) => {
+  const digits = q.replace(/\D/g, "");
+  if (digits.length < 4) return undefined;
+  const local = digits.replace(/^0+/, "");
+  return sql`regexp_replace(${leads.phone}, '\\D', '', 'g') like ${`%${local}%`}`;
+};
+
 export async function listLeadsPaginated(
   user: User,
   params: ListLeadsParams = {},
@@ -61,6 +79,7 @@ export async function listLeadsPaginated(
       ? or(
           ilike(leads.name, `%${params.search}%`),
           ilike(leads.phone, `%${params.search}%`),
+          phoneClause(params.search),
           ilike(leads.email, `%${params.search}%`),
           sql`exists (
             select 1 from lead_remarks r

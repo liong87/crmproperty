@@ -14,7 +14,7 @@
  * view, not a column nobody can prove is current.
  */
 import { and, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
-import { ACTIVE_STATUSES, OPEN_STATUSES, DEAD_STATUSES } from "@/lib/constants";
+import { ACTIVE_STATUSES, OPEN_STATUSES, DEAD_STATUSES, APPOINTMENT_STATUSES, statusGroup } from "@/lib/constants";
 import { db } from "@/lib/db/client";
 import { leads, type User } from "@/lib/db/schema";
 
@@ -72,7 +72,26 @@ const asTuple = (values: readonly string[]) =>
   sql.raw(`(${values.map((v) => `'${v}'`).join(", ")})`);
 const OPEN_OR_APPT = asTuple(ACTIVE_STATUSES);
 const DEAD_LIST = asTuple(DEAD_STATUSES);
+const APPT_LIST = asTuple(APPOINTMENT_STATUSES);
 const LEAD_PROJECT_ID = sql.raw('"leads"."project_id"');
+
+/**
+ * Phone search that survives how people actually type numbers.
+ *
+ * Stored numbers are E.164 (+60178899011). Agents type "017-889 9011", "0178899011"
+ * or paste "+60 17-889 9011". A plain ILIKE on the stored string matches none of
+ * those, so the search looked broken for the one field it is used on most.
+ *
+ * Both sides are reduced to digits, and a leading Malaysian 0 is dropped so a local
+ * number matches its E.164 form: 0178899011 -> 178899011, which is a suffix of
+ * 60178899011.
+ */
+const phoneClause = (q: string) => {
+  const digits = q.replace(/\D/g, "");
+  if (digits.length < 4) return undefined;
+  const local = digits.replace(/^0+/, "");
+  return sql`regexp_replace(${leads.phone}, '\\D', '', 'g') like ${`%${local}%`}`;
+};
 
 const lastTouchSql = sql<Date | null>`(
   select max(a.occurred_at) from activities a
@@ -163,6 +182,8 @@ export async function listWorkingLeads(
           ? or(
               ilike(leads.name, `%${q}%`),
               ilike(leads.phone, `%${q}%`),
+        phoneClause(q),
+              phoneClause(q),
               ilike(leads.email, `%${q}%`),
               sql`exists (
                 select 1 from lead_remarks r
@@ -195,10 +216,21 @@ export async function listWorkingLeads(
     };
   });
 
-  // The appointment split is on a derived count, so it happens after the query rather
-  // than as a third branch of the WHERE.
-  if (tab === "appointment") return withDerived.filter((r) => r.openAppointments > 0);
-  if (tab === "active") return withDerived.filter((r) => r.openAppointments === 0);
+  /*
+   * A lead belongs on the Appointment tab if EITHER is true: it has a booked
+   * appointment, or its status is in the appointment stage group.
+   *
+   * Both, because they are different facts that the interface calls the same thing.
+   * The status "Appointment" is a call outcome — the agent got through and agreed to
+   * meet. A row in `appointments` is a diary entry. An agent who has just set a lead to
+   * "Appointment" and then finds it under "Active" concludes, reasonably, that the app
+   * lost it. Splitting on the diary entry alone was mine and it was wrong.
+   */
+  const onAppointmentTab = (r: { openAppointments: number; status: string }) =>
+    r.openAppointments > 0 || statusGroup(r.status) === "appointment";
+
+  if (tab === "appointment") return withDerived.filter(onAppointmentTab);
+  if (tab === "active") return withDerived.filter((r) => !onAppointmentTab(r));
   return withDerived;
 }
 
@@ -221,6 +253,7 @@ export async function countWorkingTabs(
     ? or(
         ilike(leads.name, `%${q}%`),
         ilike(leads.phone, `%${q}%`),
+        phoneClause(q),
         ilike(leads.email, `%${q}%`),
         sql`exists (
           select 1 from lead_remarks r
@@ -230,9 +263,13 @@ export async function countWorkingTabs(
       )
     : undefined;
 
-  const booked = sql`exists (
-    select 1 from appointments ap
-    where ap.lead_id = ${LEAD_ID} and ap.status = 'scheduled' and ap.deleted_at is null
+  /* Must mirror onAppointmentTab exactly, or the tab counts contradict the lists. */
+  const booked = sql`(
+    exists (
+      select 1 from appointments ap
+      where ap.lead_id = ${LEAD_ID} and ap.status = 'scheduled' and ap.deleted_at is null
+    )
+    or ${leads.status} in ${APPT_LIST}
   )`;
 
   const [row] = await db
@@ -318,12 +355,16 @@ export async function countActiveWorkingLeads(user: User): Promise<number> {
         isNull(leads.deletedAt),
         eq(leads.assignedTo, user.id),
         inArray(leads.status, OPEN_STATUSES),
-        // Active excludes anything already booked in — that lives on the Appointment tab.
-        sql`not exists (
-          select 1 from appointments ap
-          where ap.lead_id = ${LEAD_ID}
-            and ap.status = 'scheduled'
-            and ap.deleted_at is null
+        // Active excludes anything on the Appointment tab, by the same rule the tab
+        // itself uses: a booked diary entry OR the "Appointment" call outcome.
+        sql`not (
+          exists (
+            select 1 from appointments ap
+            where ap.lead_id = ${LEAD_ID}
+              and ap.status = 'scheduled'
+              and ap.deleted_at is null
+          )
+          or ${leads.status} in ${APPT_LIST}
         )`,
       ),
     );

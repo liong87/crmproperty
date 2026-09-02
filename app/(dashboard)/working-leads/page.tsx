@@ -9,7 +9,7 @@ import {
 import { WorkingLeadCard } from "@/components/leads/working-lead-card";
 import { FilterDropdown, ActiveFilterChip, type FilterOption } from "@/components/leads/filter-dropdown";
 import { statusLabel } from "@/lib/constants";
-import { Search } from "lucide-react";
+import { QueueSearch } from "@/components/leads/queue-search";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageTitle } from "@/components/ui/page-title";
 import { Segmented } from "@/components/ui/segmented";
@@ -139,17 +139,9 @@ export default async function WorkingLeadsPage({
           ]}
         />
 
-        {/* A plain form: works without JavaScript and survives a reload. */}
-        <form action="/working-leads" className="relative min-w-[15rem] flex-1">
-          {sp.tab && <input type="hidden" name="tab" value={sp.tab} />}
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            name="q"
-            defaultValue={search ?? ""}
-            placeholder="Search name, phone, email, remarks…"
-            className="h-10 w-full rounded-xl border border-input bg-card pl-9 pr-4 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-          />
-        </form>
+        <Suspense fallback={<div className="h-10 min-w-[15rem] flex-1" />}>
+          <QueueSearch placeholder="Search name, phone, email, remarks…" />
+        </Suspense>
       </div>
 
       {/*
