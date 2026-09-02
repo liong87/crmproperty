@@ -12,9 +12,12 @@
  */
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { leadFormSources, activities } from "@/lib/db/schema";
+import { leadFormSources, activities, captureEvents } from "@/lib/db/schema";
 import { metaLeadAds, LeadAdsTransientError } from "@/lib/leadads";
 import { getMetaCredentials } from "@/server/lead-sources/credentials";
+import { ownerOfExternalPage } from "@/server/capture/ownership";
+import { decryptSecret } from "@/lib/crypto/secret-box";
+import type { AdPlatformCredentials } from "@/lib/leadads";
 import { monitoring } from "@/lib/monitoring";
 import { createLeadFromIntake } from "./intake";
 import { mapMetaLead, type MetaMapping } from "./meta-map";
@@ -83,6 +86,104 @@ async function findMapping(formId: string | null): Promise<MetaMapping | null> {
     : null;
 }
 
+interface PageRoute {
+  cred: AdPlatformCredentials;
+  /** The agent whose connection produced this lead. Null for the legacy shared page. */
+  ownerUserId: string | null;
+}
+
+/**
+ * Whose Page is this, and with what token.
+ *
+ * Per-user first: the Page id on the webhook is matched against the connections agents
+ * made themselves, and the lead is then assigned to that agent rather than dropped into
+ * round-robin. That is the entire point of per-user capture — an agent's own ad spend
+ * produces leads in their own queue.
+ *
+ * The agency-wide connection remains as a fallback so a Page connected before Brief 5
+ * keeps working. It has no owner, so those leads assign as they always did.
+ */
+async function routeFor(pageId: string | null): Promise<PageRoute | null> {
+  if (pageId) {
+    const owned = await ownerOfExternalPage("facebook", pageId);
+    if (owned) {
+      try {
+        return {
+          cred: { accountId: owned.page.externalPageId, token: await decryptSecret(owned.page.accessToken) },
+          ownerUserId: owned.account.ownerUserId,
+        };
+      } catch (err) {
+        /*
+         * A stored token we cannot decrypt means ENCRYPTION_KEY changed. Falling
+         * through to the shared connection keeps leads arriving, but it must be loud —
+         * otherwise the agent's connection silently stops being the one in use and
+         * their leads quietly start landing in round-robin.
+         */
+        monitoring.captureException(err, { where: "routeFor:decrypt", pageId });
+      }
+    }
+  }
+  const shared = await getMetaCredentials();
+  return shared ? { cred: shared, ownerUserId: null } : null;
+}
+
+/**
+ * Claim a delivery, or discover it has already been handled.
+ *
+ * Meta redelivers. Without this, a retry after a slow response creates the lead twice,
+ * and the second copy looks like a genuine second enquiry. The unique index on
+ * `leadgen_id` is what makes the claim atomic — two Workers racing the same retry, and
+ * exactly one insert wins.
+ *
+ * Returns the row id when this delivery is ours to process, or null when somebody
+ * already has it.
+ */
+async function claim(change: MetaLeadgenChange): Promise<string | null> {
+  try {
+    const [row] = await db
+      .insert(captureEvents)
+      .values({
+        leadgenId: change.leadgen_id!,
+        externalPageId: change.page_id ?? null,
+        formId: change.form_id ?? null,
+        rawPayload: JSON.stringify(change),
+        status: "received",
+      })
+      .onConflictDoNothing({ target: captureEvents.leadgenId })
+      .returning({ id: captureEvents.id });
+    return row?.id ?? null;
+  } catch (err) {
+    /*
+     * Never let bookkeeping lose a lead. If the audit insert fails for any reason
+     * other than the duplicate it is designed to catch, process the lead anyway and
+     * accept the small risk of a double rather than the certainty of a miss.
+     */
+    monitoring.captureException(err, { where: "claim", leadgenId: change.leadgen_id });
+    return "unrecorded";
+  }
+}
+
+async function settle(
+  eventId: string,
+  status: string,
+  extra: { leadId?: string; error?: string } = {},
+): Promise<void> {
+  if (eventId === "unrecorded") return;
+  try {
+    await db
+      .update(captureEvents)
+      .set({
+        status,
+        ...(extra.leadId ? { leadId: extra.leadId } : {}),
+        ...(extra.error ? { error: extra.error.slice(0, 2000) } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(captureEvents.id, eventId));
+  } catch (err) {
+    monitoring.captureException(err, { where: "settle", eventId });
+  }
+}
+
 /**
  * Process every leadgen change in one webhook delivery.
  *
@@ -97,30 +198,53 @@ async function findMapping(formId: string | null): Promise<MetaMapping | null> {
 export async function ingestMetaLeadgen(changes: MetaLeadgenChange[]): Promise<MetaIntakeSummary> {
   const summary: MetaIntakeSummary = { received: changes.length, created: 0, deduped: 0, skipped: 0 };
 
-  /*
-   * Resolved once for the batch, and TRANSIENT when missing. A webhook that answered
-   * 200 with no token would tell Meta the leads were accepted, and Meta does not send
-   * them twice — so a disconnected Page would quietly bin every lead the agency paid
-   * for. Throwing makes Meta retry for up to 36 hours, which is long enough for
-   * somebody to reconnect.
-   */
-  const cred = await getMetaCredentials();
-  if (!cred) {
-    throw new LeadAdsTransientError(
-      "No Facebook Page is connected, so lead answers cannot be fetched.",
-    );
-  }
-
   for (const change of changes) {
     const leadgenId = change.leadgen_id!;
 
-    // Transient failures propagate: Meta should retry rather than lose the lead.
-    const record = await metaLeadAds.fetchLead(cred, leadgenId);
+    // Idempotency BEFORE any Graph call. A redelivery must cost nothing and, more
+    // importantly, must not create a second lead.
+    const eventId = await claim(change);
+    if (!eventId) {
+      summary.deduped++;
+      continue;
+    }
+
+    /*
+     * Resolved per delivery, not once per batch: one webhook body can carry changes
+     * for several Pages, and with per-user capture those Pages belong to different
+     * agents with different tokens.
+     *
+     * Missing credentials are TRANSIENT. A webhook that answered 200 with no token
+     * would tell Meta the lead was accepted, and Meta does not send it twice — so a
+     * disconnected Page would quietly bin every lead the agency paid for. Throwing
+     * makes Meta retry for up to 36 hours, which is long enough for somebody to
+     * reconnect.
+     */
+    const route = await routeFor(change.page_id ?? null);
+    if (!route) {
+      await settle(eventId, "failed", { error: "No Facebook connection for this page." });
+      throw new LeadAdsTransientError(
+        `No Facebook connection for page ${change.page_id ?? "unknown"}, so lead answers cannot be fetched.`,
+      );
+    }
+
+    let record;
+    try {
+      record = await metaLeadAds.fetchLead(route.cred, leadgenId);
+    } catch (err) {
+      // Also transient — the token may be expiring or Graph may be down. Record the
+      // attempt, then let it propagate so Meta retries.
+      await settle(eventId, "failed", { error: (err as Error).message });
+      throw err;
+    }
+
     if (!record) {
       monitoring.captureMessage("Meta leadgen not found", { leadgenId });
+      await settle(eventId, "failed", { error: "Graph API has no such lead." });
       summary.skipped++;
       continue;
     }
+    await settle(eventId, "fetched");
 
     const mapping = await findMapping(record.formId ?? change.form_id ?? null);
     if (!mapping) {
@@ -134,18 +258,19 @@ export async function ingestMetaLeadgen(changes: MetaLeadgenChange[]): Promise<M
     const mapped = mapMetaLead(record, mapping);
     const { extraAnswers, ...payload } = mapped;
 
-    const result = await createLeadFromIntake(payload, "webhook");
+    // The agent who connected the Page gets the lead. Passing null keeps the existing
+    // round-robin, which is right for the legacy agency-wide connection.
+    const result = await createLeadFromIntake(payload, "webhook", route.ownerUserId);
     if (!result.success) {
-      monitoring.captureMessage("Meta lead rejected by intake", {
-        leadgenId,
-        error: result.error,
-      });
+      monitoring.captureMessage("Meta lead rejected by intake", { leadgenId, error: result.error });
+      await settle(eventId, "failed", { error: result.error });
       summary.skipped++;
       continue;
     }
 
     if (result.data.deduped) summary.deduped++;
     else summary.created++;
+    await settle(eventId, result.data.deduped ? "duplicate" : "created", { leadId: result.data.leadId });
 
     // Custom questions ("when are you looking to move?") have no column of their own.
     // Losing them would waste the most useful part of a well-built lead form, so they
