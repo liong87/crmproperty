@@ -14,6 +14,65 @@ const timeFmt = new Intl.DateTimeFormat("en-MY", {
   timeZone: "Asia/Kuala_Lumpur",
 });
 
+/**
+ * Column tints, one per stage.
+ *
+ * Full class strings, not built from a hue name: Tailwind scans source text, so
+ * `bg-${hue}-50` compiles to nothing and the board silently renders untinted.
+ *
+ * Kept at /30 and /25 alphas deliberately. This should read as a wash noticed
+ * peripherally, not a block of colour — the app is deep green and calm, and pasting a
+ * competitor's full-strength palette over it would fight the identity rather than
+ * help. Cancelled and Not interested take slate because they are archive, not
+ * workflow.
+ */
+const COLUMN_TINT: Record<string, { shell: string; label: string }> = {
+  scheduled: {
+    shell: "border-amber-200 bg-amber-50/30 dark:border-amber-800 dark:bg-amber-900/20",
+    label: "text-amber-700 dark:text-amber-400",
+  },
+  "showed-up": {
+    shell: "border-orange-200 bg-orange-50/30 dark:border-orange-800 dark:bg-orange-900/20",
+    label: "text-orange-700 dark:text-orange-400",
+  },
+  booked: {
+    shell: "border-emerald-200 bg-emerald-50/30 dark:border-emerald-800 dark:bg-emerald-900/20",
+    label: "text-emerald-700 dark:text-emerald-400",
+  },
+  "no-show": {
+    shell: "border-rose-200 bg-rose-50/30 dark:border-rose-800 dark:bg-rose-900/20",
+    label: "text-rose-700 dark:text-rose-400",
+  },
+  "not-interested": {
+    shell: "border-slate-200 bg-slate-50/40 dark:border-slate-700 dark:bg-slate-800/30",
+    label: "text-slate-600 dark:text-slate-400",
+  },
+  cancelled: {
+    shell: "border-slate-200 bg-slate-50/40 dark:border-slate-700 dark:bg-slate-800/30",
+    label: "text-slate-600 dark:text-slate-400",
+  },
+};
+
+/** Archive rather than workflow — folded away until somebody goes looking. */
+const COLLAPSED_BY_DEFAULT = new Set(["not-interested", "cancelled"]);
+
+/**
+ * The card banner encodes TIME, not stage — the stage is already the column it sits
+ * in, so colouring the banner by stage would say the same thing twice.
+ *
+ * This is the highest-value detail on the board: an agent glancing at Scheduled sees
+ * what is urgent without reading a single date.
+ */
+export function bannerTone(a: { scheduledAt: Date; status: string }): string {
+  const days = (a.scheduledAt.getTime() - Date.now()) / 86_400_000;
+  if (a.status === "scheduled" && days < 0) {
+    return "bg-rose-100 text-rose-700 dark:bg-rose-500/25 dark:text-rose-200";
+  }
+  if (days < 1) return "bg-amber-100 text-amber-800 dark:bg-amber-500/25 dark:text-amber-100";
+  if (days < 4) return "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/25 dark:text-emerald-200";
+  return "bg-slate-100 text-slate-600 dark:bg-slate-500/25 dark:text-slate-200";
+}
+
 export interface BoardColumnData {
   key: string;
   label: string;
@@ -100,15 +159,21 @@ export function AppointmentBoard({ columns }: { columns: BoardColumnData[] }) {
               if (id) move(id, col.key);
             }}
             className={cn(
-              "w-80 shrink-0 rounded-lg p-2 transition-colors",
-              over === col.key ? "bg-primary/10 ring-2 ring-primary/40" : "bg-muted/40",
+              "flex w-80 shrink-0 flex-col rounded-2xl border transition-all duration-150",
+              COLUMN_TINT[col.key]?.shell ?? "border-gray-100 bg-muted/40",
+              over === col.key && "ring-2 ring-primary/40",
             )}
           >
-            <div className="mb-2 flex items-center justify-between px-1">
-              <span className="text-sm font-medium">{col.label}</span>
-              <span className="text-xs tabular-nums text-muted-foreground">{col.items.length}</span>
+            <div className="flex items-center justify-between border-b border-white/60 px-3 py-2.5 dark:border-gray-700/60">
+              <span className={cn("text-[10px] font-bold uppercase tracking-wide", COLUMN_TINT[col.key]?.label)}>
+                {col.label}
+              </span>
+              <span className="text-xs font-semibold tabular-nums text-muted-foreground">
+                {col.items.length}
+              </span>
             </div>
 
+            <div className="p-2">
             {col.items.length === 0 ? (
               <div className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">
                 Empty
@@ -126,28 +191,45 @@ export function AppointmentBoard({ columns }: { columns: BoardColumnData[] }) {
                     }}
                     onDragEnd={() => setDragging(null)}
                     className={cn(
-                      "rounded-lg border bg-card p-3 shadow-sm transition-opacity",
+                      "group overflow-hidden rounded-2xl border border-gray-100 bg-card shadow-sm transition-all hover:border-gray-200 hover:shadow-md dark:border-gray-800",
+                      "cursor-grab select-none active:cursor-grabbing",
                       dragging === a.id && "opacity-40",
                       busy === a.id && "opacity-60",
                     )}
                   >
-                    <div className="flex items-start gap-2">
+                    {/* Time-coded banner. Hue = urgency, never stage. */}
+                    <div className={cn("px-3 py-2", bannerTone(a))}>
+                      <div className="flex items-center justify-between gap-1.5">
+                        <div className="flex min-w-0 flex-1 items-center gap-1 text-[11px] font-semibold leading-tight">
+                          <span className="truncate opacity-90">{a.subjectTitle}</span>
+                        </div>
+                        <span className="shrink-0 text-[11px] font-semibold tabular-nums">
+                          {timeFmt.format(a.scheduledAt)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2 p-3">
                       <GripVertical
                         className="mt-0.5 hidden h-4 w-4 shrink-0 cursor-grab text-muted-foreground/60 sm:block"
                         aria-hidden="true"
                       />
                       <div className="min-w-0 flex-1">
-                        <Link href={a.clientHref} className="block truncate font-medium hover:underline">
+                        <Link href={a.clientHref} className="block truncate text-[13px] font-bold leading-tight hover:underline">
                           {a.clientName}
                         </Link>
-                        <p className="truncate text-xs text-muted-foreground">{a.subjectTitle}</p>
-                        <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                          {timeFmt.format(a.scheduledAt)}
-                        </p>
+                        <a
+                          href={`https://wa.me/${a.clientPhone.replace(/\D/g, "")}`}
+                          target="_blank" rel="noopener noreferrer"
+                          className="block truncate text-[11px] font-semibold tabular-nums text-muted-foreground hover:text-foreground"
+                        >
+                          {a.clientPhone}
+                        </a>
                         {a.closerName && (
-                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                            Closer: {a.closerName}
-                          </p>
+                          <>
+                            <p className="mt-1.5 text-[9px] uppercase tracking-wide text-muted-foreground/70">Closer</p>
+                            <p className="truncate text-[11px]">{a.closerName}</p>
+                          </>
                         )}
                       </div>
                       {busy === a.id && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />}
@@ -155,7 +237,7 @@ export function AppointmentBoard({ columns }: { columns: BoardColumnData[] }) {
 
                     <Select
                       aria-label={`Move ${a.clientName}'s appointment`}
-                      className="mt-2 h-8 text-xs"
+                      className="mx-3 mb-3 h-8 w-[calc(100%-1.5rem)] text-xs opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
                       value={col.key}
                       disabled={busy === a.id}
                       onChange={(e) => move(a.id, e.target.value)}
@@ -168,6 +250,7 @@ export function AppointmentBoard({ columns }: { columns: BoardColumnData[] }) {
                 ))}
               </ul>
             )}
+            </div>
           </div>
         ))}
       </div>

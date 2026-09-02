@@ -11,6 +11,7 @@
  * and both are recorded at the time because commission splits on them later.
  */
 import { z } from "zod";
+import { addSystemRemark } from "@/server/leads/remarks";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
@@ -448,18 +449,19 @@ function handle(err: unknown, where: string): ActionResult<never> {
  * produce, such as a "booked" appointment nobody attended.
  */
 const COLUMN_STATE = {
-  scheduled: { status: "scheduled", outcome: null },
-  "showed-up": { status: "showed-up", outcome: null },
-  booked: { status: "showed-up", outcome: "booked" },
-  "no-show": { status: "no-show", outcome: null },
-  cancelled: { status: "cancelled", outcome: null },
+  scheduled: { status: "scheduled", outcome: null, said: "moved back to Scheduled" },
+  "showed-up": { status: "showed-up", outcome: null, said: "marked Showed up" },
+  booked: { status: "showed-up", outcome: "booked", said: "marked Booked" },
+  "no-show": { status: "no-show", outcome: null, said: "marked No show" },
+  "not-interested": { status: "showed-up", outcome: "not-interested", said: "marked Not interested" },
+  cancelled: { status: "cancelled", outcome: null, said: "marked Cancelled" },
 } as const;
 
 export type BoardColumnKey = keyof typeof COLUMN_STATE;
 
 const moveSchema = z.object({
   id: z.string().uuid(),
-  column: z.enum(["scheduled", "showed-up", "booked", "no-show", "cancelled"]),
+  column: z.enum(["scheduled", "showed-up", "booked", "no-show", "not-interested", "cancelled"]),
 });
 
 /**
@@ -475,11 +477,29 @@ export async function moveAppointmentToColumn(input: unknown): Promise<ActionRes
   try {
     const d = moveSchema.parse(input);
     const target = COLUMN_STATE[d.column];
-    return await recordAppointmentOutcome({
+    const res = await recordAppointmentOutcome({
       id: d.id,
       status: target.status,
       outcome: target.outcome,
     });
+
+    /*
+     * Every move writes a system remark to the lead's thread. The in-app guide already
+     * tells agents that moving a card records the outcome "to the client's timeline",
+     * and until now that was only true for three of the stages via the activity log —
+     * the remark thread, which is what an agent actually reads on the lead, saw
+     * nothing. A promise in help text is a specification.
+     */
+    if (res.success) {
+      const [appt] = await db
+        .select({ leadId: appointments.leadId })
+        .from(appointments)
+        .where(eq(appointments.id, d.id));
+      if (appt?.leadId) {
+        await addSystemRemark(appt.leadId, `Appointment ${target.said}.`);
+      }
+    }
+    return res;
   } catch (err) {
     return handle(err, "moveAppointmentToColumn");
   }

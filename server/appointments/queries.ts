@@ -223,7 +223,13 @@ export async function listUpcomingAppointments(user: User, limit = 5): Promise<A
 
 /* ---------- board ---------- */
 
-export type BoardColumnKey = "scheduled" | "showed-up" | "booked" | "no-show" | "cancelled";
+/**
+ * The board's columns. Two of these are outcomes rather than statuses — Booked and Not
+ * interested are both "showed up", distinguished by what was decided. See COLUMN_STATE
+ * in server/appointments/actions.ts, which is the single place that mapping lives.
+ */
+export type BoardColumnKey =
+  | "scheduled" | "showed-up" | "booked" | "no-show" | "not-interested" | "cancelled";
 
 export interface BoardColumn {
   key: BoardColumnKey;
@@ -272,17 +278,34 @@ export async function listAppointmentBoard(
 
   const showedUp = all.filter((a) => a.status === "showed-up");
   const booked = showedUp.filter((a) => a.outcome === "booked");
+  const notInterested = showedUp.filter((a) => a.outcome === "not-interested");
   const noShow = all.filter((a) => a.status === "no-show");
 
   const columns: BoardColumn[] = [
     // Soonest first while they are still ahead; most recent first once they are done.
     { key: "scheduled", label: "Scheduled", items: all.filter((a) => a.status === "scheduled") },
-    { key: "showed-up", label: "Showed up", items: recentFirst(showedUp.filter((a) => a.outcome !== "booked")) },
+    {
+      key: "showed-up",
+      label: "Showed up",
+      // Neither booked nor written off — the ones still needing a decision.
+      items: recentFirst(showedUp.filter((a) => a.outcome !== "booked" && a.outcome !== "not-interested")),
+    },
     { key: "booked", label: "Booked", items: recentFirst(booked) },
     { key: "no-show", label: "No show", items: recentFirst(noShow) },
+    /*
+     * "Met them, no fit" is a different fact from "never turned up" and from "called it
+     * off beforehand". Collapsing all three into Cancelled loses the one that says
+     * something about the LEAD rather than about the diary.
+     */
+    { key: "not-interested", label: "Not interested", items: recentFirst(notInterested) },
     { key: "cancelled", label: "Cancelled", items: recentFirst(all.filter((a) => a.status === "cancelled")) },
   ];
 
+  /*
+   * The denominator is appointments that reached a verdict — kept or missed. An
+   * appointment still in the future has no bearing on whether people turn up, and
+   * including it would drag the rate toward zero simply by booking more.
+   */
   const decided = showedUp.length + noShow.length;
 
   return {
