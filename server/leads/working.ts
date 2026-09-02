@@ -148,12 +148,21 @@ export interface FollowUpRate {
  * which is precisely the behaviour this metric exists to discourage.
  */
 export async function getFollowUpRate(user: User, days = 7): Promise<FollowUpRate> {
-  const since = new Date(Date.now() - days * 86_400_000);
+  /*
+   * ISO string, not a Date, and cast explicitly.
+   *
+   * Inside a raw `sql` fragment there is no column for drizzle to infer a type from,
+   * so a Date is handed to postgres.js unconverted and it throws ERR_INVALID_ARG_TYPE
+   * while binding the parameter. Anywhere drizzle can see the column — an ordinary
+   * .where(gte(col, date)) — a Date is fine. Here it is not. Reproduced against a real
+   * PostgreSQL 16 before and after this change.
+   */
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
 
   const [row] = await db
     .select({
       total: sql<number>`count(*)::int`,
-      followed: sql<number>`count(*) filter (where ${lastTouchSql} >= ${since})::int`,
+      followed: sql<number>`count(*) filter (where ${lastTouchSql} >= ${since}::timestamptz)::int`,
     })
     .from(leads)
     .where(
