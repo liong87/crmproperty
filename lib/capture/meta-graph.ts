@@ -234,3 +234,28 @@ export async function unsubscribePage(pageId: string, pageToken: string): Promis
     { method: "DELETE" },
   );
 }
+
+/**
+ * Which permissions Facebook actually granted.
+ *
+ * Diagnostic, and it earns its place: "no Pages came back" has at least four causes
+ * that look identical from here — the configuration is missing the Pages asset, it is
+ * missing `pages_show_list`, the person skipped the Page-selection screen, or they
+ * genuinely administer none. Guessing between them costs a deploy each time. The
+ * granted list separates the first two from the last two immediately.
+ */
+export async function fetchGrantedScopes(userToken: string): Promise<string[]> {
+  try {
+    const res = await graph<{ data?: Array<{ permission?: string; status?: string }> }>(
+      `https://graph.facebook.com/${version()}/me/permissions?` +
+        new URLSearchParams({ access_token: userToken }).toString(),
+      "Reading granted permissions",
+    );
+    return (res.data ?? [])
+      .filter((p) => p.status === "granted" && p.permission)
+      .map((p) => p.permission!);
+  } catch {
+    // Never let a diagnostic call turn into the error the user sees.
+    return [];
+  }
+}

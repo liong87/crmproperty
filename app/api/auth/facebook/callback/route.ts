@@ -10,6 +10,7 @@ import {
   exchangeCodeForUserToken,
   fetchIdentity,
   fetchPages,
+  fetchGrantedScopes,
   loginConfigId,
 } from "@/lib/capture/meta-graph";
 import { STATE_COOKIE, verifyState } from "@/lib/capture/oauth-state";
@@ -96,10 +97,30 @@ export async function GET(req: Request) {
    * actual recovery, which is removing the app so the picker is shown again.
    */
   if (pages.length === 0) {
+    const granted = await fetchGrantedScopes(userToken.token);
+    const missing = CAPTURE_SCOPES.filter((need) => !granted.includes(need));
+
+    if (!loginConfigId()) {
+      return done({
+        fb_error:
+          "Facebook shared no Pages, and the Meta app has no Login-for-Business configuration set (META_LOGIN_CONFIG_ID). Without one Facebook never asks which Pages to share.",
+      });
+    }
+    if (missing.length > 0) {
+      /*
+       * The decisive case, and the one worth naming precisely: with a configuration,
+       * permissions come from the CONFIGURATION, not from this code. A scope missing
+       * here means it was never ticked when the configuration was created — and
+       * `pages_show_list` missing makes /me/accounts return an empty list with no
+       * error at all, which is indistinguishable from owning no Pages.
+       */
+      return done({
+        fb_error: `Facebook granted ${granted.length} permission(s) but not: ${missing.join(", ")}. These come from the Login-for-Business configuration, so open it in the Meta console, tick the missing ones, save, and click Add again.`,
+      });
+    }
     return done({
-      fb_error: loginConfigId()
-        ? "Facebook shared no Pages with the CRM. On the 'Which Pages?' screen, tick the Page you run ads on — if that screen did not appear, remove PropertyAgent CRM at facebook.com → Settings → Apps and websites and click Add again."
-        : "Facebook shared no Pages. The Meta app has no Login-for-Business configuration set (META_LOGIN_CONFIG_ID), and without one Facebook never asks which Pages to share — a Page owned by a Business cannot be connected. Create a configuration in the Meta console and set that secret.",
+      fb_error:
+        "Every permission was granted but Facebook shared no Pages. The configuration is probably missing the Pages asset: open it in the Meta console, add Pages under Assets, save, then click Add again and tick your Page on the 'Which Pages?' screen.",
     });
   }
 
