@@ -45,6 +45,20 @@ export default async function LeadsPage({
     return `/leads${qs ? `?${qs}` : ""}`;
   };
 
+  /*
+   * Built here as plain strings, NOT as a function passed down.
+   *
+   * A function cannot cross from a Server Component to a Client Component — React has
+   * no way to serialise it, and the page throws at render with a digest and nothing
+   * else. TypeScript accepts it happily, so the only defence is knowing the rule.
+   */
+  const sortHrefs: Record<string, string> = {
+    name: withParams({ sort: "name" }),
+    status: withParams({ sort: "status" }),
+    newest: withParams({ sort: "newest" }),
+    oldest: withParams({ sort: "oldest" }),
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -119,7 +133,7 @@ export default async function LeadsPage({
           canDelete={me.role === "admin"}
           assignees={assignees}
           sort={sort}
-          sortHref={(s) => withParams({ sort: s })}
+          sortHrefs={sortHrefs}
         />
       )}
 

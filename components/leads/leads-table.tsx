@@ -50,7 +50,7 @@ export function LeadsTable({
   canDelete,
   assignees = [],
   sort,
-  sortHref,
+  sortHrefs,
 }: {
   rows: LeadRow[];
   /** Admin only. Without it this renders exactly as the table did before. */
@@ -61,8 +61,12 @@ export function LeadsTable({
    */
   assignees?: AssignableUser[];
   sort?: string;
-  /** Built by the page so sorting keeps the search and status filters. */
-  sortHref?: (sort: string) => string;
+  /**
+   * Prebuilt links, one per sort order, so the search and status filters survive a
+   * sort. A plain object rather than a builder function: functions cannot be passed
+   * from a Server Component to a Client Component.
+   */
+  sortHrefs?: Record<string, string>;
 }) {
   const canAssign = assignees.length > 0;
   const router = useRouter();
@@ -175,13 +179,13 @@ export function LeadsTable({
                 />
               </TH>
             )}
-            <SortTH label="Lead" sortKey="name" sort={sort} href={sortHref} />
+            <SortTH label="Lead" sortKey="name" sort={sort} hrefs={sortHrefs} />
             <TH>Source</TH>
             <TH>Interest</TH>
             <TH>Budget</TH>
             <TH>Assigned to</TH>
-            <SortTH label="Status" sortKey="status" sort={sort} href={sortHref} />
-            <SortTH label="Added" sortKey="newest" sort={sort} href={sortHref} />
+            <SortTH label="Status" sortKey="status" sort={sort} hrefs={sortHrefs} />
+            <SortTH label="Added" sortKey="newest" sort={sort} hrefs={sortHrefs} />
           </TR>
         </THead>
         <TBody>
@@ -250,22 +254,24 @@ export function LeadsTable({
  * works anywhere it is reused without sorting.
  */
 function SortTH({
-  label, sortKey, sort, href,
+  label, sortKey, sort, hrefs,
 }: {
   label: string;
   sortKey: string;
   sort?: string;
-  href?: (s: string) => string;
+  hrefs?: Record<string, string>;
 }) {
-  if (!href) return <TH>{label}</TH>;
+  if (!hrefs) return <TH>{label}</TH>;
   // "Added" toggles between newest and oldest; the others are one direction, because a
   // reverse-alphabetical lead list is not a thing anybody wants.
   const target = sortKey === "newest" ? (sort === "newest" ? "oldest" : "newest") : sortKey;
   const active = sort === sortKey || (sortKey === "newest" && sort === "oldest");
+  const to = hrefs[target];
+  if (!to) return <TH>{label}</TH>;
   return (
     <TH className="p-0">
       <Link
-        href={href(target)}
+        href={to}
         className="flex h-10 items-center gap-1 px-3 transition-colors hover:text-foreground"
       >
         {label}
