@@ -438,3 +438,49 @@ function handle(err: unknown, where: string): ActionResult<never> {
   monitoring.captureException(err, { where });
   return fail("Something went wrong.");
 }
+
+
+/**
+ * The board's five columns, and what each one MEANS in terms of status and outcome.
+ *
+ * Kept here rather than in the component so the mapping is enforced server-side: a
+ * dragged card must not be able to produce a combination the outcome form could never
+ * produce, such as a "booked" appointment nobody attended.
+ */
+const COLUMN_STATE = {
+  scheduled: { status: "scheduled", outcome: null },
+  "showed-up": { status: "showed-up", outcome: null },
+  booked: { status: "showed-up", outcome: "booked" },
+  "no-show": { status: "no-show", outcome: null },
+  cancelled: { status: "cancelled", outcome: null },
+} as const;
+
+export type BoardColumnKey = keyof typeof COLUMN_STATE;
+
+const moveSchema = z.object({
+  id: z.string().uuid(),
+  column: z.enum(["scheduled", "showed-up", "booked", "no-show", "cancelled"]),
+});
+
+/**
+ * Move an appointment between board columns.
+ *
+ * A thin wrapper over recordAppointmentOutcome rather than its own update, deliberately:
+ * dragging a card to "No show" must write the same timeline entry, close the same
+ * reminder and pass the same permission check as recording it on the form. A second
+ * write path would drift from the first, and the half that drifts is always the one
+ * nobody reads.
+ */
+export async function moveAppointmentToColumn(input: unknown): Promise<ActionResult<void>> {
+  try {
+    const d = moveSchema.parse(input);
+    const target = COLUMN_STATE[d.column];
+    return await recordAppointmentOutcome({
+      id: d.id,
+      status: target.status,
+      outcome: target.outcome,
+    });
+  } catch (err) {
+    return handle(err, "moveAppointmentToColumn");
+  }
+}

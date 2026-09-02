@@ -4,6 +4,7 @@ import { CalendarCheck } from "lucide-react";
 import { getCurrentDbUser } from "@/lib/auth";
 import { listGroupedAppointments, listAppointmentBoard } from "@/server/appointments/queries";
 import { AppointmentList } from "@/components/appointments/appointment-list";
+import { AppointmentBoard } from "@/components/appointments/appointment-board";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
@@ -101,23 +102,7 @@ async function BoardView({
       </div>
 
       {/* Mobile-first: columns scroll horizontally, matching /pipeline. */}
-      <div className="flex gap-3 overflow-x-auto pb-4">
-        {board.columns.map((col) => (
-          <div key={col.key} className="w-80 shrink-0 rounded-lg bg-muted/40 p-2">
-            <div className="mb-2 flex items-center justify-between px-1">
-              <span className="text-sm font-medium">{col.label}</span>
-              <span className="text-xs text-muted-foreground tabular-nums">{col.items.length}</span>
-            </div>
-            {col.items.length === 0 ? (
-              <div className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">
-                Empty
-              </div>
-            ) : (
-              <AppointmentList items={col.items} />
-            )}
-          </div>
-        ))}
-      </div>
+      <AppointmentBoard columns={board.columns} />
     </div>
   );
 }
