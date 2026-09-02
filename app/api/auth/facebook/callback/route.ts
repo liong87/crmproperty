@@ -10,6 +10,7 @@ import {
   exchangeCodeForUserToken,
   fetchIdentity,
   fetchPages,
+  loginConfigId,
 } from "@/lib/capture/meta-graph";
 import { STATE_COOKIE, verifyState } from "@/lib/capture/oauth-state";
 import { monitoring } from "@/lib/monitoring";
@@ -96,8 +97,9 @@ export async function GET(req: Request) {
    */
   if (pages.length === 0) {
     return done({
-      fb_error:
-        "Facebook shared no Pages with the CRM. This usually means the Page-selection step was skipped, not that you have no Pages. Fix it by opening facebook.com → Settings & privacy → Settings → Apps and websites, removing PropertyAgent CRM, then clicking Add here again — Facebook will ask which Pages to share, and you must tick the one you run ads on.",
+      fb_error: loginConfigId()
+        ? "Facebook shared no Pages with the CRM. On the 'Which Pages?' screen, tick the Page you run ads on — if that screen did not appear, remove PropertyAgent CRM at facebook.com → Settings → Apps and websites and click Add again."
+        : "Facebook shared no Pages. The Meta app has no Login-for-Business configuration set (META_LOGIN_CONFIG_ID), and without one Facebook never asks which Pages to share — a Page owned by a Business cannot be connected. Create a configuration in the Meta console and set that secret.",
     });
   }
 

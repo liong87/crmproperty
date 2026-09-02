@@ -58,23 +58,49 @@ export function captureRedirectUri(): string {
   return `${base}/api/auth/facebook/callback`;
 }
 
+/**
+ * The Login-for-Business configuration id, if one exists.
+ *
+ * THIS IS THE DIFFERENCE BETWEEN WORKING AND NOT WORKING, and it took a live failure to
+ * find. Facebook Login for Business does not grant Pages through the plain OAuth
+ * dialog: permissions are granted, a token comes back, and `/me/accounts` is EMPTY —
+ * because the step where the person chooses which Pages to share only runs when the
+ * dialog is opened against a configuration. A Page owned by a Business Portfolio, which
+ * is how any real agency holds one, can never be reached without this.
+ *
+ * The failure has no error attached to it. The login succeeds and the CRM concludes the
+ * person administers no Pages, which is a lie it cannot detect.
+ */
+export function loginConfigId(): string | undefined {
+  return process.env.META_LOGIN_CONFIG_ID || undefined;
+}
+
 export function captureAuthorizeUrl(state: string): string {
+  const configId = loginConfigId();
+
   const params = new URLSearchParams({
     client_id: process.env.META_APP_ID ?? "",
     redirect_uri: captureRedirectUri(),
     state,
-    scope: CAPTURE_SCOPES.join(","),
     response_type: "code",
-    /*
-     * Forces the permission dialog even when the person has connected before. Without
-     * it Facebook silently reuses the previously granted set, so adding a scope to the
-     * list above would change nothing for anyone already connected — they would keep
-     * hitting the same permission error with no way to fix it from the UI.
-     */
-    auth_type: "rerequest",
   });
-  // The "for Business" dialog. A Page owned by a Business Portfolio — which is how any
-  // real agency holds one — cannot be granted through the plain consumer dialog.
+
+  if (configId) {
+    /*
+     * With a configuration, the permissions come FROM the configuration — sending
+     * `scope` as well is not merged, it is ignored, so the config is the only place the
+     * scope list is real. `override_default_response_type` is required for the code
+     * flow; without it Facebook returns a token in the URL fragment, which never
+     * reaches the server and looks like a silent failure.
+     */
+    params.set("config_id", configId);
+    params.set("override_default_response_type", "true");
+  } else {
+    // Fallback: the consumer dialog. Grants user permissions and personal Pages only.
+    params.set("scope", CAPTURE_SCOPES.join(","));
+    params.set("auth_type", "rerequest");
+  }
+
   return `https://www.facebook.com/${version()}/dialog/oauth?${params.toString()}`;
 }
 
