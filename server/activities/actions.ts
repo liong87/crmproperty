@@ -49,7 +49,7 @@ export async function logActivity(input: unknown): Promise<ActionResult<{ id: st
       .returning({ id: activities.id });
 
     revalidatePath(entity.href);
-    revalidatePath("/reminders");
+    revalidatePath("/inbox");
     return ok({ id: row!.id });
   } catch (err) {
     return handle(err, "logActivity");
@@ -69,7 +69,7 @@ export async function completeFollowUp(activityId: string): Promise<ActionResult
       const e = await resolveEntity(a.entityType, a.entityId);
       if (e) revalidatePath(e.href);
     }
-    revalidatePath("/reminders");
+    revalidatePath("/inbox");
     return ok(undefined);
   } catch (err) {
     return handle(err, "completeFollowUp");

@@ -68,7 +68,7 @@ export default async function DashboardPage({
 
       {docsDue.overdue > 0 && (
         <Link
-          href="/reminders"
+          href="/inbox"
           className="block rounded-xl border p-4 transition-colors hover:bg-muted/40"
           style={{ borderColor: STATUS.critical }}
         >
@@ -144,7 +144,7 @@ export default async function DashboardPage({
             <CardTitle className="flex items-center gap-2">
               <BellRing className="h-4 w-4 text-muted-foreground" /> Upcoming follow-ups
             </CardTitle>
-            <Link href="/reminders" className="text-sm text-primary underline-offset-2 hover:underline">View all</Link>
+            <Link href="/inbox" className="text-sm text-primary underline-offset-2 hover:underline">View all</Link>
           </CardHeader>
           <CardContent>
             <FollowUpList items={followUps} />

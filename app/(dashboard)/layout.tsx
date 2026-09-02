@@ -4,6 +4,7 @@ import { syncCurrentUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { UserButton } from "@/lib/auth/provider-components";
 import { AppNav, type NavGroup } from "@/components/nav/app-nav";
 import { APP_NAME } from "@/lib/constants";
+import { BookOpen } from "lucide-react";
 
 const ROLE_LABEL: Record<string, string> = {
   admin: "Administrator",
@@ -30,53 +31,52 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   // Role filtering happens here, on the server, so a team-lead-only href is never sent
   // to an agent's browser at all.
+  /**
+   * Six primary links, then everything else folded away.
+   *
+   * The list was fifteen items under seven headings, which is a lot of reading to find
+   * the one page you want — and the headings did not help, because the eye still has to
+   * pass all of them. What an agent uses every day is now unheaded and on top; what they
+   * touch occasionally is one click away; what only a Team Lead touches is in Settings.
+   *
+   * Nothing was deleted. Every page still resolves by URL and by the links that lead to
+   * it from the pages where it matters — Contacts from Leads, Properties from Projects.
+   */
   const groups: NavGroup[] = [
     {
-      label: "Workspace",
+      label: null,
       links: [
         { href: "/dashboard", label: "Dashboard" },
         { href: "/inbox", label: "Inbox" },
-        { href: "/appointments", label: "Appointments" },
-        { href: "/reminders", label: "Reminders" },
-      ],
-    },
-    {
-      label: "Lead management",
-      links: [
         { href: "/leads", label: "Leads" },
-        { href: "/contacts", label: "Contacts" },
-        ...leadOnly([{ href: "/leads-capture", label: "Leads capture" }]),
-      ],
-    },
-    {
-      label: "Sales",
-      links: [
-        { href: "/projects", label: "Projects" },
-        { href: "/properties", label: "Properties" },
+        { href: "/appointments", label: "Appointments" },
         { href: "/pipeline", label: "Pipeline" },
+        { href: "/projects", label: "Projects" },
       ],
     },
     {
-      label: "Communication",
-      links: leadOnly([{ href: "/templates", label: "Templates" }]),
-    },
-    {
-      label: "Insights",
+      label: "More",
+      collapsible: true,
       links: [
+        { href: "/contacts", label: "Contacts" },
+        { href: "/properties", label: "Properties" },
         { href: "/reports", label: "Reports" },
-        ...leadOnly([{ href: "/settings/commission", label: "Commission" }]),
       ],
     },
     {
       label: "Team",
-      links: leadOnly([
-        { href: "/team", label: "My team" },
-        { href: "/users", label: "Users" },
-      ]),
+      collapsible: true,
+      links: leadOnly([{ href: "/team", label: "My team" }]),
     },
     {
-      label: "Support",
-      links: [{ href: "/help", label: "Guide" }],
+      label: "Settings",
+      collapsible: true,
+      links: leadOnly([
+        { href: "/leads-capture", label: "Leads capture" },
+        { href: "/templates", label: "Templates" },
+        { href: "/settings/commission", label: "Commission" },
+        { href: "/users", label: "Users" },
+      ]),
     },
   ];
 
@@ -95,9 +95,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <div className="flex-1 overflow-y-auto px-4 py-4">
           <AppNav groups={groups} variant="sidebar" />
         </div>
-        <div className="flex items-center justify-between border-t px-4 py-3">
+        <div className="flex items-center justify-between gap-2 border-t px-4 py-3">
           <span className="truncate text-xs text-muted-foreground">{user.name}</span>
-          <UserButton />
+          <div className="flex shrink-0 items-center gap-1">
+            {/* The guide is reference, not a destination — an icon, not a nav row. */}
+            <Link
+              href="/help"
+              title="User guide"
+              aria-label="User guide"
+              className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            >
+              <BookOpen className="h-4 w-4" />
+            </Link>
+            <UserButton />
+          </div>
         </div>
       </aside>
 
