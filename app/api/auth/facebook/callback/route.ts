@@ -97,30 +97,32 @@ export async function GET(req: Request) {
    * actual recovery, which is removing the app so the picker is shown again.
    */
   if (pages.length === 0) {
+    /*
+     * The granted list is reported in EVERY branch, not just some of them. The first
+     * cut checked "no configuration" first and returned early, which meant the one
+     * diagnostic that could separate the causes never ran in the case we were actually
+     * debugging. A diagnostic you can branch past is not a diagnostic.
+     */
     const granted = await fetchGrantedScopes(userToken.token);
     const missing = CAPTURE_SCOPES.filter((need) => !granted.includes(need));
+    const detail = `Facebook granted: ${granted.length > 0 ? granted.join(", ") : "nothing"}.${
+      missing.length > 0 ? ` Missing: ${missing.join(", ")}.` : ""
+    }`;
 
-    if (!loginConfigId()) {
+    if (missing.includes("pages_show_list")) {
+      // The silent one: without it /me/accounts returns [] with no error at all, which
+      // is indistinguishable from owning no Pages.
       return done({
-        fb_error:
-          "Facebook shared no Pages, and the Meta app has no Login-for-Business configuration set (META_LOGIN_CONFIG_ID). Without one Facebook never asks which Pages to share.",
+        fb_error: `${detail} Without pages_show_list Facebook cannot list your Pages at all. In development mode a permission is only granted to people holding an app role, so check App roles → Roles.`,
       });
     }
     if (missing.length > 0) {
-      /*
-       * The decisive case, and the one worth naming precisely: with a configuration,
-       * permissions come from the CONFIGURATION, not from this code. A scope missing
-       * here means it was never ticked when the configuration was created — and
-       * `pages_show_list` missing makes /me/accounts return an empty list with no
-       * error at all, which is indistinguishable from owning no Pages.
-       */
       return done({
-        fb_error: `Facebook granted ${granted.length} permission(s) but not: ${missing.join(", ")}. These come from the Login-for-Business configuration, so open it in the Meta console, tick the missing ones, save, and click Add again.`,
+        fb_error: `${detail} ${loginConfigId() ? "These come from the Login-for-Business configuration — tick them there and try again." : "Approve them on the Facebook permission screen rather than clicking through it."}`,
       });
     }
     return done({
-      fb_error:
-        "Every permission was granted but Facebook shared no Pages. The configuration is probably missing the Pages asset: open it in the Meta console, add Pages under Assets, save, then click Add again and tick your Page on the 'Which Pages?' screen.",
+      fb_error: `${detail} Every permission was granted, so the Page-sharing step is what did not happen — on the Facebook screen listing your Pages, tick the one you run ads on before continuing.`,
     });
   }
 
