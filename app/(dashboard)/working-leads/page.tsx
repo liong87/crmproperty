@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { Inbox } from "lucide-react";
 import { getCurrentDbUser } from "@/lib/auth";
 import {
-  listWorkingLeads, countWorkingTabs, getFollowUpRate, type WorkingTab,
+  listWorkingLeads, countWorkingTabs, getFollowUpRate, LIST_CAP, type WorkingTab,
 } from "@/server/leads/working";
 import { WorkingLeadCard } from "@/components/leads/working-lead-card";
 import { FilterDropdown, ActiveFilterChip, type FilterOption } from "@/components/leads/filter-dropdown";
@@ -151,7 +152,14 @@ export default async function WorkingLeadsPage({
         </form>
       </div>
 
-      {/* Own line, horizontally scrollable, never wraps to two rows. */}
+      {/*
+        Own line, horizontally scrollable, never wraps to two rows.
+
+        Inside Suspense because the chips call useSearchParams: without a boundary Next
+        de-opts the entire route to client-side rendering, which on Workers means doing
+        the whole page twice.
+      */}
+      <Suspense fallback={<div className="h-[34px]" />}>
       <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <FilterDropdown param="product" label="Product" options={productOptions} />
         {productSel.map((v) => (
@@ -172,6 +180,7 @@ export default async function WorkingLeadsPage({
         />
         {waOnly && <ActiveFilterChip param="wa" value="1" label="WhatsApp" />}
       </div>
+      </Suspense>
 
       {items.length === 0 ? (
         <EmptyState
@@ -197,6 +206,13 @@ export default async function WorkingLeadsPage({
             <WorkingLeadCard key={l.id} lead={l} waTemplate={waTemplate} />
           ))}
         </div>
+      )}
+
+      {items.length >= LIST_CAP && (
+        <p className="text-xs text-muted-foreground">
+          Showing the {LIST_CAP} quietest leads. Narrow with a filter or search to see
+          further down the queue.
+        </p>
       )}
 
       <p className="text-xs text-muted-foreground">
