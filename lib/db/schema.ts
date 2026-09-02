@@ -1241,3 +1241,42 @@ export const notifications = pgTable(
 );
 
 export type Notification = typeof notifications.$inferSelect;
+
+/* ---------- learning_topics (Learning Hub: a Team Lead uploads a video, their downline watches it) ---------- */
+
+/**
+ * A training video uploaded by a Team Lead (or admin) for their own downline.
+ *
+ * Visibility is ONE LEVEL, the same rule as every other "upline" concept in this
+ * schema (see server/users/hierarchy.ts): an agent watches a PUBLISHED topic
+ * uploaded by users.team_lead_id, never a chain of leads above that. Every read and
+ * write goes through server/learning/access.ts — see that file for why a hand
+ * written filter never appears in a caller instead.
+ *
+ * `status` is a plain draft/published flag rather than reusing deleted_at for
+ * hiding: a lead recording a video and not being ready to show the team yet is the
+ * common case here, not an edge case, and "draft" says that in a list without a
+ * second lookup.
+ */
+export const learningTopics = pgTable(
+  "learning_topics",
+  {
+    id: id(),
+    uploaderUserId: uuid("uploader_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 255 }).notNull(),
+    description: text("description"),
+    /** The video file. Null while the draft row exists before an upload is confirmed. */
+    documentId: uuid("document_id").references(() => documents.id, { onDelete: "set null" }),
+    /** draft | published. Only the uploader ever sees a draft — see access.ts. */
+    status: varchar("status", { length: 20 }).notNull().default("draft"),
+    ...timestamps,
+  },
+  (t) => ({
+    uploaderIdx: index("learning_topics_uploader_idx").on(t.uploaderUserId, t.status),
+  }),
+);
+
+export type LearningTopic = typeof learningTopics.$inferSelect;
+export type NewLearningTopic = typeof learningTopics.$inferInsert;

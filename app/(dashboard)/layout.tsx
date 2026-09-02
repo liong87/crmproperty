@@ -81,12 +81,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
       ],
     },
     {
+      // Learning Hub is visible to everyone: a Team Lead uploads and publishes,
+      // their downline watches. Only "My team" and "Commission" stay lead-only —
+      // the reason this group can no longer be wrapped in leadOnly() as a whole.
       label: "Team",
       collapsible: true,
-      links: leadOnly([
-        { href: "/team", label: "My team" },
-        ...(COMMISSION_ENABLED ? [{ href: "/settings/commission", label: "Commission" }] : []),
-      ]),
+      links: [
+        ...leadOnly([{ href: "/team", label: "My team" }]),
+        { href: "/learning", label: "Learning Hub" },
+        ...leadOnly(COMMISSION_ENABLED ? [{ href: "/settings/commission", label: "Commission" }] : []),
+      ],
     },
     {
       label: "Settings",

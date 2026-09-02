@@ -3,7 +3,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   LayoutDashboard, Inbox, Contact, Building2, Columns3, ChevronRight, BarChart3, UserCog,
-  MessageSquareText, CalendarCheck, Landmark, Radio, BookOpen, Percent, BellRing, Users2, Settings2, LayoutGrid, ListChecks,
+  MessageSquareText, CalendarCheck, Landmark, Radio, BookOpen, Percent, BellRing, Users2, Settings2, LayoutGrid, ListChecks, GraduationCap,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -24,6 +24,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/leads-capture": Radio,
   "/templates": MessageSquareText,
   "/team": Users2,
+  "/learning": GraduationCap,
   "/settings": Settings2,
   "/more": LayoutGrid,
   "/users": UserCog,
