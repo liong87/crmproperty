@@ -130,6 +130,7 @@ export default async function LeadsPage({
             assignedTo: l.assignedTo,
             status: l.status,
             createdAt: l.createdAt,
+            utmSource: l.utmSource,
             utmCampaign: l.utmCampaign,
             utmContent: l.utmContent,
             utmTerm: l.utmTerm,

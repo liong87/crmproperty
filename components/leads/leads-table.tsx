@@ -22,10 +22,11 @@ import { Button } from "@/components/ui/button";
 import { formatMYR, cn } from "@/lib/utils";
 import { leadStatusTone } from "@/lib/status";
 import { statusLabel } from "@/lib/constants";
-import { deleteLeads } from "@/server/leads/actions";
 import { AssignCell } from "./assign-cell";
 import { LeadRowActions } from "./row-actions";
 import { StatusCell } from "./status-cell";
+import { BulkBar } from "./bulk-bar";
+import { sourceLabel } from "@/lib/leads/source-label";
 import type { AssignableUser } from "@/server/users/queries";
 
 export interface LeadRow {
@@ -35,6 +36,7 @@ export interface LeadRow {
   email: string | null;
   source: string;
   sourceDetail: string | null;
+  utmSource: string | null;
   utmCampaign: string | null;
   utmContent: string | null;
   utmTerm: string | null;
@@ -91,8 +93,6 @@ export function LeadsTable({
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [armed, setArmed] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  // A partial delete succeeded — it is not an error and should not be red.
-  const [notice, setNotice] = React.useState<string | null>(null);
   const [pending, start] = React.useTransition();
 
   const pageIds = React.useMemo(() => rows.map((r) => r.id), [rows]);
@@ -114,71 +114,18 @@ export function LeadsTable({
     setArmed(false);
   }
 
-  function onDelete() {
-    setError(null);
-    setNotice(null);
-    start(async () => {
-      const res = await deleteLeads([...selected]);
-      if (!res.success) {
-        setError(res.error);
-        setArmed(false);
-        return;
-      }
-      setNotice(
-        res.data.skipped > 0
-          ? `Deleted ${res.data.deleted}. Skipped ${res.data.skipped} that became contacts — delete those from Contacts.`
-          : `Deleted ${res.data.deleted}.`,
-      );
-      setSelected(new Set());
-      setArmed(false);
-      router.refresh();
-    });
-  }
+
 
   return (
     <div className="space-y-3">
-      {canDelete && selected.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-md border border-input bg-muted/40 px-3 py-2 text-sm">
-          <span className="font-medium">
-            {selected.size} {selected.size === 1 ? "lead" : "leads"} selected
-          </span>
-          {/* Two-step, matching DeleteLeadButton: a browser confirm() is dismissed by
-              reflex, and this removes a client's enquiry record. */}
-          {armed ? (
-            <>
-              <Button size="sm" variant="destructive" disabled={pending} onClick={onDelete}>
-                {pending ? "Deleting…" : `Confirm delete ${selected.size}`}
-              </Button>
-              <Button size="sm" variant="ghost" disabled={pending} onClick={() => setArmed(false)}>
-                Cancel
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button size="sm" variant="outline" onClick={() => setArmed(true)}>
-                Delete
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-                Clear
-              </Button>
-            </>
-          )}
-        </div>
-      )}
-
       {error && (
         <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
         </p>
       )}
 
-      {notice && (
-        <p className="rounded-md border border-input bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-          {notice}
-        </p>
-      )}
 
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-card dark:border-gray-800">
       <Table>
         <THead>
           <TR>
@@ -210,7 +157,10 @@ export function LeadsTable({
                 neglected and which are being shuffled without progress. */}
             <TH className="text-center" title="Times reassigned">&#8635;</TH>
             <TH className="text-center" title="Days since the last touch">D</TH>
-            <TH className="w-20" />
+            {/* Pinned right. These were the most important controls on the row and
+                the furthest off-screen — you had to scroll sideways past six columns
+                to reach Edit, which is why nobody found them. */}
+            <TH className="sticky right-0 w-24 bg-card" />
           </TR>
         </THead>
         <TBody>
@@ -236,7 +186,7 @@ export function LeadsTable({
                 <span className="block text-xs tabular-nums text-muted-foreground">{l.phone}</span>
               </TD>
               <TD>
-                <span className="block text-sm capitalize">{l.source}</span>
+                <span className="block text-sm">{sourceLabel(l.source, l.utmSource, l.sourceDetail)}</span>
                 {l.sourceDetail && (
                   <span className="block max-w-[14rem] truncate text-xs text-muted-foreground">
                     {l.sourceDetail}
@@ -282,7 +232,7 @@ export function LeadsTable({
               <TD className="text-center text-xs tabular-nums text-muted-foreground">
                 {l.dormantDays}d
               </TD>
-              <TD>
+              <TD className="sticky right-0 bg-card group-hover:bg-muted/50">
                 <LeadRowActions
                   lead={{
                     id: l.id, name: l.name, phone: l.phone, email: l.email,
@@ -300,6 +250,18 @@ export function LeadsTable({
         </TBody>
       </Table>
       </div>
+
+      <BulkBar
+        selected={[...selected]}
+        rows={rows.map((r) => ({
+          id: r.id, name: r.name, phone: r.phone, email: r.email,
+          status: r.status, projectName: r.projectName, createdAt: r.createdAt,
+        }))}
+        assignees={assignees}
+        projects={projects}
+        canDelete={canDelete}
+        onClear={() => { setSelected(new Set()); setArmed(false); }}
+      />
     </div>
   );
 }
