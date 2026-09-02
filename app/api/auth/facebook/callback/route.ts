@@ -121,8 +121,15 @@ export async function GET(req: Request) {
         fb_error: `${detail} ${loginConfigId() ? "These come from the Login-for-Business configuration — tick them there and try again." : "Approve them on the Facebook permission screen rather than clicking through it."}`,
       });
     }
+    /*
+     * Every permission granted and still no Pages means one thing in practice: the
+     * "Continue as ...? / continue with your previous settings" screen was accepted.
+     * That button reuses the last asset selection, which was empty — so clicking the
+     * blue, obvious, default button is precisely what keeps this broken, and the grey
+     * "Edit settings" one beside it is the fix. Naming the button is the whole message.
+     */
     return done({
-      fb_error: `${detail} Every permission was granted, so the Page-sharing step is what did not happen — on the Facebook screen listing your Pages, tick the one you run ads on before continuing.`,
+      fb_error: `${detail} Every permission was granted, so only the Page selection is missing. When Facebook asks "Continue as ...?", click the grey EDIT SETTINGS button rather than the blue Continue — Continue reuses your previous choice, which shared no Pages. On the screen that follows, tick the Page you run ads on.`,
     });
   }
 
