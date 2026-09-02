@@ -114,6 +114,7 @@ export async function updateLead(input: unknown): Promise<ActionResult<Lead>> {
 
     revalidatePath("/leads");
     revalidatePath(`/leads/${d.id}`);
+    revalidatePath("/working-leads");
     return ok(row!);
   } catch (err) {
     return handle(err, "updateLead");

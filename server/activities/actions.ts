@@ -50,6 +50,7 @@ export async function logActivity(input: unknown): Promise<ActionResult<{ id: st
 
     revalidatePath(entity.href);
     revalidatePath("/inbox");
+    revalidatePath("/working-leads");
     return ok({ id: row!.id });
   } catch (err) {
     return handle(err, "logActivity");
