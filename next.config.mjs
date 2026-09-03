@@ -57,6 +57,11 @@ const nextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           // Record ids appear in URLs; do not leak full paths to third parties.
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // This CRM is internal to the agency. Nothing in it should ever appear in a
+          // search result, and a sign-in page is exactly what gets indexed and then
+          // probed. Cloudflare Access already stops a crawler at the edge; this is the
+          // second lock, for the day somebody turns Access off.
+          { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
           // No page here needs a camera, microphone or location.
           {
             key: "Permissions-Policy",
