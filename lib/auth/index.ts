@@ -1,4 +1,4 @@
-export { authProvider, getCurrentUser, requireUser } from "./active-provider";
+export { authProvider, getCurrentAuthId, getCurrentUser, requireUser } from "./active-provider";
 export type { AuthProvider, AuthUser, Role } from "./interface";
 export { syncCurrentUser, getCurrentDbUser, requireDbUser } from "./sync";
 export {

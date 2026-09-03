@@ -16,7 +16,17 @@ export interface AuthUser {
 }
 
 export interface AuthProvider {
-  /** The currently authenticated user (from the request context), or null. */
+  /**
+   * The signed-in identity's id, and NOTHING else.
+   *
+   * Separate from `getCurrentUser` because it is the cheap one: with Clerk it reads the
+   * session cookie and makes no network call, whereas the full profile is an HTTPS
+   * round trip to the provider's API. Almost every request only needs the id — enough
+   * to find our own `users` row — so paying for the profile on each was the app's
+   * largest avoidable latency.
+   */
+  getCurrentAuthId(): Promise<string | null>;
+  /** The currently authenticated user's full profile (from the request context), or null. */
   getCurrentUser(): Promise<AuthUser | null>;
   /** Require an authenticated user; throws if none. */
   requireUser(): Promise<AuthUser>;

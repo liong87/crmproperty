@@ -8,7 +8,8 @@
 import { eq, and, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { users, type User } from "@/lib/db/schema";
-import { getCurrentUser } from "./active-provider";
+import { cache } from "react";
+import { getCurrentAuthId, getCurrentUser } from "./active-provider";
 import { monitoring } from "@/lib/monitoring";
 
 /**
@@ -96,15 +97,27 @@ export async function syncCurrentUser(): Promise<User | null> {
  * member of staff kept a working session - and any route using this helper instead of
  * requireDbUser (the PDPA export endpoint, for one) still served them client data.
  */
-export async function getCurrentDbUser(): Promise<User | null> {
-  const authUser = await getCurrentUser();
-  if (!authUser) return null;
+export const getCurrentDbUser = cache(async (): Promise<User | null> => {
+  /*
+   * `getCurrentAuthId`, not `getCurrentUser`.
+   *
+   * All this needs is the external id to look up our own row. The full profile — name,
+   * email, verification status — costs an HTTPS round trip to the auth provider's API
+   * and is used only by `syncCurrentUser`, which runs once per request in the layout.
+   * Asking for it here meant every page paid for a network call to fetch a name it then
+   * ignored, two or three times over.
+   *
+   * Memoised with `cache` for the same reason: a page, its layout and any server module
+   * calling `requireDbUser` all land here, and they should share one SELECT.
+   */
+  const externalAuthId = await getCurrentAuthId();
+  if (!externalAuthId) return null;
   const [row] = await db
     .select()
     .from(users)
-    .where(and(eq(users.externalAuthId, authUser.externalAuthId), isNull(users.deletedAt)));
+    .where(and(eq(users.externalAuthId, externalAuthId), isNull(users.deletedAt)));
   return row ?? null;
-}
+});
 
 /** Like getCurrentDbUser but throws if missing — use in server actions. */
 export async function requireDbUser(): Promise<User> {

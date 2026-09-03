@@ -3,6 +3,11 @@ import type { AuthProvider, AuthUser } from "./interface";
 
 /** Clerk implementation of AuthProvider. Only this file imports Clerk. */
 export const clerkProvider: AuthProvider = {
+  async getCurrentAuthId(): Promise<string | null> {
+    // `auth()` reads the verified session token. No call to api.clerk.com.
+    const { userId } = await auth();
+    return userId ?? null;
+  },
   async getCurrentUser(): Promise<AuthUser | null> {
     const { userId } = await auth();
     if (!userId) return null;
