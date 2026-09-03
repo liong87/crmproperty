@@ -322,7 +322,7 @@ def story():
         "11 &nbsp; The two pipelines",
         "12 &nbsp; The paperwork checklist",
         "<b>Staying on top</b>",
-        "13 &nbsp; Reminders",
+        "13 &nbsp; Inbox",
         "14 &nbsp; Reports",
         "<b>Projects</b>",
         "15 &nbsp; The sales kit",
@@ -415,7 +415,7 @@ def story():
         ["Properties", "Resale and rental listings"],
         ["Pipeline", "Deals in progress, on a board by stage"],
         ["Appointments", "Gallery visits and viewings, and how they went"],
-        ["Reminders", "Follow-ups due, and paperwork due"],
+        ["Inbox", "Follow-ups due, paperwork due, and notifications"],
         ["Reports", "The funnel, by project and by agent"],
         ["Leads capture", "Connect <i>your own</i> Facebook and pick the lead forms you want"],
         ["Learning", "Training videos from your team leader, and what you have watched"],
@@ -651,16 +651,22 @@ def story():
 
     # ---- 13 ----------------------------------------------------------------
     s.append(PageBreak())
-    s += section("13", "Reminders")
+    s += section("13", "Inbox")
 
     s.append(Paragraph(
-        "Two lists on one screen. <b>Paperwork due</b> sits above the follow-ups: anything "
-        "due in the next 14 days plus anything already overdue, soonest first, with the "
-        "client and project named. Overdue items never drop off, even once they are past "
-        "that window.", S["body"]))
+        "Everything still open, on one screen. <b>Paperwork due</b> sits above the "
+        "follow-ups: anything due in the next 14 days plus anything already overdue, "
+        "soonest first, with the client and project named. Overdue items never drop off, "
+        "even once they are past that window.", S["body"]))
     s.append(Paragraph(
-        "Below it, your follow-ups — every date you set while logging activity.", S["body"]))
-    s.append(figure("13-reminders", "The Reminders screen."))
+        "Below it, your follow-ups \u2014 every date you set while logging activity \u2014 and "
+        "your notifications, including the weekly summary of leads and bookings.", S["body"]))
+    s.append(figure("13-inbox", "The Inbox."))
+    s.append(callout(
+        "<b>There is no separate Reminders screen.</b> Follow-ups and paperwork used to "
+        "live on their own page; both answered &ldquo;what needs me?&rdquo;, so an agent had "
+        "two places to check and reliably checked neither. They are one screen now, and "
+        "/reminders sends you here."))
 
     # ---- 14 ----------------------------------------------------------------
     s += section("14", "Reports")
