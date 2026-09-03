@@ -11,7 +11,7 @@
  * and both are recorded at the time because commission splits on them later.
  */
 import { z } from "zod";
-import { addSystemRemark } from "@/server/leads/remarks";
+import { addSystemRemark } from "@/server/leads/remarks-internal";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";

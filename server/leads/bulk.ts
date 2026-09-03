@@ -16,7 +16,7 @@ import { requireDbUser, assertRole, AuthorizationError } from "@/lib/auth";
 import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
-import { addSystemRemark } from "./remarks";
+import { addSystemRemark } from "./remarks-internal";
 
 const idsSchema = z.array(z.string().uuid()).min(1).max(200);
 

@@ -8,7 +8,7 @@ import { DEAL_TYPE } from "@/lib/constants";
 import { deals, dealStages, contacts, activities, type Deal } from "@/lib/db/schema";
 import { requireDbUser, assertCanEdit, AuthorizationError } from "@/lib/auth";
 import { ok, fail } from "@/lib/action-result";
-import { instantiateChecklist } from "@/server/deal-documents/actions";
+import { instantiateChecklist } from "@/server/deal-documents/checklist-internal";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { getDealById } from "./queries";

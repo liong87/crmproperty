@@ -22,30 +22,14 @@ import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { getLeadById } from "./queries";
 
-export interface RemarkRow {
-  id: string;
-  body: string | null;
-  status: string | null;
-  kind: string;
-  authorName: string | null;
-  createdAt: Date;
-}
-
-export async function listRemarks(leadId: string): Promise<RemarkRow[]> {
-  return db
-    .select({
-      id: leadRemarks.id,
-      body: leadRemarks.body,
-      status: leadRemarks.status,
-      kind: leadRemarks.kind,
-      authorName: users.name,
-      createdAt: leadRemarks.createdAt,
-    })
-    .from(leadRemarks)
-    .leftJoin(users, eq(users.id, leadRemarks.userId))
-    .where(and(eq(leadRemarks.leadId, leadId), isNull(leadRemarks.deletedAt)))
-    .orderBy(asc(leadRemarks.createdAt));
-}
+/**
+ * NOTE ON THIS FILE: it carries "use server", and two Client Components import
+ * `addRemark` from it. That makes EVERY export here a browser-callable endpoint, so
+ * every export must authenticate and authorize for itself. A helper that relies on its
+ * caller having already done so belongs in ./remarks-internal.ts, which has no
+ * directive. `listRemarks` (unauthenticated, unused) and `addSystemRemark` (no
+ * ownership check, wrote lead status) both used to live here.
+ */
 
 const addSchema = z
   .object({
@@ -116,28 +100,6 @@ export async function addRemark(input: unknown): Promise<ActionResult<{ id: stri
     return ok({ id: row!.id });
   } catch (err) {
     return handle(err, "addRemark");
-  }
-}
-
-/**
- * A remark written by the system rather than a person.
- *
- * Rendered in the same thread, dimmer and without an author. Crucially it does NOT
- * touch the follow-up counters: an automated note is not somebody ringing a client,
- * and letting it count would make the rate flatter and useless.
- */
-export async function addSystemRemark(
-  leadId: string,
-  body: string,
-  status?: string,
-): Promise<void> {
-  try {
-    await db.insert(leadRemarks).values({
-      leadId, userId: null, body, status: status ?? null, kind: "system",
-    });
-    if (status) await db.update(leads).set({ status }).where(eq(leads.id, leadId));
-  } catch (err) {
-    monitoring.captureException(err, { where: "addSystemRemark", leadId });
   }
 }
 
