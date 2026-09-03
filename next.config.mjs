@@ -30,10 +30,18 @@ const nextConfig = {
    * Security headers.
    *
    * A Content-Security-Policy is included in REPORT-ONLY mode. It blocks nothing; the
-   * browser reports what it WOULD have blocked to the console. Run the app normally
-   * for a week — sign in, upload a photo, open a document, view every report — and
-   * watch for violations. When the console stays quiet, rename the header to
-   * `Content-Security-Policy` to enforce it.
+   * browser reports what it WOULD have blocked to /api/csp-report, which logs each
+   * violation through the monitoring provider.
+   *
+   * TO PROMOTE IT, and not before: run a week of real use — sign in, upload a photo,
+   * open a document, view every report, connect Facebook — then read the distinct
+   * `blocked` values out of Workers Observability (`event: "message"`,
+   * `message: "csp-violation"`). Widen the policy for anything legitimate. When a week
+   * passes with no new violation, rename this header to `Content-Security-Policy`.
+   *
+   * It was report-only with NO reporting endpoint for months, which made the
+   * instruction above impossible to follow: violations went to each agent's private
+   * browser console and nobody could see them.
    *
    * Switching it on before that would break sign-in: Clerk loads scripts and workers
    * from its own domains, and property photographs come from signed R2 URLs. Both are
@@ -67,11 +75,23 @@ const nextConfig = {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=()",
           },
+          /*
+           * Where violations are reported. Without this the policy was unfalsifiable:
+           * report-only with no endpoint means every violation lands in one agent's
+           * private browser console and nobody can act on it.
+           *
+           * `report-uri` is deprecated but is what Safari and older Chrome still send;
+           * `report-to` is the modern one and needs the Reporting-Endpoints header
+           * below. Both are set so reports arrive from every phone in the agency.
+           */
+          { key: "Reporting-Endpoints", value: 'csp="/api/csp-report"' },
           // REPORT-ONLY. See the note above before promoting this to enforcing.
           {
             key: "Content-Security-Policy-Report-Only",
             value: [
               "default-src 'self'",
+              "report-uri /api/csp-report",
+              "report-to csp",
               // Clerk ships its SDK from its own domains and needs eval for its
               // dev-instance tooling. 'unsafe-inline' is here because Next emits
               // inline bootstrap scripts; removing it needs nonces, which is a

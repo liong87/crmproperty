@@ -70,6 +70,13 @@ const featureSchema = z.object({
   META_GRAPH_VERSION: optionalStr,
   // Migrations only
   DIRECT_DATABASE_URL: optionalStr,
+
+  /**
+   * Where production errors are pushed. A Slack or Discord incoming webhook, or any
+   * endpoint accepting a JSON POST. Unset means log-only, which is the correct local
+   * and build-time behaviour — see lib/monitoring/alert-provider.ts.
+   */
+  MONITORING_WEBHOOK_URL: optionalUrl,
 });
 
 export interface EnvProblem {

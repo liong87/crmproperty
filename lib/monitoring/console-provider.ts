@@ -37,7 +37,11 @@ const REDACT = new Set([
   "secret",
 ]);
 
-function scrub(context?: Record<string, unknown>): Record<string, unknown> | undefined {
+/**
+ * Exported so `alert-provider` redacts by exactly the same rule. Two redaction lists
+ * would drift, and the one that drifts is the one that posts client data to Slack.
+ */
+export function scrub(context?: Record<string, unknown>): Record<string, unknown> | undefined {
   if (!context) return undefined;
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(context)) {

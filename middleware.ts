@@ -29,6 +29,17 @@ const isPublicRoute = createRouteMatcher([
   "/api/webhooks/(.*)",
   "/api/auth/facebook/deauthorize",
   "/api/auth/facebook/data-deletion",
+  /*
+   * CSP violation reports. The browser posts these without credentials, and a
+   * violation on the sign-in page happens before anyone is authenticated — so behind
+   * `auth.protect()` the endpoint would only ever receive reports from pages that
+   * already work, which are the ones we do not need reports about.
+   *
+   * NOTE: this is a browser-facing diagnostic, NOT a Meta machine path. It does not
+   * belong in the Cloudflare Access bypass list — reports come from a signed-in
+   * agent's browser, which already holds an Access cookie.
+   */
+  "/api/csp-report",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

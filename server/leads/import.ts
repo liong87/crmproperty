@@ -17,7 +17,11 @@
  * "RM 850000" and "850k" all work — previously any of those rejected the whole row.
  */
 import { requireDbUser, isTeamLeadOrAbove } from "@/lib/auth";
-import { createLeadFromIntake } from "./intake";
+import { and, asc, inArray, isNull, notInArray, or } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { leads } from "@/lib/db/schema";
+import { DEAD_STATUSES } from "@/lib/constants";
+import { createLeadFromIntake, knownEmailKey, knownPhoneKey } from "./intake";
 import { ok, fail } from "@/lib/action-result";
 import type { ActionResult } from "@/types";
 import { parseCsv, pick, ringgitToCents, toE164My, toInterest, toConsent } from "./csv";
@@ -76,6 +80,61 @@ export async function importLeadsFromCsv(
       missingConsent: 0,
     };
 
+    /*
+     * ONE dedupe query for the file, not one per row.
+     *
+     * Every row used to run its own "is this person already here?" SELECT. A 1,000-row
+     * import therefore made 1,000 round trips before it inserted anything, on a
+     * runtime billed by CPU time and bounded by a request deadline — which is the most
+     * likely reason a large import would time out half-finished.
+     *
+     * The index is passed into `createLeadFromIntake`, which mutates it as rows are
+     * created, so a file listing the same person twice still dedupes the second
+     * occurrence. Semantics are unchanged; the number of queries is not.
+     */
+    const parsedRows = rows.map(({ line, values }) => ({
+      line,
+      values,
+      phone: toE164My(pick(values, "phone", "phone number", "phonenumber", "mobile")) ?? "",
+      email: pick(values, "email", "email address") || null,
+    }));
+
+    const phones = [...new Set(parsedRows.map((r) => r.phone).filter(Boolean))];
+    const emails = [...new Set(parsedRows.map((r) => r.email).filter((e): e is string => !!e))];
+
+    const known = new Map<string, { id: string }>();
+    if (phones.length > 0 || emails.length > 0) {
+      const matchers = [
+        phones.length > 0 ? inArray(leads.phone, phones) : undefined,
+        emails.length > 0 ? inArray(leads.email, emails) : undefined,
+      ].filter(Boolean);
+
+      const existing = await db
+        .select({
+          id: leads.id,
+          phone: leads.phone,
+          email: leads.email,
+          createdAt: leads.createdAt,
+        })
+        .from(leads)
+        .where(
+          and(
+            isNull(leads.deletedAt),
+            isNull(leads.convertedToContactId),
+            notInArray(leads.status, DEAD_STATUSES),
+            matchers.length === 1 ? matchers[0] : or(...matchers),
+          ),
+        )
+        // Oldest first, so the newest row overwrites and the map ends up holding the
+        // most recent match — the same lead the per-row query's ORDER BY chose.
+        .orderBy(asc(leads.createdAt));
+
+      for (const row of existing) {
+        known.set(knownPhoneKey(row.phone), { id: row.id });
+        if (row.email) known.set(knownEmailKey(row.email), { id: row.id });
+      }
+    }
+
     for (const { line, values } of rows) {
       const name = pick(values, "name", "full name", "fullname");
       const consentCol = pick(values, "consent", "pdpa consent", "pdpa", "agree");
@@ -118,7 +177,15 @@ export async function importLeadsFromCsv(
           pick(values, "ad name", "adname", "ad", "creative", "utm term", "utmterm") || null,
       };
 
-      const res = await createLeadFromIntake(payload, "import", assignTo);
+      /*
+       * `notify: false`. An import must not message the agent once per row — a 500-row
+       * file produced 500 "New lead assigned" WhatsApp notifications, and a `users`
+       * lookup plus an outbound request each time.
+       */
+      const res = await createLeadFromIntake(payload, "import", assignTo, {
+        notify: false,
+        known,
+      });
       if (!res.success) {
         summary.failed++;
         summary.errors.push({ line, name: name || "(no name)", error: res.error });

@@ -97,11 +97,49 @@ async function pickAssignee(): Promise<string | null> {
  * and paid for. Website and webhook leads keep round-robin — nobody owns those, and
  * waiting for a manual assignment costs conversions.
  */
+/**
+ * Per-call behaviour that differs between a single arriving lead and a bulk import.
+ *
+ * Everything still funnels through `createLeadFromIntake` — the module header's rule —
+ * because the alternative is a second copy of the dedupe, assignment and consent logic
+ * that drifts from this one.
+ */
+export interface IntakeOptions {
+  /**
+   * Message the assigned agent. TRUE for a lead arriving on its own; false for an
+   * import.
+   *
+   * A CSV import ran with this permanently on, so uploading a 500-row list of last
+   * quarter's leads generated 500 separate WhatsApp notifications to the agent it
+   * assigned them to — one per row, each announcing a "New lead". That is not a
+   * performance problem, it is the feature being wrong: nobody needs to be pinged five
+   * hundred times about a spreadsheet they can see. It also cost a `users` lookup and
+   * an outbound request per row.
+   */
+  notify?: boolean;
+  /**
+   * Leads already known to exist, keyed by phone and by email, so a bulk caller can
+   * resolve duplicates with ONE query instead of one per row.
+   *
+   * The map is MUTATED as rows are created, which is deliberate: a file containing the
+   * same person twice must still dedupe the second occurrence against the first, and
+   * that only works if the newly created lead joins the index.
+   */
+  known?: Map<string, { id: string }>;
+}
+
+/** Index keys. Phone and email are separate namespaces so they cannot collide. */
+export const knownPhoneKey = (phone: string) => `phone:${phone}`;
+export const knownEmailKey = (email: string) => `email:${email.toLowerCase()}`;
+
 export async function createLeadFromIntake(
   rawPayload: unknown,
   source: LeadSource,
   assignTo?: string | null,
+  options: IntakeOptions = {},
 ): Promise<ActionResult<{ leadId: string; deduped: boolean }>> {
+  const notify = options.notify ?? true;
+  const known = options.known;
   const parsed = intakeSchema.safeParse(rawPayload);
   if (!parsed.success) {
     return fail(parsed.error.issues.map((i) => i.message).join("; "));
@@ -124,22 +162,30 @@ export async function createLeadFromIntake(
     //
     // Also ordered and limited: without ORDER BY, PostgreSQL row order is
     // unspecified, so which lead received the duplicate note could vary run to run.
-    const existingMatches = await db
-      .select()
-      .from(leads)
-      .where(
-        and(
-          isNull(leads.deletedAt),
-          isNull(leads.convertedToContactId),
-          notInArray(leads.status, DEAD_STATUSES),
-          p.email
-            ? or(eq(leads.phone, p.phone), eq(leads.email, p.email))
-            : eq(leads.phone, p.phone),
-        ),
-      )
-      .orderBy(desc(leads.createdAt))
-      .limit(1);
-    const existing = existingMatches[0];
+    let existing: { id: string } | undefined;
+    if (known) {
+      // Bulk path: the caller already ran this query once for the whole file.
+      existing =
+        known.get(knownPhoneKey(p.phone)) ??
+        (p.email ? known.get(knownEmailKey(p.email)) : undefined);
+    } else {
+      const existingMatches = await db
+        .select()
+        .from(leads)
+        .where(
+          and(
+            isNull(leads.deletedAt),
+            isNull(leads.convertedToContactId),
+            notInArray(leads.status, DEAD_STATUSES),
+            p.email
+              ? or(eq(leads.phone, p.phone), eq(leads.email, p.email))
+              : eq(leads.phone, p.phone),
+          ),
+        )
+        .orderBy(desc(leads.createdAt))
+        .limit(1);
+      existing = existingMatches[0];
+    }
 
     if (existing) {
       // Merge: log a new activity on the existing lead rather than duplicating.
@@ -230,8 +276,15 @@ export async function createLeadFromIntake(
       body: `Lead created via ${source}${p.sourceDetail ? ` (${p.sourceDetail})` : ""}.`,
     });
 
+    // Keep a bulk caller's index current, so a file containing the same person twice
+    // dedupes the second row against the first.
+    if (known) {
+      known.set(knownPhoneKey(p.phone), { id: leadId });
+      if (p.email) known.set(knownEmailKey(p.email), { id: leadId });
+    }
+
     // Notify assigned agent (WhatsApp click-to-chat link in Phase A).
-    if (assignedTo) {
+    if (notify && assignedTo) {
       const [agent] = await db
         .select({ phone: users.phone })
         .from(users)

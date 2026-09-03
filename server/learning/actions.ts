@@ -262,11 +262,23 @@ export async function createUploadUrl(
 
     const safeExt = (filename.match(/\.[A-Za-z0-9]{1,8}$/)?.[0] ?? "").toLowerCase();
     const key = `learning/${topicId}/${crypto.randomUUID()}${safeExt}`;
+    // The shape below is what `addAttachment` re-derives and checks. If this line
+    // changes, KEY_SHAPE must change with it, or every new upload is rejected.
 
     return ok({ uploadUrl: await storage.getUploadUrl(key, contentType, 900), key });
   } catch (err) {
     return asFailure(err);
   }
+}
+
+/**
+ * The only key shape `createUploadUrl` can mint: the topic's own folder, then a UUID,
+ * then an optional short extension.
+ */
+function expectedKeyShape(topicId: string): RegExp {
+  return new RegExp(
+    `^learning/${topicId}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\\.[a-z0-9]{1,8})?$`,
+  );
 }
 
 export async function addAttachment(
@@ -284,6 +296,25 @@ export async function addAttachment(
       .limit(1);
     if (!chapter) throw new TopicNotFoundError();
     await requireOwnedTopic(me, chapter.topicId);
+
+    /*
+     * The key came back from the browser, so re-derive what it is allowed to look
+     * like rather than trusting it.
+     *
+     * `createUploadUrl` chooses the key server-side and pins the content type into the
+     * signature — but this function then accepted any string. Storage keys are not
+     * secret: they appear in the path of every signed URL an agent has ever opened
+     * (`deals/<id>/<uuid>-spa-scan.pdf`). A team leader who had seen one could attach
+     * that object to a chapter of their own and, via `attachmentUrl`, mint working
+     * download links to it for their entire downline — reaching a signed SPA or a loan
+     * letter belonging to a deal they cannot see.
+     *
+     * server/project-resources/actions.ts does exactly this check for kit items; this
+     * is the same rule applied to the same class of input.
+     */
+    if (!expectedKeyShape(chapter.topicId).test(storageKey)) {
+      return fail("That upload does not belong to this topic.");
+    }
 
     await db.insert(learningAttachments).values({
       chapterId,
