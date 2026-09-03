@@ -14,7 +14,7 @@ import { PrintButton } from "@/components/reports/print-button";
 import { SourceTable, FollowUpTable } from "@/components/reports/source-table";
 import { CampaignTab } from "@/components/reports/campaign-tab";
 import { getLeadsBySource, getFollowUpByAgent } from "@/server/reports/by-source";
-import { listMyAdAccounts } from "@/server/capture/queries";
+import { listMyAdConnections } from "@/server/capture/queries";
 import { listProjectOptions } from "@/server/projects/queries";
 import { OPEN_STATUSES } from "@/lib/constants";
 import { STATUS } from "@/lib/chart-colors";
@@ -38,7 +38,7 @@ export default async function ReportsPage({
   // "Maximum" cannot render hundreds of unreadable buckets.
   const weeks = Math.min(104, Math.max(4, Math.ceil(days / 7)));
 
-  const [r, funnel, trend, activity, bySource, followUp, projects, adAccounts] = await Promise.all([
+  const [r, funnel, trend, activity, bySource, followUp, projects, adConnections] = await Promise.all([
     getReportData(me),
     getFunnel(me, days),
     getFunnelTrend(me, weeks),
@@ -51,7 +51,7 @@ export default async function ReportsPage({
     getFollowUpByAgent(me, OPEN_STATUSES),
     listProjectOptions(),
     // Per-user, like every other capture connection: their ad accounts, not the agency's.
-    listMyAdAccounts(),
+    listMyAdConnections(),
   ]);
 
   // Offered as chips only when leads actually carry them — an empty filter row is
@@ -93,7 +93,7 @@ export default async function ReportsPage({
       <ReportTabs params={params} />
 
       {tab === "campaign" ? (
-        <CampaignTab accounts={adAccounts} />
+        <CampaignTab connections={adConnections} />
       ) : (
       <>
       <ReportControls params={params} sources={sourceChips} projects={projects} />

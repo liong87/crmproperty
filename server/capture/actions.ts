@@ -108,9 +108,15 @@ export async function setPageSubscriptions(
  */
 export async function disconnectAccount(accountId: string): Promise<ActionResult<null>> {
   try {
-    await requireMyAccount(accountId);
+    const account = await requireMyAccount(accountId);
 
-    const rows = await db
+    /*
+     * Only a PAGE has a webhook subscription to remove. An ad account is read on
+     * demand and has nothing registered at Meta, so calling subscribed_apps for one
+     * fails with a confusing permissions error — and that error would then look like
+     * the disconnect itself had failed.
+     */
+    const rows = account.provider !== "facebook" ? [] : await db
       .select()
       .from(capturePages)
       .where(

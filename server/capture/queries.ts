@@ -75,3 +75,35 @@ export async function listMyAdAccounts(): Promise<AdAccountView[]> {
     .map((p) => ({ id: p.id, externalId: p.externalPageId, name: p.name, selected: p.subscribed }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
+
+export interface AdConnectionView {
+  /** capture_accounts id — what Disconnect acts on. */
+  id: string;
+  displayName: string;
+  accounts: AdAccountView[];
+}
+
+/**
+ * Ad accounts grouped under the Facebook login that produced them.
+ *
+ * The grouping exists so the UI can offer Disconnect. Unticking an ad account only
+ * excludes it from the report; removing the CONNECTION is a different action on a
+ * different object, and a screen that offers only the first leaves no way to undo the
+ * second.
+ */
+export async function listMyAdConnections(): Promise<AdConnectionView[]> {
+  const [accounts, pages] = await Promise.all([listMyAccounts("meta_ads"), listMyPages("meta_ads")]);
+
+  const byAccount = new Map<string, AdAccountView[]>();
+  for (const p of pages) {
+    const list = byAccount.get(p.accountId) ?? [];
+    list.push({ id: p.id, externalId: p.externalPageId, name: p.name, selected: p.subscribed });
+    byAccount.set(p.accountId, list);
+  }
+
+  return accounts.map((a) => ({
+    id: a.id,
+    displayName: a.displayName,
+    accounts: (byAccount.get(a.id) ?? []).sort((x, y) => x.name.localeCompare(y.name)),
+  }));
+}

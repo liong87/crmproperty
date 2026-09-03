@@ -1,7 +1,7 @@
 import { Megaphone, Plus, Clock } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { AdAccountPicker } from "./ad-account-picker";
-import type { AdAccountView } from "@/server/capture/queries";
+import type { AdConnectionView } from "@/server/capture/queries";
 
 /**
  * Meta Ads Report.
@@ -15,7 +15,8 @@ import type { AdAccountView } from "@/server/capture/queries";
  * it exists this page shows what is connected and says plainly what is missing. A table
  * of zeroes would be worse than an empty one: somebody would set a budget from it.
  */
-export function CampaignTab({ accounts }: { accounts: AdAccountView[] }) {
+export function CampaignTab({ connections }: { connections: AdConnectionView[] }) {
+  const accounts = connections.flatMap((c) => c.accounts);
   const selected = accounts.filter((a) => a.selected);
 
   return (
@@ -49,14 +50,23 @@ export function CampaignTab({ accounts }: { accounts: AdAccountView[] }) {
               access to. Your spend stays yours; nobody else in the agency sees it.
             </p>
           ) : (
-            <div className="rounded-xl border p-4">
-              <p className="text-sm font-medium">Your ad accounts</p>
-              <p className="mb-2 text-xs text-muted-foreground">
-                Tick the ones this report should cover. Untick anything that is not your budget —
-                otherwise somebody else&apos;s spend lands in your cost per lead.
-              </p>
-              <AdAccountPicker accounts={accounts} />
-            </div>
+            connections.map((connection) => (
+              <div key={connection.id} className="rounded-xl border p-4">
+                <p className="text-sm font-medium">
+                  Your ad accounts
+                  {connections.length > 1 && (
+                    <span className="ml-1.5 font-normal text-muted-foreground">
+                      · {connection.displayName}
+                    </span>
+                  )}
+                </p>
+                <p className="mb-2 text-xs text-muted-foreground">
+                  Tick the ones this report should cover. Untick anything that is not your budget —
+                  otherwise somebody else&apos;s spend lands in your cost per lead.
+                </p>
+                <AdAccountPicker accounts={connection.accounts} connectionId={connection.id} />
+              </div>
+            ))
           )}
 
           <div className="flex items-start gap-2.5 rounded-xl border bg-muted/30 p-4 text-sm">
