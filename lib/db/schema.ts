@@ -1242,56 +1242,49 @@ export const notifications = pgTable(
 
 export type Notification = typeof notifications.$inferSelect;
 
-/* ---------- learning_topics (Learning Hub: a Team Lead uploads a video, their downline watches it) ---------- */
+/* ---------- learning hub ---------- */
 
 /**
- * A training video uploaded by a Team Lead (or admin) for their own downline.
+ * A training topic a team leader publishes to the agents under them.
  *
- * Visibility is ONE LEVEL, the same rule as every other "upline" concept in this
- * schema (see server/users/hierarchy.ts): an agent watches a PUBLISHED topic
- * uploaded by users.team_lead_id, never a chain of leads above that. Every read and
- * write goes through server/learning/access.ts — see that file for why a hand
- * written filter never appears in a caller instead.
- *
- * `status` is a plain draft/published flag rather than reusing deleted_at for
- * hiding: a lead recording a video and not being ready to show the team yet is the
- * common case here, not an edge case, and "draft" says that in a list without a
- * second lookup.
+ * `ownerUserId` is the leader, and it is the whole access model: a leader writes only
+ * their own topics, and an agent reads only PUBLISHED topics owned by their upline
+ * (`users.team_lead_id`). That rule lives in exactly one place —
+ * server/learning/access.ts — for the same reason capture ownership does: a filter
+ * hand-written per query leaks the day somebody adds the eleventh query.
  */
 export const learningTopics = pgTable(
   "learning_topics",
   {
     id: id(),
-    uploaderUserId: uuid("uploader_user_id")
+    ownerUserId: uuid("owner_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     title: varchar("title", { length: 255 }).notNull(),
-    description: text("description"),
-    /** draft | published. Only the uploader ever sees a draft — see access.ts. */
-    status: varchar("status", { length: 20 }).notNull().default("draft"),
+    summary: text("summary"),
+    category: varchar("category", { length: 60 }),
+    /** team — room for "agency" or "private" later without a migration. */
+    visibility: varchar("visibility", { length: 20 }).notNull().default("team"),
+    /**
+     * Drafts are invisible to agents. A half-finished topic appearing in the library
+     * is worse than no topic: somebody watches two chapters of six and believes that
+     * is the training.
+     */
+    isPublished: boolean("is_published").notNull().default(false),
     ...timestamps,
   },
   (t) => ({
-    uploaderIdx: index("learning_topics_uploader_idx").on(t.uploaderUserId, t.status),
+    ownerIdx: index("learning_topics_owner_idx").on(t.ownerUserId, t.isPublished),
   }),
 );
 
 /**
- * One video within a topic — "Closing Masterclass" is a topic, "Handling
- * objections" and "No-shows" are its chapters.
+ * One video in a topic, in order.
  *
- * The video pointer lives HERE, not on learning_topics, because a topic is a
- * container: publishing, ownership and the one-level-upline visibility rule all
- * apply to the topic as a whole (see server/learning/access.ts), while a chapter
- * is just one of what can be several files under it. sortOrder is a plain
- * insertion-order integer, the same pattern as deal_documents and
- * project_resources — reordering by drag-and-drop is a UI feature nobody asked
- * for yet, not a reason to model the list any differently today.
- *
- * Deleting a chapter's row is a soft delete like everywhere else, so the FK
- * cascade below only matters for a hard delete of the topic row itself (which
- * this app never does) — removeTopic in actions.ts explicitly soft-deletes each
- * chapter and discards its file, rather than relying on this cascade to do it.
+ * `videoKind` is link | file. A link is a YouTube or Vimeo URL; a file is an R2 object
+ * key uploaded straight from the browser with a presigned PUT — the bytes never pass
+ * through the Worker, which is not an optimisation but the only way a 500 MB video can
+ * work inside a Worker's CPU budget.
  */
 export const learningChapters = pgTable(
   "learning_chapters",
@@ -1300,14 +1293,62 @@ export const learningChapters = pgTable(
     topicId: uuid("topic_id")
       .notNull()
       .references(() => learningTopics.id, { onDelete: "cascade" }),
+    /** Sort order within the topic. Gaps are fine; only the ordering matters. */
+    position: integer("position").notNull().default(0),
     title: varchar("title", { length: 255 }).notNull(),
-    /** The video file. Null while the row exists before an upload is confirmed. */
-    documentId: uuid("document_id").references(() => documents.id, { onDelete: "set null" }),
-    sortOrder: integer("sort_order").notNull().default(0),
+    durationSeconds: integer("duration_seconds"),
+    videoKind: varchar("video_kind", { length: 10 }).notNull(),
+    /** The URL for a link, or the R2 storage key for a file. Never a signed URL. */
+    videoUrlOrKey: text("video_url_or_key").notNull(),
+    notes: text("notes"),
     ...timestamps,
   },
   (t) => ({
-    topicIdx: index("learning_chapters_topic_idx").on(t.topicId, t.sortOrder),
+    topicIdx: index("learning_chapters_topic_idx").on(t.topicId, t.position),
+  }),
+);
+
+/** A file attached to a chapter — a slide deck, a price list, a script. */
+export const learningAttachments = pgTable(
+  "learning_attachments",
+  {
+    id: id(),
+    chapterId: uuid("chapter_id")
+      .notNull()
+      .references(() => learningChapters.id, { onDelete: "cascade" }),
+    filename: varchar("filename", { length: 255 }).notNull(),
+    storageKey: text("storage_key").notNull(),
+    sizeBytes: integer("size_bytes"),
+    ...timestamps,
+  },
+  (t) => ({
+    chapterIdx: index("learning_attachments_chapter_idx").on(t.chapterId),
+  }),
+);
+
+/**
+ * Who has watched what.
+ *
+ * One row per person per chapter, and the unique index is what makes "Mark as watched"
+ * idempotent — a double click, or a second device, must not produce two rows and a
+ * progress bar over 100%.
+ */
+export const learningProgress = pgTable(
+  "learning_progress",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    chapterId: uuid("chapter_id")
+      .notNull()
+      .references(() => learningChapters.id, { onDelete: "cascade" }),
+    watchedAt: timestamp("watched_at", { withTimezone: true }).notNull().defaultNow(),
+    ...timestamps,
+  },
+  (t) => ({
+    uniquePair: uniqueIndex("learning_progress_unique").on(t.userId, t.chapterId),
+    userIdx: index("learning_progress_user_idx").on(t.userId),
   }),
 );
 
@@ -1315,3 +1356,5 @@ export type LearningTopic = typeof learningTopics.$inferSelect;
 export type NewLearningTopic = typeof learningTopics.$inferInsert;
 export type LearningChapter = typeof learningChapters.$inferSelect;
 export type NewLearningChapter = typeof learningChapters.$inferInsert;
+export type LearningAttachment = typeof learningAttachments.$inferSelect;
+export type LearningProgress = typeof learningProgress.$inferSelect;

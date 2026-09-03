@@ -1,15 +1,13 @@
 "use client";
-import * as React from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   LayoutDashboard, Inbox, Contact, Building2, Columns3, ChevronRight, BarChart3, UserCog,
-  MessageSquareText, CalendarCheck, Landmark, Radio, BookOpen, Percent, BellRing, Users2, Settings2, LayoutGrid, ListChecks, GraduationCap,
-  PanelLeftClose, PanelLeftOpen,
+  MessageSquareText, CalendarCheck, Landmark, Radio, BookOpen, Percent, BellRing, Users2, Settings2, LayoutGrid, ListChecks,
+  GraduationCap,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { setSidebarCollapsed } from "@/server/preferences/sidebar";
 
 const ICONS: Record<string, LucideIcon> = {
   "/dashboard": LayoutDashboard,
@@ -27,10 +25,10 @@ const ICONS: Record<string, LucideIcon> = {
   "/leads-capture": Radio,
   "/templates": MessageSquareText,
   "/team": Users2,
-  "/learning": GraduationCap,
   "/settings": Settings2,
   "/more": LayoutGrid,
   "/users": UserCog,
+  "/learning": GraduationCap,
 };
 
 export interface NavLink {
@@ -63,14 +61,7 @@ export interface NavGroup {
   mobile?: boolean;
 }
 
-export function AppNav({
-  groups, variant, collapsed,
-}: {
-  groups: NavGroup[];
-  variant: "sidebar" | "bar";
-  /** Icons-only rail. Sidebar variant only; the mobile strip is always icons. */
-  collapsed?: boolean;
-}) {
+export function AppNav({ groups, variant }: { groups: NavGroup[]; variant: "sidebar" | "bar" }) {
   const pathname = usePathname();
   const active = (href: string) => pathname === href || pathname.startsWith(href + "/");
   const visible = groups.filter((g) => g.links.length > 0);
@@ -83,36 +74,16 @@ export function AppNav({
         key={l.href}
         href={l.href}
         aria-current={active(l.href) ? "page" : undefined}
-        // The title is what makes the collapsed rail usable: an icon alone is a
-        // guess, and a rail you have to expand to read is a rail nobody keeps
-        // collapsed. Native title rather than a tooltip component — it costs
-        // nothing and works before hydration.
-        title={collapsed ? l.label : undefined}
         className={cn(
-          "flex items-center rounded-lg text-sm font-medium transition-colors",
-          collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2",
+          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
           isActive
             ? "bg-brand-gradient text-primary-foreground shadow-md shadow-primary/25"
             : "text-muted-foreground hover:bg-gray-900/5 hover:text-foreground dark:hover:bg-white/10",
         )}
       >
-        <span className="relative shrink-0">
-          <Icon className="h-4 w-4" />
-          {/* Collapsed, there is no room for a number, so the badge becomes a
-              dot — it still says "something is waiting here", which is the only
-              part that has to survive the loss of the label. */}
-          {collapsed && l.badge !== undefined && l.badge > 0 && (
-            <span
-              aria-hidden="true"
-              className={cn(
-                "absolute -right-1 -top-1 h-2 w-2 rounded-full ring-2",
-                isActive ? "bg-white ring-primary" : "bg-primary ring-card",
-              )}
-            />
-          )}
-        </span>
-        {!collapsed && <span className="truncate">{l.label}</span>}
-        {!collapsed && l.badge !== undefined && l.badge > 0 && (
+        <Icon className="h-4 w-4 shrink-0" />
+        <span className="truncate">{l.label}</span>
+        {l.badge !== undefined && l.badge > 0 && (
           <span
             className={cn(
               "ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums",
@@ -125,29 +96,6 @@ export function AppNav({
       </Link>
     );
   };
-
-  /*
-   * Collapsed: one flat column of icons, no headings and no folds.
-   *
-   * Group headings are the first thing to go — "LEAD MANAGEMENT" does not fit,
-   * and truncating it to "LEA…" is worse than nothing. The folds go too: a
-   * <details> summary you cannot read is a control nobody can use, and hiding
-   * half the icons behind it would make the rail actively worse than the full
-   * sidebar it replaced. A thin rule between groups keeps the grouping legible
-   * without needing words for it.
-   */
-  if (variant === "sidebar" && collapsed) {
-    return (
-      <nav className="flex flex-col gap-1">
-        {visible.map((group, i) => (
-          <div key={group.label ?? "primary"} className="flex flex-col gap-1">
-            {i > 0 && <div aria-hidden="true" className="mx-auto my-1 h-px w-6 bg-gray-200/70 dark:bg-gray-800" />}
-            {group.links.map((l) => item(l))}
-          </div>
-        ))}
-      </nav>
-    );
-  }
 
   if (variant === "sidebar") {
     return (
@@ -232,37 +180,5 @@ export function AppNav({
         );
       })}
     </nav>
-  );
-}
-
-/**
- * The collapse toggle, at the foot of the sidebar.
- *
- * Writes a cookie through a server action and then refreshes, rather than
- * flipping a class locally: the width has to be right on the NEXT first paint
- * too, and a client-only toggle forgets by the next full page load. The refresh
- * is what makes the server re-read the cookie it just set.
- */
-export function SidebarToggle({ collapsed }: { collapsed: boolean }) {
-  const router = useRouter();
-  const [pending, start] = React.useTransition();
-
-  return (
-    <button
-      type="button"
-      title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-      aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-      aria-expanded={!collapsed}
-      disabled={pending}
-      onClick={() =>
-        start(async () => {
-          await setSidebarCollapsed(!collapsed);
-          router.refresh();
-        })
-      }
-      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
-    >
-      {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-    </button>
   );
 }

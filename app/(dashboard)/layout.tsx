@@ -2,11 +2,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { syncCurrentUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { UserButton } from "@/lib/auth/provider-components";
-import { AppNav, SidebarToggle, type NavGroup } from "@/components/nav/app-nav";
-import { getSidebarCollapsed } from "@/lib/sidebar-pref";
+import { AppNav, type NavGroup } from "@/components/nav/app-nav";
 import { countActiveWorkingLeads } from "@/server/leads/working";
 import { APP_NAME } from "@/lib/constants";
-import { cn } from "@/lib/utils";
 import { COMMISSION_ENABLED } from "@/lib/features";
 import { BookOpen } from "lucide-react";
 
@@ -33,9 +31,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const lead = isTeamLeadOrAbove(user);
   // One cheap count; the sidebar renders on every page.
   const activeCount = await countActiveWorkingLeads(user);
-  // Read before the first paint, so a collapsed rail never renders wide and
-  // then snap to narrow — see server/preferences/sidebar.ts.
-  const collapsed = await getSidebarCollapsed();
   const leadOnly = <T,>(items: T[]): T[] => (lead ? items : []);
 
   // Role filtering happens here, on the server, so a team-lead-only href is never sent
@@ -77,6 +72,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
       ],
     },
     {
+      label: "Learning",
+      collapsible: true,
+      links: [{ href: "/learning", label: "Learning hub" }],
+    },
+    {
       label: "Property",
       collapsible: true,
       links: [
@@ -86,18 +86,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
       ],
     },
     {
-      // Learning Hub is visible to everyone: a Team Lead uploads and publishes,
-      // their downline watches. Only "My team" and "Commission" stay lead-only —
-      // the reason this group is not wrapped in leadOnly() as a whole. Anybody
-      // who wants it out of the fold and up top can pin it (see below), which is
-      // a better answer than the layout deciding that for all three roles.
       label: "Team",
       collapsible: true,
-      links: [
-        ...leadOnly([{ href: "/team", label: "My team" }]),
-        { href: "/learning", label: "Learning Hub" },
-        ...leadOnly(COMMISSION_ENABLED ? [{ href: "/settings/commission", label: "Commission" }] : []),
-      ],
+      links: leadOnly([
+        { href: "/team", label: "My team" },
+        ...(COMMISSION_ENABLED ? [{ href: "/settings/commission", label: "Commission" }] : []),
+      ]),
     },
     {
       label: "Settings",
@@ -112,39 +106,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="app-shell min-h-dvh sm:flex">
       {/* Desktop sidebar */}
-      <aside
-        className={cn(
-          "sticky top-0 hidden h-dvh shrink-0 flex-col sm:flex",
-          collapsed ? "w-16" : "w-60",
-        )}
-      >
-        <div className={cn("py-5", collapsed ? "px-2 text-center" : "px-4")}>
-          <Link
-            href="/dashboard"
-            title={collapsed ? APP_NAME : undefined}
-            className="block truncate font-display font-semibold leading-tight text-primary"
-          >
-            {/* Collapsed, the wordmark becomes its initial — the logo slot still
-                reads as "home", which is what people click it for. */}
-            {collapsed ? <span className="text-xl">{APP_NAME.charAt(0)}</span> : <span className="text-lg">{APP_NAME}</span>}
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col sm:flex">
+        <div className="px-4 py-5">
+          <Link href="/dashboard" className="block font-display text-lg font-semibold leading-tight text-primary">
+            {APP_NAME}
           </Link>
-          {!collapsed && (
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {user.name} · {ROLE_LABEL[user.role] ?? user.role}
-            </p>
-          )}
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {user.name} · {ROLE_LABEL[user.role] ?? user.role}
+          </p>
         </div>
-        <div className={cn("flex-1 overflow-y-auto py-4", collapsed ? "px-2" : "px-4")}>
-          <AppNav groups={groups} variant="sidebar" collapsed={collapsed} />
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          <AppNav groups={groups} variant="sidebar" />
         </div>
-        <div
-          className={cn(
-            "border-t border-gray-200/70 py-3 dark:border-gray-800",
-            collapsed ? "flex flex-col items-center gap-1 px-2" : "flex items-center justify-between gap-2 px-4",
-          )}
-        >
-          {!collapsed && <span className="truncate text-xs text-muted-foreground">{user.name}</span>}
-          <div className={cn("flex shrink-0 items-center gap-1", collapsed && "flex-col")}>
+        <div className="flex items-center justify-between gap-2 border-t border-gray-200/70 px-4 py-3 dark:border-gray-800">
+          <span className="truncate text-xs text-muted-foreground">{user.name}</span>
+          <div className="flex shrink-0 items-center gap-1">
             {/* The guide is reference, not a destination — an icon, not a nav row. */}
             <Link
               href="/help"
@@ -154,7 +130,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
             >
               <BookOpen className="h-4 w-4" />
             </Link>
-            <SidebarToggle collapsed={collapsed} />
             <UserButton />
           </div>
         </div>

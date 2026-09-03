@@ -1,191 +1,147 @@
-import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { learningTopics, learningChapters, documents, users } from "@/lib/db/schema";
-import { requireDbUser, isAdmin } from "@/lib/auth";
-import type { User } from "@/lib/db/schema";
+import { learningTopics, users } from "@/lib/db/schema";
+import type { LearningTopic, User } from "@/lib/db/schema";
 
 /**
- * Who may see which Learning Hub topics, and who may upload one.
+ * Who can see which training topics, decided in exactly one place.
  *
- * This is the whole security model for the feature, in one file, for the same reason
- * server/capture/ownership.ts is: a hand-written `and(eq(uploaderUserId, me.id))`
- * per query is how a topic meant for one team ends up visible to the whole agency —
- * the day somebody adds an eleventh query and forgets the clause.
+ * The rule, in full:
  *
- * THE RULE, stated once so nothing re-derives it: an agent watches PUBLISHED topics
- * uploaded by their own upline — ONE level, users.team_lead_id, never a chain above
- * that (see server/users/hierarchy.ts for why depth is not wanted in this schema). A
- * draft is visible only to the person who uploaded it. This applies at the TOPIC
- * level — a chapter has no owner or status of its own, it inherits both from the
- * topic it belongs to, which is why every chapter query below joins back to
- * learning_topics rather than trusting a chapter id on its own.
+ *   - A LEADER (team_lead or admin) writes only topics where `owner_user_id` is their
+ *     own id. There is no "edit anyone's" path, not even for an admin: training is
+ *     somebody's teaching, and an admin quietly rewriting a team lead's chapter is a
+ *     worse failure than an admin being unable to.
+ *   - An AGENT reads only PUBLISHED topics owned by their upline — `users.team_lead_id`,
+ *     one level. They write nothing.
+ *   - A leader also reads their own DRAFTS, because otherwise they cannot review what
+ *     they are about to publish.
  *
- * Reading and writing are asymmetric on purpose. `listVisibleTopics` gives an admin
- * every topic, draft included — that is oversight of what a Team Lead has put in
- * front of their team, not a credential the way an OAuth token in
- * capture/ownership.ts is, so there is no harm in an admin seeing a title. But
- * `requireMyTopic` and `requireMyChapter`, used by every WRITE (upload, edit,
- * publish, delete), have no admin override at all: a Team Lead's rough draft is
- * exactly the kind of thing they do not want someone else editing or publishing out
- * from under them.
+ * This lives in one helper rather than as an `AND` clause per query for the same
+ * reason capture ownership does (server/capture/ownership.ts): the eleventh query is
+ * the one that forgets, and the failure is silent — an agent seeing a draft, or another
+ * team's material, with nothing throwing.
  */
 
-export type LearningChapterRow = {
-  id: string;
-  topicId: string;
-  title: string;
-  sortOrder: number;
-  documentId: string | null;
-  filename: string | null;
-  mimeType: string | null;
-  size: number | null;
-};
-
-export type LearningTopicRow = {
-  id: string;
-  title: string;
-  description: string | null;
-  status: string;
-  createdAt: Date;
-  uploaderUserId: string;
-  uploaderName: string;
-  chapters: LearningChapterRow[];
-};
-
-/** Every topic the signed-in user may watch, newest first, each with its chapters. */
-export async function listVisibleTopics(): Promise<LearningTopicRow[]> {
-  const me = await requireDbUser();
-
-  const topicSelect = {
-    id: learningTopics.id,
-    title: learningTopics.title,
-    description: learningTopics.description,
-    status: learningTopics.status,
-    createdAt: learningTopics.createdAt,
-    uploaderUserId: learningTopics.uploaderUserId,
-    uploaderName: users.name,
-  };
-  const topicQuery = db.select(topicSelect).from(learningTopics).innerJoin(users, eq(learningTopics.uploaderUserId, users.id));
-
-  const topicRows = isAdmin(me)
-    ? await topicQuery.where(isNull(learningTopics.deletedAt)).orderBy(desc(learningTopics.createdAt))
-    : await topicQuery
-        .where(
-          and(
-            isNull(learningTopics.deletedAt),
-            // Own uploads (any status) plus the upline's published ones — never a
-            // chain above that, and never a downline's or a peer's.
-            inArray(learningTopics.uploaderUserId, me.teamLeadId ? [me.id, me.teamLeadId] : [me.id]),
-            or(eq(learningTopics.uploaderUserId, me.id), eq(learningTopics.status, "published")),
-          ),
-        )
-        .orderBy(desc(learningTopics.createdAt));
-
-  if (topicRows.length === 0) return [];
-
-  const topicIds = topicRows.map((t) => t.id);
-  const chapterRows = await db
-    .select({
-      id: learningChapters.id,
-      topicId: learningChapters.topicId,
-      title: learningChapters.title,
-      sortOrder: learningChapters.sortOrder,
-      documentId: learningChapters.documentId,
-      filename: documents.filename,
-      mimeType: documents.mimeType,
-      size: documents.size,
-    })
-    .from(learningChapters)
-    .leftJoin(documents, eq(learningChapters.documentId, documents.id))
-    .where(and(inArray(learningChapters.topicId, topicIds), isNull(learningChapters.deletedAt)))
-    .orderBy(asc(learningChapters.sortOrder));
-
-  const byTopic = new Map<string, LearningChapterRow[]>();
-  for (const c of chapterRows) {
-    const list = byTopic.get(c.topicId) ?? [];
-    list.push(c);
-    byTopic.set(c.topicId, list);
+export class TopicNotFoundError extends Error {
+  constructor() {
+    // Deliberately indistinguishable from "does not exist". A "forbidden" would
+    // confirm the topic is real and belongs to someone, which is information an agent
+    // has no business having.
+    super("That topic does not exist.");
+    this.name = "TopicNotFoundError";
   }
-
-  return topicRows.map((t) => ({ ...t, chapters: byTopic.get(t.id) ?? [] }));
 }
 
-/** How many topics this user has uploaded (draft + published) — the "My Uploads" count. */
-export async function countMyUploads(me: User): Promise<number> {
-  const rows = await db
-    .select({ id: learningTopics.id })
-    .from(learningTopics)
-    .where(and(eq(learningTopics.uploaderUserId, me.id), isNull(learningTopics.deletedAt)));
-  return rows.length;
+export class NotATopicOwnerError extends Error {
+  constructor() {
+    super("Only a team leader can publish training.");
+    this.name = "NotATopicOwnerError";
+  }
 }
 
-/**
- * The same rule `listVisibleTopics` applies in SQL, restated as a predicate for a
- * SINGLE already-loaded topic — used by getChapterVideoUrl so a stale tab or a
- * shared link can never outlive the access rule just because it once had an id.
- */
-export function canWatchTopic(
-  me: User,
-  topic: { uploaderUserId: string; status: string },
-): boolean {
-  if (isAdmin(me)) return true;
-  if (topic.uploaderUserId === me.id) return true;
-  return topic.status === "published" && topic.uploaderUserId === me.teamLeadId;
-}
-
-/** Team Leads and admins upload; agents watch only. */
-export function canUploadLearning(user: User): boolean {
+/** Team leads and admins own training. Agents consume it. */
+export function canOwnTopics(user: User): boolean {
   return user.role === "admin" || user.role === "team_lead";
 }
 
-export class LearningNotFoundError extends Error {
-  constructor() {
-    // User-facing, so it must not hint that the row exists and belongs to someone else.
-    super("That topic does not exist.");
-    this.name = "LearningNotFoundError";
+/**
+ * The people whose published topics this user may read.
+ *
+ * An agent gets their upline. A leader gets themselves — a leader with no upline still
+ * has their own material, and one WITH an upline gets both, because a team lead is
+ * usually also somebody's agent.
+ */
+export async function visibleOwnerIds(user: User): Promise<string[]> {
+  const ids = new Set<string>();
+  if (canOwnTopics(user)) ids.add(user.id);
+  if (user.teamLeadId) ids.add(user.teamLeadId);
+
+  /*
+   * An admin sees every leader's library. That is a deliberate exception and a narrow
+   * one: it grants READING published training, which is company material by intent,
+   * and it does not grant editing (see requireOwnedTopic) or any sight of drafts
+   * belonging to somebody else.
+   */
+  if (user.role === "admin") {
+    const leaders = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(isNull(users.deletedAt), inArray(users.role, ["admin", "team_lead"])));
+    for (const l of leaders) ids.add(l.id);
   }
+
+  return [...ids];
 }
 
 /**
- * One topic by id, IF the signed-in user is the one who uploaded it — the only
- * person allowed to change it. Throws `LearningNotFoundError` both for an id that
- * does not exist and for one that belongs to somebody else, so the two cases are
- * indistinguishable to the caller by design (see the module docblock).
+ * The WHERE clause for "topics this user may see in the library".
+ *
+ * Published topics from their visible owners, plus their own drafts. Returns a clause
+ * that matches nothing when there is nobody to read from — an agent with no team lead
+ * assigned yet — rather than accidentally matching everything, which is what an
+ * `inArray` on an empty list would risk if a caller dropped the guard.
  */
-export async function requireMyTopic(
-  topicId: string,
-): Promise<{ me: User; row: typeof learningTopics.$inferSelect }> {
-  const me = await requireDbUser();
+export function visibleTopicsFilter(user: User, ownerIds: string[]): SQL {
+  if (ownerIds.length === 0) return sql`false`;
+
+  const readable = and(
+    inArray(learningTopics.ownerUserId, ownerIds),
+    eq(learningTopics.isPublished, true),
+  );
+
+  // A leader's own drafts are visible to them and to nobody else.
+  const ownDrafts = canOwnTopics(user) ? eq(learningTopics.ownerUserId, user.id) : undefined;
+
+  return and(isNull(learningTopics.deletedAt), ownDrafts ? or(readable, ownDrafts) : readable)!;
+}
+
+/** One topic the user may READ, or a throw. */
+export async function requireVisibleTopic(user: User, topicId: string): Promise<LearningTopic> {
+  const ownerIds = await visibleOwnerIds(user);
   const [row] = await db
     .select()
     .from(learningTopics)
-    .where(and(eq(learningTopics.id, topicId), isNull(learningTopics.deletedAt)));
-  if (!row || row.uploaderUserId !== me.id) throw new LearningNotFoundError();
-  return { me, row };
+    .where(and(eq(learningTopics.id, topicId), visibleTopicsFilter(user, ownerIds)))
+    .limit(1);
+  if (!row) throw new TopicNotFoundError();
+  return row;
 }
 
 /**
- * One chapter by id, IF the signed-in user owns the TOPIC it belongs to — a
- * chapter is never independently owned. Same not-found-vs-forbidden reasoning as
- * `requireMyTopic`.
+ * One topic the user may WRITE, or a throw.
+ *
+ * Strictly `owner_user_id = me`. Note this is stricter than reading: an admin can read
+ * every leader's published library but cannot edit any of it.
  */
-export async function requireMyChapter(chapterId: string): Promise<{
-  me: User;
-  chapter: typeof learningChapters.$inferSelect;
-  topic: typeof learningTopics.$inferSelect;
-}> {
-  const me = await requireDbUser();
+export async function requireOwnedTopic(user: User, topicId: string): Promise<LearningTopic> {
+  if (!canOwnTopics(user)) throw new NotATopicOwnerError();
   const [row] = await db
-    .select({ chapter: learningChapters, topic: learningTopics })
-    .from(learningChapters)
-    .innerJoin(learningTopics, eq(learningChapters.topicId, learningTopics.id))
+    .select()
+    .from(learningTopics)
     .where(
       and(
-        eq(learningChapters.id, chapterId),
-        isNull(learningChapters.deletedAt),
+        eq(learningTopics.id, topicId),
+        eq(learningTopics.ownerUserId, user.id),
         isNull(learningTopics.deletedAt),
       ),
-    );
-  if (!row || row.topic.uploaderUserId !== me.id) throw new LearningNotFoundError();
-  return { me, chapter: row.chapter, topic: row.topic };
+    )
+    .limit(1);
+  if (!row) throw new TopicNotFoundError();
+  return row;
+}
+
+/**
+ * The agents a leader is responsible for — the roster Team Progress reports on.
+ *
+ * Their own direct reports only. An admin does not get everybody's reports here,
+ * because "who has watched my training" is a question about one leader's team.
+ */
+export async function myTeam(user: User): Promise<{ id: string; name: string }[]> {
+  if (!canOwnTopics(user)) return [];
+  return db
+    .select({ id: users.id, name: users.name })
+    .from(users)
+    .where(and(eq(users.teamLeadId, user.id), isNull(users.deletedAt), eq(users.active, true)))
+    .orderBy(users.name);
 }

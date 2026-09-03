@@ -1,337 +1,361 @@
 "use server";
-/**
- * Learning Hub: a Team Lead uploads training videos, grouped into topics with one
- * or more chapters, and their downline watches them.
- *
- * The upload is the same direct-to-storage shape as the sales kit
- * (server/project-resources/actions.ts): mint a presigned PUT, the browser sends the
- * bytes straight to R2, then this records what landed. Training videos are exactly
- * the file type that pattern exists for — a five-minute screen recording is already
- * tens of megabytes, nowhere near what a Worker's 10ms CPU budget can relay.
- *
- * Visibility and edit permission are NOT decided here — every function below defers
- * to server/learning/access.ts, which is the one place that logic is allowed to live.
- */
+
 import { z } from "zod";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
-import { learningTopics, learningChapters, documents } from "@/lib/db/schema";
+import {
+  learningTopics,
+  learningChapters,
+  learningAttachments,
+  learningProgress,
+} from "@/lib/db/schema";
+import { requireDbUser } from "@/lib/auth";
 import { storage } from "@/lib/storage";
-import { requireDbUser, AuthorizationError } from "@/lib/auth";
 import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import {
-  canUploadLearning, canWatchTopic, requireMyTopic, requireMyChapter, LearningNotFoundError,
+  canOwnTopics,
+  requireOwnedTopic,
+  requireVisibleTopic,
+  NotATopicOwnerError,
+  TopicNotFoundError,
 } from "./access";
 
-/** What a training video legitimately is. */
-const UPLOAD_TYPES: Record<string, true> = {
-  "video/mp4": true,
-  "video/quicktime": true,
-  "video/webm": true,
-  "video/x-matroska": true,
-};
-
-/** Generous — a full role-play recording can run long. R2 takes 5 GB in one PUT. */
-const MAX_DIRECT_BYTES = 1024 * 1024 * 1024; // 1 GB
-
-async function requireUploader() {
-  const me = await requireDbUser();
-  if (!canUploadLearning(me)) throw new AuthorizationError();
-  return me;
+function asFailure(err: unknown): ActionResult<never> {
+  if (err instanceof TopicNotFoundError) return fail("That topic does not exist.");
+  if (err instanceof NotATopicOwnerError) return fail("Only a team leader can publish training.");
+  if (err instanceof z.ZodError) return fail(err.issues.map((i) => i.message).join("; "));
+  monitoring.captureException(err, { where: "learning:action" });
+  return fail((err as Error).message || "Something went wrong.");
 }
 
-const createTopicSchema = z.object({
-  title: z.string().min(1).max(255),
-  description: z.string().max(4000).optional().nullable(),
+const topicSchema = z.object({
+  title: z.string().min(1, "A title is needed.").max(255),
+  summary: z.string().max(2000).optional().nullable(),
+  category: z.string().max(60).optional().nullable(),
+  visibility: z.enum(["team"]).default("team"),
 });
 
-/** Create a topic shell. Chapters (each an uploaded video) are added to it next. */
 export async function createTopic(input: unknown): Promise<ActionResult<{ id: string }>> {
   try {
-    const d = createTopicSchema.parse(input);
-    const me = await requireUploader();
+    const me = await requireDbUser();
+    if (!canOwnTopics(me)) throw new NotATopicOwnerError();
+    const d = topicSchema.parse(input);
+
     const [row] = await db
       .insert(learningTopics)
       .values({
-        uploaderUserId: me.id,
+        ownerUserId: me.id,
         title: d.title.trim(),
-        description: d.description?.trim() || null,
-        status: "draft",
+        summary: d.summary?.trim() || null,
+        category: d.category?.trim() || null,
+        visibility: d.visibility,
+        // Always a draft. Publishing is a separate, deliberate act — a topic with no
+        // chapters appearing in the team's library is worse than no topic at all.
+        isPublished: false,
       })
       .returning({ id: learningTopics.id });
+
     revalidatePath("/learning");
     return ok({ id: row!.id });
   } catch (err) {
-    return handle(err, "createTopic");
+    return asFailure(err);
   }
 }
 
-const editTopicSchema = z.object({
-  id: z.string().uuid(),
-  title: z.string().min(1).max(255).optional(),
-  description: z.string().max(4000).optional().nullable(),
-});
-
-export async function updateTopic(input: unknown): Promise<ActionResult<void>> {
+export async function updateTopic(
+  topicId: string,
+  input: unknown,
+): Promise<ActionResult<null>> {
   try {
-    const d = editTopicSchema.parse(input);
-    const { row } = await requireMyTopic(d.id);
+    const me = await requireDbUser();
+    await requireOwnedTopic(me, topicId);
+    const d = topicSchema.partial().parse(input);
+
     await db
       .update(learningTopics)
       .set({
         ...(d.title !== undefined ? { title: d.title.trim() } : {}),
-        ...(d.description !== undefined ? { description: d.description?.trim() || null } : {}),
+        ...(d.summary !== undefined ? { summary: d.summary?.trim() || null } : {}),
+        ...(d.category !== undefined ? { category: d.category?.trim() || null } : {}),
+        updatedAt: new Date(),
       })
-      .where(eq(learningTopics.id, row.id));
-    revalidatePath("/learning");
-    return ok<void>(undefined);
-  } catch (err) {
-    return handle(err, "updateTopic");
-  }
-}
-
-const createChapterSchema = z.object({
-  topicId: z.string().uuid(),
-  title: z.string().min(1).max(255),
-  filename: z.string().min(1).max(255),
-  contentType: z.string().min(1).max(255),
-  size: z.number().int().positive().max(MAX_DIRECT_BYTES),
-});
-
-/**
- * Start a chapter upload: create the chapter row (appended to the end of its
- * topic), and mint a presigned PUT for the video. The row exists before the bytes
- * land so the client has an id to confirm against, and a chapter title is never
- * lost even if the PUT itself never completes.
- */
-export async function createChapterUploadUrl(
-  input: unknown,
-): Promise<ActionResult<{ chapterId: string; url: string; key: string }>> {
-  try {
-    const d = createChapterSchema.parse(input);
-    const { me, row: topic } = await requireMyTopic(d.topicId);
-
-    if (!UPLOAD_TYPES[d.contentType]) return fail("Upload an MP4, MOV, WebM or MKV video.");
-
-    // Append to the end of THIS topic's chapters, same pattern as
-    // dealDocuments.addChecklistItem — never the row count, which is wrong the
-    // moment a chapter is ever removed.
-    const orderRows = (await db.execute(sql`
-      select coalesce(max(sort_order), -1) + 1 as next
-      from learning_chapters where topic_id = ${topic.id} and deleted_at is null
-    `)) as unknown as Array<{ next: number | string }>;
-
-    const [chapter] = await db
-      .insert(learningChapters)
-      .values({ topicId: topic.id, title: d.title.trim(), sortOrder: Number(orderRows[0]?.next ?? 0) })
-      .returning({ id: learningChapters.id });
-
-    const safeName = d.filename.replace(/[^\w.\-]/g, "_").slice(0, 120);
-    const key = `learning/${me.id}/${topic.id}/${chapter!.id}/${crypto.randomUUID()}-${safeName}`;
-
-    return ok({ chapterId: chapter!.id, url: await storage.getUploadUrl(key, d.contentType), key });
-  } catch (err) {
-    return handle(err, "createChapterUploadUrl");
-  }
-}
-
-const confirmChapterSchema = z.object({
-  chapterId: z.string().uuid(),
-  key: z.string().min(1).max(1024),
-  filename: z.string().min(1).max(255),
-  contentType: z.string().min(1).max(255),
-  size: z.number().int().positive().max(MAX_DIRECT_BYTES),
-});
-
-/** Record the video that landed in storage against its chapter. Topic is still a draft. */
-export async function confirmChapterUpload(input: unknown): Promise<ActionResult<void>> {
-  try {
-    const d = confirmChapterSchema.parse(input);
-    const { me, chapter, topic } = await requireMyChapter(d.chapterId);
-
-    if (!UPLOAD_TYPES[d.contentType]) return fail("Unsupported video type.");
-
-    // Re-derive the expected key rather than trust the one handed back — without
-    // this a caller could point a chapter at any object already in the bucket.
-    const expected = new RegExp(
-      `^learning/${me.id}/${topic.id}/${chapter.id}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-`,
-    );
-    if (!expected.test(d.key)) return fail("That upload does not belong to this chapter.");
-
-    const [doc] = await db
-      .insert(documents)
-      .values({
-        entityType: "learning_chapters",
-        entityId: chapter.id,
-        storageKey: d.key,
-        filename: d.filename,
-        mimeType: d.contentType,
-        size: d.size,
-        uploadedBy: me.id,
-      })
-      .returning({ id: documents.id });
-
-    const previousId = chapter.documentId;
-    await db.update(learningChapters).set({ documentId: doc!.id }).where(eq(learningChapters.id, chapter.id));
-    if (previousId) await discardFile(previousId);
+      .where(eq(learningTopics.id, topicId));
 
     revalidatePath("/learning");
-    return ok<void>(undefined);
+    return ok(null);
   } catch (err) {
-    return handle(err, "confirmChapterUpload");
-  }
-}
-
-export async function removeChapter(chapterId: string): Promise<ActionResult<void>> {
-  try {
-    const parsed = z.string().uuid().parse(chapterId);
-    const { chapter } = await requireMyChapter(parsed);
-    await db.update(learningChapters).set({ deletedAt: new Date() }).where(eq(learningChapters.id, chapter.id));
-    if (chapter.documentId) await discardFile(chapter.documentId);
-    revalidatePath("/learning");
-    return ok<void>(undefined);
-  } catch (err) {
-    return handle(err, "removeChapter");
-  }
-}
-
-/** Make a topic visible to the downline. Requires at least one chapter with a video. */
-export async function publishTopic(id: string): Promise<ActionResult<void>> {
-  try {
-    const parsed = z.string().uuid().parse(id);
-    const { row } = await requireMyTopic(parsed);
-
-    const chapters = await db
-      .select({ documentId: learningChapters.documentId })
-      .from(learningChapters)
-      .where(and(eq(learningChapters.topicId, row.id), isNull(learningChapters.deletedAt)));
-    if (!chapters.some((c) => c.documentId)) {
-      return fail("Add at least one chapter with a video before publishing.");
-    }
-
-    await db.update(learningTopics).set({ status: "published" }).where(eq(learningTopics.id, row.id));
-    revalidatePath("/learning");
-    return ok<void>(undefined);
-  } catch (err) {
-    return handle(err, "publishTopic");
-  }
-}
-
-/** Pull a topic back to draft — visible only to its uploader again. */
-export async function unpublishTopic(id: string): Promise<ActionResult<void>> {
-  try {
-    const parsed = z.string().uuid().parse(id);
-    const { row } = await requireMyTopic(parsed);
-    await db.update(learningTopics).set({ status: "draft" }).where(eq(learningTopics.id, row.id));
-    revalidatePath("/learning");
-    return ok<void>(undefined);
-  } catch (err) {
-    return handle(err, "unpublishTopic");
+    return asFailure(err);
   }
 }
 
 /**
- * Remove a topic and every one of its chapters. Chapters are soft-deleted and
- * their files discarded explicitly here rather than relying on the DB's ON DELETE
- * CASCADE on learning_chapters.topic_id — that cascade only fires on a hard
- * delete, and this app never hard-deletes anything.
- */
-export async function removeTopic(id: string): Promise<ActionResult<void>> {
-  try {
-    const parsed = z.string().uuid().parse(id);
-    const { row } = await requireMyTopic(parsed);
-
-    const chapters = await db
-      .select({ id: learningChapters.id, documentId: learningChapters.documentId })
-      .from(learningChapters)
-      .where(and(eq(learningChapters.topicId, row.id), isNull(learningChapters.deletedAt)));
-
-    await db.update(learningTopics).set({ deletedAt: new Date() }).where(eq(learningTopics.id, row.id));
-    for (const c of chapters) {
-      await db.update(learningChapters).set({ deletedAt: new Date() }).where(eq(learningChapters.id, c.id));
-      if (c.documentId) await discardFile(c.documentId);
-    }
-
-    revalidatePath("/learning");
-    return ok<void>(undefined);
-  } catch (err) {
-    return handle(err, "removeTopic");
-  }
-}
-
-/**
- * A signed URL to STREAM one chapter's video.
+ * Publish or unpublish.
  *
- * No `downloadAs`: unlike a contract or identity document, a training video is meant
- * to render inline in a <video> element, so the object's real content-type is left
- * alone. An hour's expiry rather than the usual 15 minutes — a video actively
- * playing keeps re-requesting byte ranges from the same URL, and a link expiring
- * mid-seek would stop playback for no reason a viewer could see.
- *
- * The chapter's PARENT TOPIC is re-loaded and re-checked against `canWatchTopic`
- * rather than trusting that an id the browser is holding was ever this user's to
- * see — a stale tab or a forwarded link must not outlive the access rule.
+ * Publishing an empty topic is refused rather than allowed-and-warned: the agents see
+ * it the moment it flips, and "0 chapters" in their library reads as the CRM being
+ * broken rather than the leader being mid-way through.
  */
-export async function getChapterVideoUrl(chapterId: string): Promise<ActionResult<{ url: string }>> {
+export async function setPublished(topicId: string, published: boolean): Promise<ActionResult<null>> {
   try {
-    const parsed = z.string().uuid().parse(chapterId);
     const me = await requireDbUser();
+    await requireOwnedTopic(me, topicId);
+
+    if (published) {
+      const [counted] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(learningChapters)
+        .where(and(eq(learningChapters.topicId, topicId), isNull(learningChapters.deletedAt)));
+      if ((counted?.n ?? 0) === 0) return fail("Add at least one chapter before publishing this to your team.");
+    }
+
+    await db
+      .update(learningTopics)
+      .set({ isPublished: published, updatedAt: new Date() })
+      .where(eq(learningTopics.id, topicId));
+
+    revalidatePath("/learning");
+    return ok(null);
+  } catch (err) {
+    return asFailure(err);
+  }
+}
+
+export async function deleteTopic(topicId: string): Promise<ActionResult<null>> {
+  try {
+    const me = await requireDbUser();
+    await requireOwnedTopic(me, topicId);
+    // Soft delete: progress rows reference the chapters, and "who watched what" is
+    // worth keeping even once the material is retired.
+    await db
+      .update(learningTopics)
+      .set({ deletedAt: new Date(), isPublished: false })
+      .where(eq(learningTopics.id, topicId));
+    revalidatePath("/learning");
+    return ok(null);
+  } catch (err) {
+    return asFailure(err);
+  }
+}
+
+const chapterSchema = z.object({
+  title: z.string().min(1, "A chapter title is needed.").max(255),
+  videoKind: z.enum(["link", "file"]),
+  videoUrlOrKey: z.string().min(1, "A video link or upload is needed."),
+  notes: z.string().max(20000).optional().nullable(),
+  durationSeconds: z.number().int().positive().max(86_400).optional().nullable(),
+});
+
+export async function addChapter(topicId: string, input: unknown): Promise<ActionResult<{ id: string }>> {
+  try {
+    const me = await requireDbUser();
+    await requireOwnedTopic(me, topicId);
+    const d = chapterSchema.parse(input);
+
+    if (d.videoKind === "link" && !/^https:\/\//i.test(d.videoUrlOrKey)) {
+      // http:// would be blocked as mixed content inside the player and look like a
+      // broken video rather than a rejected link.
+      return fail("A video link must start with https://");
+    }
+
+    const [ordering] = await db
+      .select({ next: sql<number>`coalesce(max(${learningChapters.position}), -1) + 1` })
+      .from(learningChapters)
+      .where(and(eq(learningChapters.topicId, topicId), isNull(learningChapters.deletedAt)));
 
     const [row] = await db
-      .select({
-        documentId: learningChapters.documentId,
-        topicStatus: learningTopics.status,
-        topicUploaderId: learningTopics.uploaderUserId,
+      .insert(learningChapters)
+      .values({
+        topicId,
+        position: ordering?.next ?? 0,
+        title: d.title.trim(),
+        videoKind: d.videoKind,
+        videoUrlOrKey: d.videoUrlOrKey,
+        notes: d.notes?.trim() || null,
+        durationSeconds: d.durationSeconds ?? null,
       })
-      .from(learningChapters)
-      .innerJoin(learningTopics, eq(learningChapters.topicId, learningTopics.id))
-      .where(
-        and(
-          eq(learningChapters.id, parsed),
-          isNull(learningChapters.deletedAt),
-          isNull(learningTopics.deletedAt),
-        ),
-      );
-    if (!row || !canWatchTopic(me, { uploaderUserId: row.topicUploaderId, status: row.topicStatus })) {
-      return fail("Video not found.");
-    }
-    if (!row.documentId) return fail("No video attached.");
+      .returning({ id: learningChapters.id });
 
-    const [doc] = await db.select({ key: documents.storageKey }).from(documents).where(eq(documents.id, row.documentId));
-    if (!doc) return fail("Video not found.");
-
-    return ok({ url: await storage.getSignedUrl(doc.key, 3600) });
+    revalidatePath("/learning");
+    return ok({ id: row!.id });
   } catch (err) {
-    return handle(err, "getChapterVideoUrl");
+    return asFailure(err);
+  }
+}
+
+export async function updateChapter(chapterId: string, input: unknown): Promise<ActionResult<null>> {
+  try {
+    const me = await requireDbUser();
+    const [chapter] = await db
+      .select()
+      .from(learningChapters)
+      .where(and(eq(learningChapters.id, chapterId), isNull(learningChapters.deletedAt)))
+      .limit(1);
+    if (!chapter) throw new TopicNotFoundError();
+    await requireOwnedTopic(me, chapter.topicId); // ownership is on the TOPIC
+
+    const d = chapterSchema.partial().parse(input);
+    await db
+      .update(learningChapters)
+      .set({
+        ...(d.title !== undefined ? { title: d.title.trim() } : {}),
+        ...(d.notes !== undefined ? { notes: d.notes?.trim() || null } : {}),
+        ...(d.durationSeconds !== undefined ? { durationSeconds: d.durationSeconds ?? null } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(learningChapters.id, chapterId));
+
+    revalidatePath("/learning");
+    return ok(null);
+  } catch (err) {
+    return asFailure(err);
+  }
+}
+
+export async function deleteChapter(chapterId: string): Promise<ActionResult<null>> {
+  try {
+    const me = await requireDbUser();
+    const [chapter] = await db
+      .select()
+      .from(learningChapters)
+      .where(and(eq(learningChapters.id, chapterId), isNull(learningChapters.deletedAt)))
+      .limit(1);
+    if (!chapter) throw new TopicNotFoundError();
+    await requireOwnedTopic(me, chapter.topicId);
+
+    await db
+      .update(learningChapters)
+      .set({ deletedAt: new Date() })
+      .where(eq(learningChapters.id, chapterId));
+    revalidatePath("/learning");
+    return ok(null);
+  } catch (err) {
+    return asFailure(err);
   }
 }
 
 /**
- * Drop a file from storage and mark its row gone. Never throws: this is always
- * cleanup after the thing that mattered already succeeded.
+ * A presigned PUT so the browser uploads the video straight to R2.
+ *
+ * The bytes never touch the Worker, and that is not an optimisation: a Worker's CPU
+ * budget cannot receive, buffer and re-upload a training video, and trying is how you
+ * get Error 1102 on a file somebody waited ten minutes to send.
+ *
+ * The content type is signed INTO the URL, so the holder can only store an object of
+ * that exact type. The key is server-chosen — never taken from the client — because a
+ * client-supplied key is a path-traversal waiting to overwrite somebody else's object.
  */
-async function discardFile(documentId: string): Promise<void> {
+export async function createUploadUrl(
+  topicId: string,
+  filename: string,
+  contentType: string,
+): Promise<ActionResult<{ uploadUrl: string; key: string }>> {
   try {
-    const [doc] = await db
-      .select({ key: documents.storageKey })
-      .from(documents)
-      .where(eq(documents.id, documentId));
-    if (!doc) return;
-    await db.update(documents).set({ deletedAt: new Date() }).where(eq(documents.id, documentId));
-    await storage.delete(doc.key);
+    const me = await requireDbUser();
+    await requireOwnedTopic(me, topicId);
+
+    if (!/^(video|audio|application|image|text)\//.test(contentType)) {
+      return fail("That file type cannot be uploaded.");
+    }
+
+    const safeExt = (filename.match(/\.[A-Za-z0-9]{1,8}$/)?.[0] ?? "").toLowerCase();
+    const key = `learning/${topicId}/${crypto.randomUUID()}${safeExt}`;
+
+    return ok({ uploadUrl: await storage.getUploadUrl(key, contentType, 900), key });
   } catch (err) {
-    monitoring.captureException(err, { where: "discardFile", documentId });
+    return asFailure(err);
   }
 }
 
-function handle(err: unknown, where: string): ActionResult<never> {
-  if (err instanceof AuthorizationError) return fail("Only a Team Lead or admin can manage Learning Hub uploads.");
-  if (err instanceof LearningNotFoundError) return fail(err.message);
-  if (err instanceof z.ZodError) return fail(err.issues.map((i) => i.message).join("; "));
-  if (err instanceof Error && err.message === "UNAUTHENTICATED") return fail("Please sign in.");
-  monitoring.captureException(err, { where });
-  return fail("Something went wrong.");
+export async function addAttachment(
+  chapterId: string,
+  filename: string,
+  storageKey: string,
+  sizeBytes?: number,
+): Promise<ActionResult<null>> {
+  try {
+    const me = await requireDbUser();
+    const [chapter] = await db
+      .select()
+      .from(learningChapters)
+      .where(and(eq(learningChapters.id, chapterId), isNull(learningChapters.deletedAt)))
+      .limit(1);
+    if (!chapter) throw new TopicNotFoundError();
+    await requireOwnedTopic(me, chapter.topicId);
+
+    await db.insert(learningAttachments).values({
+      chapterId,
+      filename: filename.slice(0, 255),
+      storageKey,
+      sizeBytes: sizeBytes ?? null,
+    });
+    revalidatePath("/learning");
+    return ok(null);
+  } catch (err) {
+    return asFailure(err);
+  }
+}
+
+/** A short-lived download link for an attachment, for anyone who can see the topic. */
+export async function attachmentUrl(attachmentId: string): Promise<ActionResult<{ url: string }>> {
+  try {
+    const me = await requireDbUser();
+    const [row] = await db
+      .select({ file: learningAttachments, topicId: learningChapters.topicId })
+      .from(learningAttachments)
+      .innerJoin(learningChapters, eq(learningAttachments.chapterId, learningChapters.id))
+      .where(and(eq(learningAttachments.id, attachmentId), isNull(learningAttachments.deletedAt)))
+      .limit(1);
+    if (!row) throw new TopicNotFoundError();
+
+    // Read permission comes from the TOPIC, not from holding the attachment id.
+    await requireVisibleTopic(me, row.topicId);
+
+    return ok({ url: await storage.getSignedUrl(row.file.storageKey, 300, row.file.filename) });
+  } catch (err) {
+    return asFailure(err);
+  }
+}
+
+/**
+ * Mark a chapter watched.
+ *
+ * Idempotent by the unique index on (user_id, chapter_id): a double click, or the same
+ * person on a second device, must not produce two rows and a progress bar over 100%.
+ */
+export async function markWatched(chapterId: string, watched = true): Promise<ActionResult<null>> {
+  try {
+    const me = await requireDbUser();
+    const [chapter] = await db
+      .select({ topicId: learningChapters.topicId })
+      .from(learningChapters)
+      .where(and(eq(learningChapters.id, chapterId), isNull(learningChapters.deletedAt)))
+      .limit(1);
+    if (!chapter) throw new TopicNotFoundError();
+
+    // You can only record progress on something you are allowed to watch.
+    await requireVisibleTopic(me, chapter.topicId);
+
+    if (watched) {
+      await db
+        .insert(learningProgress)
+        .values({ userId: me.id, chapterId })
+        .onConflictDoNothing({
+          target: [learningProgress.userId, learningProgress.chapterId],
+        });
+    } else {
+      await db
+        .delete(learningProgress)
+        .where(
+          and(eq(learningProgress.userId, me.id), eq(learningProgress.chapterId, chapterId)),
+        );
+    }
+
+    revalidatePath("/learning");
+    return ok(null);
+  } catch (err) {
+    return asFailure(err);
+  }
 }
