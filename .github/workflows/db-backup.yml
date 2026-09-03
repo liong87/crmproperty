@@ -124,6 +124,69 @@ jobs:
             --endpoint-url "$R2_ENDPOINT" --only-show-errors
           echo "Uploaded db/crm-${STAMP}.dump.gpg"
 
+      - name: Prune old backups
+        # Runs only after a VERIFIED, uploaded dump. If any earlier step failed this
+        # never executes, so a run of broken backups cannot delete the last good one.
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
+          # How many nightly dumps to keep. Backups ran unbounded before this, so R2
+          # accumulated one file per day forever.
+          #
+          # KEEP THE NEWEST N, deliberately, rather than "delete anything older than N
+          # days". With a daily schedule the two are identical — until the day the dump
+          # step breaks. A date rule would then keep deleting on schedule and, a week
+          # later, leave nothing; keeping the newest N cannot empty the bucket however
+          # long backups have been failing.
+          #
+          # THE TRADE at 7: a problem noticed more than a week after it happened is
+          # unrecoverable — a bad migration, a mass edit, or a client deleted in error
+          # and spotted at month end. If that worries you, raise this to 30. A dump of
+          # this database is single-digit megabytes against R2's 10 GB free tier, so
+          # the difference costs approximately nothing.
+          KEEP: "1"
+        run: |
+          set -euo pipefail
+
+          # Validate the setting BEFORE looking at the bucket. Checking it later meant
+          # a dangerous KEEP only failed on days when there happened to be enough files
+          # to delete — so a misconfiguration could sit unnoticed until the run that
+          # acted on it.
+          if [ "$KEEP" -lt 3 ]; then
+            echo "::error::KEEP is $KEEP - refusing to run with fewer than 3 retained."
+            exit 1
+          fi
+
+          # Sort by KEY, not by upload time. The key carries the dump's own timestamp
+          # (crm-2026-09-03T18-00-00Z.dump.gpg), which sorts lexicographically into
+          # chronological order and does not move if a file is ever re-uploaded.
+          mapfile -t KEYS < <(
+            aws s3api list-objects-v2 \
+              --bucket "$R2_BUCKET" --prefix "db/crm-" \
+              --endpoint-url "$R2_ENDPOINT" \
+              --query "Contents[].Key" --output text 2>/dev/null \
+              | tr '\t' '\n' | grep -E '\.dump\.gpg$' | sort
+          )
+
+          TOTAL=${#KEYS[@]}
+          echo "Found $TOTAL backup(s); keeping the newest $KEEP."
+
+          if [ "$TOTAL" -le "$KEEP" ]; then
+            echo "Nothing to prune."
+            exit 0
+          fi
+
+          DELETE_COUNT=$((TOTAL - KEEP))
+          for KEY in "${KEYS[@]:0:$DELETE_COUNT}"; do
+            echo "Deleting $KEY"
+            aws s3api delete-object --bucket "$R2_BUCKET" --key "$KEY" \
+              --endpoint-url "$R2_ENDPOINT"
+          done
+          echo "Pruned $DELETE_COUNT old backup(s)."
+
       - name: List what is now stored
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
