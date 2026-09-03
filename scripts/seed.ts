@@ -23,7 +23,7 @@ async function main() {
   // This script DELETES every row before inserting. Guarded so it can never be
   // run against Supabase (or any remote database) by accident.
   assertLocalDatabase("pnpm seed");
-  console.log(`Seeding PropertyAgent CRM into ${maskUrl(process.env.DATABASE_URL)}…`);
+  console.log(`Seeding Lanthorn Properties CRM into ${maskUrl(process.env.DATABASE_URL)}…`);
 
   // --- clear (order respects FKs) ---
   await db.delete(activities);

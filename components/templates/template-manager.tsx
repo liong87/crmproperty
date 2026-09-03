@@ -20,7 +20,7 @@ const PREVIEW = {
   name: "Ali",
   fullName: "Ali bin Hassan",
   agent: "Your name",
-  agency: "PropertyAgent CRM",
+  agency: "Lanthorn Properties CRM",
   property: "Vista Kiara 3-bed",
   price: "RM 850,000",
   area: "Mont Kiara",

@@ -1,5 +1,5 @@
 """
-Builds the PropertyAgent CRM user guide PDF.
+Builds the Lanthorn Properties CRM user guide PDF.
 
 Screenshots are optional. Every figure looks for a PNG/JPG in docs/screenshots/
 named after its key (e.g. docs/screenshots/03-leads-list.png). If the file exists
@@ -9,7 +9,7 @@ is always complete and readable — you can add screenshots later and re-run.
     pip install reportlab --break-system-packages
     python docs/build_user_guide.py
 
-Output: docs/PropertyAgent-CRM-User-Guide.pdf
+Output: docs/Lanthorn-Properties-CRM-User-Guide.pdf
 """
 
 import os
@@ -39,9 +39,9 @@ from reportlab.platypus import (
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SHOTS = os.path.join(HERE, "screenshots")
-OUT = os.path.join(HERE, "PropertyAgent-CRM-User-Guide.pdf")
+OUT = os.path.join(HERE, "Lanthorn-Properties-CRM-User-Guide.pdf")
 
-APP_URL = "https://propertyagent-crm.lanthornrealty.workers.dev"
+APP_URL = "https://crm.lanthornproperties.com"
 
 # Brand — pulled from the app's own palette so the guide matches the product.
 INK = colors.HexColor("#12312C")
@@ -237,8 +237,8 @@ def cover_page(c, doc):
     c.setFillColor(GREEN)
     c.rect(0, PAGE_H - 118 * mm, PAGE_W, 118 * mm, stroke=0, fill=1)
     c.setFillColor(colors.white)
-    c.setFont("Helvetica-Bold", 34)
-    c.drawString(MARGIN, PAGE_H - 62 * mm, "PropertyAgent CRM")
+    c.setFont("Helvetica-Bold", 27)
+    c.drawString(MARGIN, PAGE_H - 62 * mm, "Lanthorn Properties CRM")
     c.setFont("Helvetica", 17)
     c.drawString(MARGIN, PAGE_H - 74 * mm, "User Guide")
     c.setFont("Helvetica", 10.5)
@@ -257,7 +257,7 @@ def body_page(c, doc):
     c.line(MARGIN, PAGE_H - 14 * mm, PAGE_W - MARGIN, PAGE_H - 14 * mm)
     c.setFont("Helvetica", 8)
     c.setFillColor(MUTED)
-    c.drawString(MARGIN, PAGE_H - 12 * mm, "PropertyAgent CRM — User Guide")
+    c.drawString(MARGIN, PAGE_H - 12 * mm, "Lanthorn Properties CRM — User Guide")
     c.drawRightString(PAGE_W - MARGIN, 12 * mm, str(c.getPageNumber()))
     c.restoreState()
 
@@ -267,8 +267,8 @@ def build():
         OUT, pagesize=A4,
         leftMargin=MARGIN, rightMargin=MARGIN,
         topMargin=MARGIN, bottomMargin=18 * mm,
-        title="PropertyAgent CRM — User Guide",
-        author="PropertyAgent CRM",
+        title="Lanthorn Properties CRM — User Guide",
+        author="Lanthorn Properties CRM",
     )
     frame = Frame(MARGIN, 18 * mm, CONTENT_W, PAGE_H - MARGIN - 18 * mm, id="body")
     doc.addPageTemplates([
@@ -326,17 +326,19 @@ def story():
         "14 &nbsp; Reports",
         "<b>Projects</b>",
         "15 &nbsp; The sales kit",
+        "<b>Your own tools</b>",
+        "16 &nbsp; Your Facebook lead capture",
+        "17 &nbsp; Learning Hub",
         "<b>For managers and administrators</b>",
-        "16 &nbsp; Publishing a sales kit",
-        "17 &nbsp; Projects and unit types",
-        "18 &nbsp; Lead pools and pass-on",
-        "19 &nbsp; Leads capture",
-        "20 &nbsp; Users and templates",
-        "21 &nbsp; Advertising spend",
+        "18 &nbsp; Publishing a sales kit",
+        "19 &nbsp; Projects and unit types",
+        "20 &nbsp; Lead pools and pass-on",
+        "21 &nbsp; Users and templates",
+        "22 &nbsp; Advertising spend",
         "<b>Reference</b>",
-        "22 &nbsp; Status vocabulary",
-        "23 &nbsp; Protecting client data (PDPA)",
-        "24 &nbsp; Troubleshooting",
+        "23 &nbsp; Status vocabulary",
+        "24 &nbsp; Protecting client data (PDPA)",
+        "25 &nbsp; Troubleshooting",
     ]:
         s.append(Paragraph(line, S["toc"]))
 
@@ -345,24 +347,40 @@ def story():
         "<b>New here?</b> Read sections 1 to 15 in order. That is the whole daily loop: "
         "sign in, work a lead, book an appointment, record the outcome, create the deal "
         "and chase the paperwork, with 15 covering the sales kit you work from. "
-        "Sections 16 to 21 are for managers and administrators, "
-        "and you will not be able to reach those screens as an agent."))
+        "Sections 16 and 17 are yours too \u2014 connecting your own Facebook, and the "
+        "training your team leader has published. Sections 18 to 22 are for managers and "
+        "administrators, and you will not be able to reach those screens as an agent."))
 
     # ---- 1 -----------------------------------------------------------------
     s.append(PageBreak())
     s += section("1", "Signing in")
 
+    s.append(Paragraph(
+        "There are <b>two doors</b>, and you pass through both. The first is Cloudflare, "
+        "which decides whether you may see the CRM at all; the second is the CRM\u2019s own "
+        "sign-in, which decides who you are. Expect both the first time \u2014 people who are "
+        "not expecting the first one assume something has gone wrong.", S["body"]))
+
     s.append(Paragraph("Your first sign-in", S["h2"]))
     s.append(steps([
-        f"Open <b>{APP_URL}</b> in your browser. Add it to your phone home screen — "
+        f"Open <b>{APP_URL}</b> in your browser. Add it to your phone home screen \u2014 "
         "you will use it in the field.",
-        "Sign in with <b>the work email address your administrator was given</b>. "
-        "Sign-in is handled by Clerk; you do not create a password inside the CRM.",
+        "<b>Door one.</b> A Cloudflare page asks for your email address. Enter the one "
+        "your administrator registered. It emails you a six-digit code; type that in. "
+        "This does not happen again for 24 hours.",
+        "<b>Door two.</b> The CRM\u2019s own sign-in appears. Sign in with <b>the work email "
+        "address your administrator was given</b>. Sign-in is handled by Clerk; you do not "
+        "create a password inside the CRM.",
         "If you land on <b>Account pending approval</b>, that is correct. New accounts "
         "arrive inactive and cannot see any client data.",
         "Tell your administrator. Once they activate you, sign in again and you reach "
         "the dashboard.",
     ]))
+    s.append(callout(
+        "<b>The six-digit code often lands in Spam the first time.</b> It is a new sender "
+        "on a new domain, which is exactly what mail providers are suspicious of. Look "
+        "there before reporting a problem, mark it <b>Not spam</b>, and it will behave "
+        "afterwards.", "warn"))
     s.append(figure("01-sign-in", "The sign-in screen."))
 
     s.append(callout(
@@ -399,7 +417,8 @@ def story():
         ["Appointments", "Gallery visits and viewings, and how they went"],
         ["Reminders", "Follow-ups due, and paperwork due"],
         ["Reports", "The funnel, by project and by agent"],
-        ["Leads capture <i>(manager)</i>", "Create and map the forms that feed each project"],
+        ["Leads capture", "Connect <i>your own</i> Facebook and pick the lead forms you want"],
+        ["Learning", "Training videos from your team leader, and what you have watched"],
         ["Templates <i>(manager)</i>", "Reusable WhatsApp and email messages"],
         ["Users <i>(manager)</i>", "Approving accounts and setting roles"],
     ], [44 * mm, CONTENT_W - 44 * mm]))
@@ -701,8 +720,91 @@ def story():
         "in section 12 — not back in the kit, which everybody shares.", S["body"]))
 
     # ---- 16 ----------------------------------------------------------------
+    s += section("16", "Your Facebook lead capture")
+
+    s.append(Paragraph(
+        "Leads capture is <b>yours</b>, not the office\u2019s. Every agent connects their own "
+        "Facebook account and chooses their own Pages and lead forms. Leads from a form you "
+        "picked arrive assigned to you, automatically, within seconds of the person "
+        "submitting it \u2014 no one retypes anything and no one has to notice it first.",
+        S["body"]))
+
+    s.append(Paragraph("Connecting, once", S["h2"]))
+    s.append(steps([
+        "Open <b>Leads capture</b> and press <b>Connect Facebook</b>. You are sent to "
+        "Facebook to log in as yourself.",
+        "Choose the Pages you want leads from. If Facebook offers <b>Continue with "
+        "previous settings</b>, do not take it \u2014 press <b>Edit settings</b> and tick the "
+        "Pages, or you will come back with nothing connected.",
+        "Back in the CRM, press <b>+ New</b> and pick the lead form by name.",
+        "That is the whole setup. New leads on that form now reach you.",
+    ]))
+    s.append(figure("19-leads-capture", "Leads capture, showing one agent\u2019s own connections."))
+
+    s.append(callout(
+        "<b>Nobody else can see your connection.</b> Not another agent, not a manager, not "
+        "an administrator \u2014 the screen shows only what the signed-in person connected, and "
+        "your Facebook access token is encrypted and never displayed. If you leave, "
+        "disconnecting removes it."))
+    s.append(callout(
+        "<b>A Facebook lead form cannot be edited once it exists</b> \u2014 Meta allows only "
+        "create and archive. Read a new form through before submitting it."))
+    s.append(callout(
+        "<b>If a lead does not appear</b>, check that the form is still ticked here, then "
+        "tell your administrator. A lead that Facebook accepted is not lost \u2014 Meta retries "
+        "delivery for 36 hours."))
+
+    # ---- 17 ----------------------------------------------------------------
     s.append(PageBreak())
-    s += section("16", "Publishing a sales kit")
+    s += section("17", "Learning Hub")
+
+    s.append(Paragraph(
+        "Training material, kept where the work happens. A team leader records or links "
+        "videos; the agents under them watch and tick them off. It exists so that what a "
+        "good negotiator knows stops living only in their head.", S["body"]))
+
+    s.append(Paragraph("Library \u2014 everybody", S["h2"]))
+    s.append(Paragraph(
+        "Every topic published by your team leader, as cards showing how many chapters "
+        "there are, roughly how long they run, and how far <i>you</i> have got. Open one and "
+        "you get the video, the leader\u2019s notes, any files attached to that chapter, and a "
+        "chapter list down the side.", S["body"]))
+    s.append(Paragraph(
+        "Press <b>Mark as watched</b> when you finish a chapter. That is the only thing "
+        "feeding your progress bar, and it is what your leader sees.", S["body"]))
+    s.append(figure("20-learning-library", "The Learning Hub library."))
+
+    s.append(callout(
+        "<b>The progress bar is yours alone.</b> It answers &ldquo;what do I still owe?&rdquo; "
+        "rather than showing a team average, which would be a number about somebody else."))
+
+    s.append(Paragraph("My uploads \u2014 team leaders", S["h2"]))
+    s.append(steps([
+        "Create a <b>topic</b> \u2014 a title, a short summary, and optionally a category.",
+        "Add <b>chapters</b> to it. Each chapter is one video: either a link (an unlisted "
+        "YouTube or Vimeo address is fine, and costs nothing to store) or a file you upload.",
+        "Add notes and any files agents should keep \u2014 a script, a checklist, a price list.",
+        "Press <b>Publish</b> when it is ready. Until you do, your team cannot see it.",
+    ]))
+    s.append(callout(
+        "<b>A topic with no chapters cannot be published.</b> An empty topic appearing in "
+        "your agents\u2019 library reads as the CRM being broken rather than as you being "
+        "half-way through."))
+
+    s.append(Paragraph("Team progress \u2014 team leaders", S["h2"]))
+    s.append(Paragraph(
+        "Who has watched what, across your team. Useful before a coaching session, and "
+        "useful for spotting a topic nobody finishes \u2014 which is usually a fact about the "
+        "topic rather than about the team.", S["body"]))
+
+    s.append(callout(
+        "<b>You only see your own team.</b> A leader writes and sees their own material and "
+        "their own agents\u2019 progress. An administrator can read every leader\u2019s published "
+        "library but cannot edit it \u2014 training belongs to whoever recorded it.", "warn"))
+
+    # ---- 18 ----------------------------------------------------------------
+    s.append(PageBreak())
+    s += section("18", "Publishing a sales kit")
     s.append(Paragraph("Managers and administrators only.", S["small"]))
     s.append(Spacer(1, 6))
 
@@ -728,9 +830,9 @@ def story():
         "app. Deactivate somebody&rsquo;s account and their access ends immediately — which "
         "is not true of a shared drive link they saved months ago."))
 
-    # ---- 17 ----------------------------------------------------------------
+    # ---- 19 ----------------------------------------------------------------
     s.append(PageBreak())
-    s += section("17", "Projects and unit types")
+    s += section("19", "Projects and unit types")
     s.append(Paragraph("Managers and administrators only.", S["small"]))
     s.append(Spacer(1, 6))
 
@@ -754,9 +856,9 @@ def story():
         "managers and administrators create, edit or delete. That differs from Properties "
         "on purpose — a listing belongs to the agent who won it.", S["body"]))
 
-    # ---- 18 ----------------------------------------------------------------
+    # ---- 20 ----------------------------------------------------------------
     s.append(PageBreak())
-    s += section("18", "Lead pools and pass-on")
+    s += section("20", "Lead pools and pass-on")
     s.append(Paragraph("Managers and administrators only.", S["small"]))
     s.append(Spacer(1, 6))
 
@@ -783,32 +885,9 @@ def story():
         "it applies retroactively — switching it on for a project with old untouched leads "
         "will move a batch on the first night.", "warn"))
 
-    # ---- 19 ----------------------------------------------------------------
-    s += section("19", "Leads capture")
-    s.append(Paragraph("Managers and administrators only.", S["small"]))
-    s.append(Spacer(1, 6))
-
-    s.append(Paragraph(
-        "Every way a lead can reach the CRM, on one page. The heart of it is the mapping "
-        "table: which form feeds which project. Leads from a mapped form arrive already "
-        "attached to the project, which is what makes per-project reporting work.",
-        S["body"]))
-    s.append(Paragraph(
-        "You no longer have to copy form IDs out of the Meta console. <b>Import forms from "
-        "Facebook</b> reads the Page and adds anything new, unmapped \u2014 you then set the "
-        "project. <b>New form on Facebook</b> builds a form here and pushes it to the Page "
-        "in one step.", S["body"]))
-    s.append(callout(
-        "<b>A Facebook lead form cannot be edited once it exists</b> \u2014 Meta allows only "
-        "create and archive. Read a new form through before submitting it."))
-    s.append(callout(
-        "<b>An unmapped form still creates the lead</b> — it just arrives with no project. "
-        "Losing a lead the agency paid for because nobody filled in a mapping would be far "
-        "worse than filing it imperfectly."))
-
-    # ---- 20 ----------------------------------------------------------------
+    # ---- 21 ----------------------------------------------------------------
     s.append(PageBreak())
-    s += section("20", "Users and templates")
+    s += section("21", "Users and templates")
     s.append(Paragraph("Managers and administrators only.", S["small"]))
     s.append(Spacer(1, 6))
 
@@ -825,8 +904,8 @@ def story():
         "name, project and price, so agents send something consistent without retyping it.",
         S["body"]))
 
-    # ---- 21 ----------------------------------------------------------------
-    s += section("21", "Advertising spend")
+    # ---- 22 ----------------------------------------------------------------
+    s += section("22", "Advertising spend")
     s.append(Paragraph("Managers and administrators only. Agents never see agency ad spend.", S["small"]))
     s.append(Spacer(1, 6))
 
@@ -849,9 +928,9 @@ def story():
         "no matching leads appears as its own row — money out, nothing in. That is the row "
         "to look at first.", "warn"))
 
-    # ---- 22 ----------------------------------------------------------------
+    # ---- 23 ----------------------------------------------------------------
     s.append(PageBreak())
-    s += section("22", "Status vocabulary")
+    s += section("23", "Status vocabulary")
 
     s.append(Paragraph("Lead status", S["h2"]))
     s.append(table([
@@ -886,9 +965,9 @@ def story():
         ["SPA", "Sale and purchase agreement"],
     ], [34 * mm, CONTENT_W - 34 * mm]))
 
-    # ---- 23 ----------------------------------------------------------------
+    # ---- 24 ----------------------------------------------------------------
     s.append(PageBreak())
-    s += section("23", "Protecting client data (PDPA)")
+    s += section("24", "Protecting client data (PDPA)")
 
     s.append(Paragraph(
         "Everything in this system is personal data belonging to real people, and Malaysian "
@@ -906,15 +985,19 @@ def story():
         "Administrators can export everything held about one person, and erase them, from "
         "the contact record — that is how a request from a client is answered.", S["body"]))
 
-    # ---- 24 ----------------------------------------------------------------
-    s += section("24", "Troubleshooting")
+    # ---- 25 ----------------------------------------------------------------
+    s += section("25", "Troubleshooting")
 
     s.append(table([
         ["Symptom", "Almost always"],
+        ["The six-digit code never arrived",
+         "Check your Spam folder \u2014 it usually lands there the first time. If it is not there either, your address is not on the access list; ask your administrator to add it."],
+        ["Cloudflare says you do not have access",
+         "You typed an address your administrator has not registered. Try the exact one they gave you."],
         ["Stuck on &ldquo;Account pending approval&rdquo;",
          "An administrator has not activated you yet, or you signed up with a different email address than the one they were given."],
         ["A screen in this guide is missing from the menu",
-         "It is manager or administrator only. Sections 15 to 19 are all like this."],
+         "It is manager or administrator only. Sections 18 to 22 are all like this."],
         ["No Edit button on a record",
          "It is not assigned to you, or the lead has already been qualified. Qualified leads become read-only."],
         ["WhatsApp does not open",

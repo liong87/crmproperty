@@ -5,7 +5,7 @@
  * the product changes, and so sections can be filtered by role before rendering —
  * an agent is never shown instructions for a screen they cannot reach.
  *
- * The same material is published as docs/PropertyAgent-CRM-User-Guide.pdf for
+ * The same material is published as docs/Lanthorn-Properties-CRM-User-Guide.pdf for
  * handing to a new agent on day one. If you change one, change the other.
  */
 

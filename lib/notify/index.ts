@@ -109,8 +109,8 @@ async function sendEmail(id: string, to: string, input: NotifyInput): Promise<vo
     const href = input.link && base ? `${base}${input.link}` : null;
     const bodyHtml = input.body ? `<p>${escapeHtml(input.body)}</p>` : "";
     const linkHtml = href
-      ? `<p><a href="${href}">Open in PropertyAgent CRM</a></p>`
-      : `<p>Open PropertyAgent CRM to see it.</p>`;
+      ? `<p><a href="${href}">Open in Lanthorn Properties CRM</a></p>`
+      : `<p>Open Lanthorn Properties CRM to see it.</p>`;
 
     const { id: providerId } = await email.send({
       to,

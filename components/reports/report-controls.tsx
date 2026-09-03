@@ -138,7 +138,7 @@ export function PrintHeader({
 }) {
   return (
     <div className="hidden print:mb-4 print:block print:border-b print:pb-3">
-      <p className="text-[10px] uppercase tracking-wider text-gray-500">PropertyAgent CRM</p>
+      <p className="text-[10px] uppercase tracking-wider text-gray-500">Lanthorn Properties CRM</p>
       <h1 className="font-display text-lg font-bold">{title}</h1>
       <p className="mt-0.5 text-[11px] text-gray-600">
         {rangeLabel}

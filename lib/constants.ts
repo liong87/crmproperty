@@ -1,5 +1,5 @@
 // All user-facing strings live here for future i18n (BM / 中文).
-export const APP_NAME = "PropertyAgent CRM";
+export const APP_NAME = "Lanthorn Properties CRM";
 
 /**
  * The agency this instance belongs to, as it should appear to the outside world.
