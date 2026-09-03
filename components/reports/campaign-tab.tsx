@@ -33,7 +33,7 @@ export function CampaignTab({ accounts }: { accounts: AdAccountView[] }) {
             </p>
           </div>
           <a
-            href="/api/auth/facebook/start"
+            href="/api/auth/facebook/start?next=%2Freports%3Ftab%3Dcampaign"
             className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground transition hover:brightness-110"
           >
             <Plus className="h-3.5 w-3.5" aria-hidden />

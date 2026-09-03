@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentDbUser } from "@/lib/auth";
 import { appSecret, captureAuthorizeUrl, captureOAuthConfigured } from "@/lib/capture/meta-graph";
-import { STATE_COOKIE, issueState } from "@/lib/capture/oauth-state";
+import { STATE_COOKIE, issueState, safeReturnPath } from "@/lib/capture/oauth-state";
 import { encryptionAvailable } from "@/lib/crypto/secret-box";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ function back(reason: string): NextResponse {
  * The state is signed and carries this user's id; lib/capture/oauth-state.ts explains
  * why a bare nonce stops being sufficient once accounts belong to individuals.
  */
-export async function GET() {
+export async function GET(req: Request) {
   const me = await getCurrentDbUser();
   if (!me) return NextResponse.redirect(new URL("/sign-in", process.env.APP_URL));
 
@@ -40,7 +40,13 @@ export async function GET() {
     return back("ENCRYPTION_KEY is not set, so a Facebook token cannot be stored safely. Nothing was connected.");
   }
 
-  const { state, nonce } = await issueState(me.id, secret);
+  /*
+   * Where to come back to. Connecting is started from Leads capture AND from the
+   * Campaign tab of the report, and landing on the wrong one after a re-sync reads as
+   * the button having done something else entirely.
+   */
+  const returnTo = safeReturnPath(new URL(req.url).searchParams.get("next"));
+  const { state, nonce } = await issueState(me.id, secret, returnTo);
   const res = NextResponse.redirect(captureAuthorizeUrl(state));
   res.cookies.set(STATE_COOKIE, nonce, {
     httpOnly: true,

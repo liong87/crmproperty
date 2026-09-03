@@ -8,7 +8,29 @@ const OTHER = "22222222-2222-2222-2222-222222222222";
 describe("capture OAuth state", () => {
   it("round-trips the user it was issued to", async () => {
     const { state, nonce } = await issueState(USER, SECRET);
-    expect(await verifyState(state, nonce, SECRET)).toBe(USER);
+    expect(await verifyState(state, nonce, SECRET)).toMatchObject({ userId: USER });
+  });
+
+  it("carries the return path so a re-sync comes back where it started", async () => {
+    const { state, nonce } = await issueState(USER, SECRET, "/reports?tab=campaign");
+    expect(await verifyState(state, nonce, SECRET)).toMatchObject({
+      returnTo: "/reports?tab=campaign",
+    });
+  });
+
+  it("defaults the return path when none was given", async () => {
+    const { state, nonce } = await issueState(USER, SECRET);
+    expect(await verifyState(state, nonce, SECRET)).toMatchObject({ returnTo: "/leads-capture" });
+  });
+
+  it("refuses a return path that would leave the site", async () => {
+    // Signing stops an attacker FORGING a state, but the value still has to be
+    // constrained: a round trip through Facebook is exactly where an open redirect
+    // would be laundered into something that looks legitimate.
+    for (const evil of ["https://evil.example", "//evil.example", "http://evil.example/x"]) {
+      const { state, nonce } = await issueState(USER, SECRET, evil);
+      expect(await verifyState(state, nonce, SECRET)).toMatchObject({ returnTo: "/leads-capture" });
+    }
   });
 
   it("rejects a state whose payload was edited", async () => {

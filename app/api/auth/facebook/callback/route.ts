@@ -19,8 +19,8 @@ import { monitoring } from "@/lib/monitoring";
 
 export const dynamic = "force-dynamic";
 
-function done(params: Record<string, string>): NextResponse {
-  const url = new URL("/leads-capture", process.env.APP_URL);
+function done(params: Record<string, string>, returnTo = "/leads-capture"): NextResponse {
+  const url = new URL(returnTo, process.env.APP_URL);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   const res = NextResponse.redirect(url);
   // Single use. Deleting the cookie here is what stops this exact URL being replayed.
@@ -65,15 +65,16 @@ export async function GET(req: Request) {
   const secret = appSecret();
   if (!secret) return done({ fb_error: "Facebook login is not configured." });
 
-  const issuedTo = await verifyState(url.searchParams.get("state"), readCookie(req, STATE_COOKIE), secret);
-  if (!code || !issuedTo || issuedTo !== me.id) {
+  const verified = await verifyState(url.searchParams.get("state"), readCookie(req, STATE_COOKIE), secret);
+  if (!code || !verified || verified.userId !== me.id) {
     return done({ fb_error: "That login could not be verified. Start again from Leads capture." });
   }
+  const backTo = verified.returnTo;
 
   if (!encryptionAvailable()) {
     return done({
       fb_error: "ENCRYPTION_KEY is not set, so a Facebook token cannot be stored safely. Nothing was connected.",
-    });
+    }, backTo);
   }
 
   let identity: Awaited<ReturnType<typeof fetchIdentity>>;
@@ -86,7 +87,7 @@ export async function GET(req: Request) {
   } catch (err) {
     // Never the token, never the code — a monitoring backend is not a secret store.
     monitoring.captureException(err, { where: "capture:facebook:callback", userId: me.id });
-    return done({ fb_error: (err as Error).message });
+    return done({ fb_error: (err as Error).message }, backTo);
   }
 
   /*
@@ -131,7 +132,7 @@ export async function GET(req: Request) {
      */
     return done({
       fb_error: `${detail} Every permission was granted and no Pages came back from either your personal Pages or your businesses. If you have just re-granted, click Add once more — business_management was added to the permission list and an older grant will not have it.`,
-    });
+    }, backTo);
   }
 
   const cipherUserToken = await encryptSecret(userToken.token);
@@ -187,7 +188,7 @@ export async function GET(req: Request) {
         lastCheckedAt: now,
       })
       .returning({ id: captureAccounts.id });
-    if (!inserted) return done({ fb_error: "The connection could not be saved. Please try again." });
+    if (!inserted) return done({ fb_error: "The connection could not be saved. Please try again." }, backTo);
     accountId = inserted.id;
   }
 
@@ -312,5 +313,5 @@ export async function GET(req: Request) {
     monitoring.captureException(err, { where: "capture:facebook:adaccounts", userId: me.id });
   }
 
-  return done({ fb_connected: identity.name, fb_pick: accountId });
+  return done({ fb_connected: identity.name, fb_pick: accountId }, backTo);
 }

@@ -30,6 +30,8 @@ interface StatePayload {
   n: string;
   /** Expiry, epoch ms. */
   e: number;
+  /** Where to return to. Signed, so it cannot be turned into an open redirect. */
+  r?: string;
 }
 
 function b64url(bytes: Uint8Array): string {
@@ -63,9 +65,18 @@ export interface IssuedState {
   nonce: string;
 }
 
-export async function issueState(userId: string, secret: string): Promise<IssuedState> {
+export async function issueState(
+  userId: string,
+  secret: string,
+  returnTo?: string,
+): Promise<IssuedState> {
   const nonce = crypto.randomUUID();
-  const payload: StatePayload = { u: userId, n: nonce, e: Date.now() + TTL_MS };
+  const payload: StatePayload = {
+    u: userId,
+    n: nonce,
+    e: Date.now() + TTL_MS,
+    ...(returnTo ? { r: returnTo } : {}),
+  };
   const body = b64url(new TextEncoder().encode(JSON.stringify(payload)));
   const sig = await crypto.subtle.sign("HMAC", await signingKey(secret), new TextEncoder().encode(body) as BufferSource);
   return { state: `${body}.${b64url(new Uint8Array(sig))}`, nonce };
@@ -79,11 +90,33 @@ export async function issueState(userId: string, secret: string): Promise<Issued
  * a forged state was well-formed, and there is nothing useful either way: every
  * failure means "start again".
  */
+export interface VerifiedState {
+  userId: string;
+  /** Always a same-origin path; see safeReturnPath. */
+  returnTo: string;
+}
+
+/**
+ * Only a path on this site, never a URL.
+ *
+ * A return address that survives a round trip through a third party is an open-redirect
+ * waiting to happen: "//evil.example" and "https://evil.example" are both valid values
+ * of `next` that a browser would follow off-site. Signing the state stops an attacker
+ * FORGING one, but the value still has to be constrained, because the person who chose
+ * it is not necessarily the person who lands on it.
+ */
+export function safeReturnPath(raw: string | null | undefined, fallback = "/leads-capture"): string {
+  if (!raw) return fallback;
+  if (!raw.startsWith("/")) return fallback;
+  if (raw.startsWith("//")) return fallback;
+  return raw;
+}
+
 export async function verifyState(
   state: string | null,
   cookieNonce: string | undefined,
   secret: string,
-): Promise<string | null> {
+): Promise<VerifiedState | null> {
   if (!state || !cookieNonce) return null;
   const dot = state.indexOf(".");
   if (dot <= 0) return null;
@@ -113,5 +146,5 @@ export async function verifyState(
   if (Date.now() > payload.e) return null;
   // The browser that finishes must be the browser that started.
   if (payload.n !== cookieNonce) return null;
-  return payload.u;
+  return { userId: payload.u, returnTo: safeReturnPath(payload.r) };
 }
