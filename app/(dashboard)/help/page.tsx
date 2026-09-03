@@ -43,6 +43,38 @@ function BlockView({ block }: { block: Block }) {
           {block.items.map((t) => <li key={t}>{t}</li>)}
         </ol>
       );
+    case "figure":
+      return (
+        /*
+         * A screenshot of the real screen.
+         *
+         * A plain <img>, not next/image, and deliberately. Nothing else in this app uses
+         * next/image, and the Cloudflare Images binding is not enabled on the account
+         * (see the note in wrangler.jsonc) — so the default optimizer endpoint would
+         * fail at runtime on Workers and every screenshot would be a broken icon.
+         * These are static assets served straight from the edge.
+         *
+         * `width`/`height` are the capture's true pixel size, so the browser reserves
+         * the right box before the file arrives and the guide does not jump as you read
+         * it. `loading="lazy"` keeps the fourteen below the fold off the critical path —
+         * agents read this on 4G between viewings.
+         */
+        <figure className="space-y-1.5">
+          <div className="overflow-hidden rounded-xl border bg-muted/30">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`/guide/${block.src}`}
+              alt={block.caption}
+              width={block.w}
+              height={block.h}
+              loading="lazy"
+              decoding="async"
+              className="h-auto w-full"
+            />
+          </div>
+          <figcaption className="text-xs italic text-muted-foreground">{block.caption}</figcaption>
+        </figure>
+      );
     case "note":
       return <Note tone={block.tone} text={block.text} />;
     case "table":

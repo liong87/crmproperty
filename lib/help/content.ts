@@ -14,7 +14,17 @@ export type Block =
   | { kind: "steps"; items: string[] }
   | { kind: "list"; items: string[] }
   | { kind: "note"; tone: "info" | "warn" | "stop"; text: string }
-  | { kind: "table"; head: string[]; rows: string[][] };
+  | { kind: "table"; head: string[]; rows: string[][] }
+  /**
+   * A screenshot of the real screen, served from public/guide/.
+   *
+   * The guide described nine screens in prose and showed none of them. An agent reading
+   * "press Called" has to find the button first, and a paragraph is a poor way to say
+   * where something is. `src` is the filename in public/guide; `w` and `h` are the
+   * capture's real pixel dimensions, which next/image needs to reserve the space before
+   * the file arrives so the page does not jump as each one loads.
+   */
+  | { kind: "figure"; src: string; caption: string; w: number; h: number };
 
 export interface HelpSection {
   id: string;
@@ -30,7 +40,12 @@ export const HELP_SECTIONS: HelpSection[] = [
   {
     id: "signing-in", n: 1, part: "Getting started", title: "Signing in",
     blocks: [
-      { kind: "p", text: "Sign in with your work email. You do not create a password here — sign-in is handled by Clerk, and it links your account to your staff record by email address." },
+      { kind: "p", text: "There are two doors, and you pass through both. Cloudflare decides whether you may see the CRM at all; the CRM's own sign-in decides who you are. Expect both the first time — people who are not expecting the first one assume something has gone wrong." },
+      { kind: "steps", items: [
+        "Cloudflare asks for your email address and sends you a six-digit code. Type it in. This does not happen again for 24 hours.",
+        "The CRM's sign-in appears. Use the work email your admin registered — you do not create a password here.",
+      ] },
+      { kind: "note", tone: "warn", text: "The six-digit code often lands in Spam the first time. It is a new sender on a new domain, which is exactly what mail providers are suspicious of. Look there before reporting a problem, mark it Not spam, and it will behave afterwards." },
       { kind: "p", text: "If you land on a page saying your account is pending, that is correct. New sign-ups arrive inactive and an admin has to approve you before you can see any client data." },
       { kind: "note", tone: "warn", text: "Sign in with the email your admin was given. A different address creates a brand-new inactive account instead of finding yours." },
       {
@@ -50,6 +65,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     blocks: [
       { kind: "p", text: "The dashboard answers one question: what needs me today? Lead and pipeline counts, follow-ups due, and two warnings that appear only when they matter — a red banner counting overdue documents, and a count of leads that have gone quiet." },
       { kind: "note", tone: "info", text: "No news means no banner. A permanent “0 overdue” row is furniture people learn to skip, so those warnings are absent entirely when there is nothing wrong. If you see one, it is real." },
+      { kind: "figure", src: "02-dashboard.jpg", caption: "The dashboard.", w: 1341, h: 866 },
     ],
   },
   {
@@ -68,6 +84,9 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       { kind: "p", text: "So a lead you sourced yourself is yours from the moment you enter it. Rotation only ever touches leads nobody owns yet — the ones the agency paid for." },
       { kind: "p", text: "On the leads list, the Assigned to column shows who owns each lead, and calls out Unassigned in red. Duplicates are detected by phone and email, so re-importing the same CSV does not create the same person twice." },
+      { kind: "figure", src: "04-leads-list.jpg", caption: "The leads list, with the Assigned to column.", w: 1568, h: 648 },
+      { kind: "figure", src: "03-new-lead.jpg", caption: "The New Lead form.", w: 1341, h: 866 },
+      { kind: "figure", src: "05-import-csv.jpg", caption: "Importing a CSV.", w: 1341, h: 866 },
     ],
   },
   {
@@ -83,6 +102,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         ],
       },
       { kind: "note", tone: "warn", text: "Log it the same day. Pass-on, response-time reporting and the funnel all read the timeline. Work that is not logged did not happen as far as the system is concerned." },
+      { kind: "figure", src: "06-lead-detail.jpg", caption: "A lead, with its activity timeline.", w: 1568, h: 648 },
     ],
   },
   {
@@ -91,6 +111,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       { kind: "p", text: "When someone is genuinely interested and can proceed, use Qualify. That converts them to a contact — carrying across their details, consent record and history — and a contact is what a deal is built on." },
       { kind: "p", text: "When they are not a buyer, give them the outcome that fits — Not Searching, Unmatched Requirement or Blocked — rather than leaving them in your list. It keeps your numbers honest and stops the system chasing you about them." },
       { kind: "note", tone: "info", text: "Disqualifying is part of the funnel, not a failure. Conversion is measured against every lead received, including the ones you rejected. Rejecting a poor lead quickly is good work." },
+      { kind: "figure", src: "07-qualify.jpg", caption: "Qualify and Disqualify sit together on the lead.", w: 1568, h: 648 },
     ],
   },
   {
@@ -123,6 +144,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         ],
       },
       { kind: "note", tone: "info", text: "Booking a project appointment links the lead to that project if it did not already have one. Somebody who turns up at a gallery is a lead for that project, and the timeline says so." },
+      { kind: "figure", src: "09-appointments.jpg", caption: "The appointments board.", w: 1341, h: 866 },
     ],
   },
   {
@@ -166,6 +188,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         ],
       },
       { kind: "p", text: "A project deal starts at Booked because the appointment board already owns everything before that. Repeating those steps here would count the same event twice." },
+      { kind: "figure", src: "11-pipeline.jpg", caption: "The pipeline, on the New launch tab.", w: 1341, h: 866 },
     ],
   },
   {
@@ -179,9 +202,11 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    id: "reminders", n: 11, part: "Staying on top", title: "Reminders",
+    id: "reminders", n: 11, part: "Staying on top", title: "Inbox",
     blocks: [
-      { kind: "p", text: "Two lists on one screen. Paperwork due sits above the follow-ups: anything due in the next 14 days plus anything already overdue, soonest first, with the client and project named. Overdue items never drop off. Below it, your follow-ups — every date you set while logging activity." },
+      { kind: "p", text: "Everything still open, on one screen. Paperwork due sits above the follow-ups: anything due in the next 14 days plus anything already overdue, soonest first, with the client and project named. Overdue items never drop off. Below it, your follow-ups — every date you set while logging activity — and your notifications, including the weekly summary." },
+      { kind: "note", tone: "info", text: "There is no separate Reminders screen. Follow-ups and paperwork used to live on their own page; both answered “what needs me?”, so there were two places to check and people reliably checked neither. They are one screen now." },
+      { kind: "figure", src: "13-inbox.jpg", caption: "The Inbox.", w: 1341, h: 866 },
     ],
   },
   {
@@ -190,6 +215,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       { kind: "p", text: "The funnel is the heart of it: Leads → Appointments set → Showed up → Booked, with the conversion rate at each step. Underneath, the same figures by project and, for team leads, by agent. A trend chart plots leads, appointments and bookings week by week." },
       { kind: "p", text: "The period selector — 30 days, 90 days, 6 months, 12 months, All time — drives the funnel, the trend and both tables together. The four tiles at the top are not filtered: open pipeline is a snapshot of what is live right now." },
       { kind: "note", tone: "info", text: "Setting and closing are credited separately. Appointments set count for whoever booked them; show-ups and bookings for whoever ran the presentation. A setter who hands over good appointments is never shown as having converted nothing." },
+      { kind: "figure", src: "14-reports.jpg", caption: "Reports.", w: 1341, h: 866 },
     ],
   },
   {
@@ -207,10 +233,39 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       { kind: "note", tone: "stop", text: "If a kit contains a unit lock or availability sheet, it records only what OUR agents have committed. Other agencies sell the same projects, and their bookings never appear in it. Always confirm a unit is still available with the developer before promising it to a buyer." },
       { kind: "note", tone: "info", text: "Blank forms live in the kit. The buyer's SIGNED copy belongs on that buyer's deal, under the paperwork checklist — not back in the kit, which is shared by everyone." },
+      { kind: "figure", src: "15-sales-kit.jpg", caption: "A project's sales kit.", w: 1568, h: 648 },
     ],
   },
   {
-    id: "publishing-kit", n: 14, part: "For team leads", title: "Publishing a sales kit", teamLeadOnly: true,
+    id: "lead-form-mapping", n: 14, part: "Your own tools", title: "Your Facebook lead capture",
+    blocks: [
+      { kind: "p", text: "Leads capture is yours, not the office's. Every agent connects their own Facebook account and chooses their own Pages and lead forms. Leads from a form you picked arrive assigned to you, automatically, within seconds of the person submitting it." },
+      { kind: "steps", items: [
+        "Open Leads capture and press Connect Facebook. You are sent to Facebook to log in as yourself.",
+        "Choose the Pages you want leads from. If Facebook offers “Continue with previous settings”, do not take it — press Edit settings and tick the Pages, or you will come back with nothing connected.",
+        "Back in the CRM, press + New and pick the lead form by name.",
+      ] },
+      { kind: "note", tone: "info", text: "Nobody else can see your connection — not another agent, not a manager, not an administrator. Your Facebook access token is encrypted and never displayed, and Disconnect removes it." },
+      { kind: "note", tone: "warn", text: "A Facebook lead form cannot be edited once it exists — Meta allows only create and archive. Read a new form through before submitting it." },
+      { kind: "p", text: "Map fields, on each Facebook form, is for when a form asks in unexpected words. The CRM already recognises Meta's standard name, phone and email questions, so leave every field on Guess unless one is coming through blank. A form whose phone question is labelled \u201cNombor telefon\u201d is the case this exists for: without a mapping those leads arrive with no number and nobody can call them." },
+      { kind: "note", tone: "info", text: "An unmapped form still creates the lead — it just arrives with no project. Losing a lead the agency paid for because nobody filled in a mapping would be far worse than filing it imperfectly." },
+      { kind: "figure", src: "19-leads-capture.jpg", caption: "Leads capture — your own Facebook connections.", w: 1341, h: 866 },
+    ],
+  },
+  {
+    id: "learning", n: 15, part: "Your own tools", title: "Learning Hub",
+    blocks: [
+      { kind: "p", text: "Training material, kept where the work happens. A team leader records or links videos; the agents under them watch and tick them off. It exists so that what a good negotiator knows stops living only in their head." },
+      { kind: "p", text: "Library is every topic your team leader has published, as cards showing how many chapters there are, roughly how long they run, and how far you have got. Open one and you get the video, the leader's notes, any files attached to that chapter, and a chapter list down the side." },
+      { kind: "p", text: "Press Mark as watched when you finish a chapter. That is the only thing feeding your progress bar, and it is what your leader sees." },
+      { kind: "figure", src: "20-learning-library.jpg", caption: "The Learning Hub library.", w: 1341, h: 866 },
+      { kind: "note", tone: "info", text: "The progress bar is yours alone. It answers “what do I still owe?” rather than showing a team average, which would be a number about somebody else." },
+      { kind: "p", text: "Team leaders also get My uploads and Team progress. Create a topic, add chapters — each chapter is one video, either a link (an unlisted YouTube or Vimeo address is fine, and costs nothing to store) or a file you upload — then Publish when it is ready. Until you publish, your team cannot see it." },
+      { kind: "note", tone: "warn", text: "A topic with no chapters cannot be published. An empty topic appearing in your agents' library reads as the CRM being broken rather than as you being half-way through." },
+    ],
+  },
+  {
+    id: "publishing-kit", n: 16, part: "For team leads", title: "Publishing a sales kit", teamLeadOnly: true,
     blocks: [
       { kind: "p", text: "Kit items are added from the project page itself, so the person who notices the price list is out of date is the person who can replace it." },
       {
@@ -228,16 +283,17 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    id: "projects", n: 15, part: "For team leads", title: "Projects and unit types", teamLeadOnly: true,
+    id: "projects", n: 17, part: "For team leads", title: "Projects and unit types", teamLeadOnly: true,
     blocks: [
       { kind: "p", text: "Projects → New Project. Name, developer, state and area are the minimum. Also worth setting: developer commission rate, expected VP date, gallery address, and the pass-on window in days." },
       { kind: "p", text: "Then add unit types — label, built-up, beds, baths, parking, list price and the nett price after rebate. This is the level agents quote at. Every field stays editable, and editing keeps the type's identity, so any lead or booking pointing at it is not orphaned." },
       { kind: "note", tone: "info", text: "The price range on the project card is calculated, never typed. It comes from the unit types every time the card is drawn, using the nett price where one exists." },
       { kind: "p", text: "Projects belong to the agency, not to an agent. Every agent views them; only team leads and admins create, edit or delete. That differs from Properties on purpose — a listing belongs to the agent who won it." },
+      { kind: "figure", src: "15-project.jpg", caption: "A project and its unit types.", w: 1568, h: 648 },
     ],
   },
   {
-    id: "pools", n: 16, part: "For team leads", title: "Lead pools and pass-on", teamLeadOnly: true,
+    id: "pools", n: 18, part: "For team leads", title: "Lead pools and pass-on", teamLeadOnly: true,
     blocks: [
       { kind: "p", text: "On a project page, Lead pool decides who receives that project's leads and in what order. New leads go round the list in rotation, so over any stretch of time everyone gets the same number. Position is a seat at the table, not a ranking." },
       {
@@ -254,25 +310,16 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    id: "lead-form-mapping", n: 17, part: "For team leads", title: "Leads capture", teamLeadOnly: true,
-    blocks: [
-      { kind: "p", text: "Every way a lead can reach the CRM, on one page. The heart of it is the mapping table: which form feeds which project. Leads from a mapped form arrive already attached to the project, which is what makes per-project reporting work." },
-      { kind: "p", text: "Connect Facebook signs you in and links your Page. The access token is encrypted before it is stored, and Disconnect removes it. Once connected, Import forms from Facebook reads the Page and adds anything new, unmapped — you then set the project. New form on Facebook builds a form here and pushes it to the Page in one step." },
-      { kind: "note", tone: "warn", text: "A Facebook lead form cannot be edited once it exists — Meta allows only create and archive. Read a new form through before submitting it." },
-      { kind: "p", text: "Map fields, on each Facebook form, is for when a form asks in unexpected words. The CRM already recognises Meta's standard name, phone and email questions, so leave every field on Guess unless one is coming through blank. A form whose phone question is labelled \u201cNombor telefon\u201d is the case this exists for: without a mapping those leads arrive with no number and nobody can call them." },
-      { kind: "note", tone: "info", text: "An unmapped form still creates the lead — it just arrives with no project. Losing a lead the agency paid for because nobody filled in a mapping would be far worse than filing it imperfectly." },
-    ],
-  },
-  {
-    id: "users", n: 18, part: "For team leads", title: "Users and templates", teamLeadOnly: true,
+    id: "users", n: 19, part: "For team leads", title: "Users and templates", teamLeadOnly: true,
     blocks: [
       { kind: "p", text: "Users is where new sign-ups are approved. Somebody who has signed up appears inactive and can see nothing until you activate them and set their role." },
       { kind: "note", tone: "warn", text: "Deactivate somebody the day they leave. Their sign-in keeps working until you do." },
       { kind: "p", text: "Templates holds reusable WhatsApp and email messages with placeholders for name, project and price, so agents send something consistent without retyping it." },
+      { kind: "figure", src: "18-users.jpg", caption: "The Users screen.", w: 1341, h: 866 },
     ],
   },
   {
-    id: "spend", n: 19, part: "For team leads", title: "Advertising spend", teamLeadOnly: true,
+    id: "spend", n: 20, part: "For team leads", title: "Advertising spend", teamLeadOnly: true,
     blocks: [
       { kind: "p", text: "Reports → Advertising spend. Record what each campaign cost and the report divides it by what the campaign produced. Agents never see agency ad spend." },
       {
@@ -290,7 +337,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    id: "vocabulary", n: 20, part: "Reference", title: "Status vocabulary",
+    id: "vocabulary", n: 21, part: "Reference", title: "Status vocabulary",
     blocks: [
       {
         kind: "table",
@@ -333,7 +380,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     ],
   },
   {
-    id: "pdpa", n: 21, part: "Reference", title: "Protecting client data",
+    id: "pdpa", n: 22, part: "Reference", title: "Protecting client data",
     blocks: [
       { kind: "p", text: "Everything here is personal data belonging to real people, and Malaysian law gives them rights over it. A few habits keep the agency on the right side of that:" },
       {
