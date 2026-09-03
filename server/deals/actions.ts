@@ -12,6 +12,7 @@ import { instantiateChecklist } from "@/server/deal-documents/checklist-internal
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { getDealById } from "./queries";
+import { assertCanEditOwned } from "@/server/auth/ownership";
 
 const createSchema = z.object({
   contactId: z.string().uuid(),
@@ -34,7 +35,7 @@ export async function createDeal(input: unknown): Promise<ActionResult<Deal>> {
       .from(contacts)
       .where(and(eq(contacts.id, d.contactId), isNull(contacts.deletedAt)));
     if (!contact) return fail("Contact not found — a deal must be linked to a contact.");
-    assertCanEdit(me, contact.assignedTo);
+    await assertCanEditOwned(me, contact.assignedTo);
 
     // A deal against a project is a project deal even if the caller did not say so —
     // inferring it here stops a booked unit landing in the resale pipeline because a
@@ -103,7 +104,7 @@ export async function moveDealStage(dealId: string, stageId: string): Promise<Ac
 
     const deal = await getDealById(dealId);
     if (!deal) return fail("Deal not found.");
-    assertCanEdit(me, deal.assignedTo);
+    await assertCanEditOwned(me, deal.assignedTo);
 
     const [stage] = await db
       .select({ id: dealStages.id, name: dealStages.name })

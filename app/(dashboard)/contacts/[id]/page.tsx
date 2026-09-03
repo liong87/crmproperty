@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getCurrentDbUser, canEdit, canView } from "@/lib/auth";
+import { getCurrentDbUser, canView } from "@/lib/auth";
 import { getContactById } from "@/server/contacts/queries";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import { APP_NAME } from "@/lib/constants";
 import { PdpaPanel } from "@/components/pdpa/pdpa-panel";
 import { isAdmin } from "@/lib/auth";
 import { formatMYR } from "@/lib/utils";
+import { canEditOwned } from "@/server/auth/ownership";
 
 export default async function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await getCurrentDbUser();
@@ -30,7 +31,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
   // open any contact by URL and read NRIC/passport numbers, budget and notes.
   // notFound() rather than a 403 so the page does not confirm the record exists.
   if (!canView(me, contact.assignedTo)) notFound();
-  const editable = canEdit(me, contact.assignedTo);
+  const editable = await canEditOwned(me, contact.assignedTo);
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">

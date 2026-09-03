@@ -16,6 +16,7 @@ import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { getPropertyById } from "./queries";
+import { assertCanEditOwned } from "@/server/auth/ownership";
 
 const MAX_BYTES = 8 * 1024 * 1024; // 8 MB
 const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
@@ -33,7 +34,7 @@ export async function uploadPropertyImage(formData: FormData): Promise<ActionRes
     const propertyId = z.string().uuid().parse(formData.get("propertyId"));
     const property = await getPropertyById(propertyId);
     if (!property) return fail("Property not found.");
-    assertCanEdit(me, property.assignedAgent);
+    await assertCanEditOwned(me, property.assignedAgent);
 
     const file = formData.get("file");
     if (!(file instanceof File)) return fail("No file provided.");
@@ -86,13 +87,13 @@ export async function deletePropertyImage(documentId: string): Promise<ActionRes
     // lead or deal. Refuse anything that is not a property image.
     if (doc.entityType !== "properties") return fail("Image not found.");
 
-    // Previously: `if (property) assertCanEdit(...)`. When the parent property was
+    // Previously: `if (property) await assertCanEditOwned(...)`. When the parent property was
     // soft-deleted getPropertyById returned null, the guard was skipped entirely,
     // and any authenticated user could permanently destroy the file in R2.
     // Fail closed instead: no resolvable parent means no permission.
     const property = await getPropertyById(doc.entityId);
     if (!property) return fail("Image not found.");
-    assertCanEdit(me, property.assignedAgent);
+    await assertCanEditOwned(me, property.assignedAgent);
 
     // Soft-delete the row FIRST. If storage deletion then fails we have a row
     // marked deleted and an orphaned object (harmless, cleanable) rather than a

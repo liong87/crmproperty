@@ -15,6 +15,7 @@ import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { resolveEntity, isEntityType } from "./entity";
+import { assertCanEditOwned } from "@/server/auth/ownership";
 
 const logSchema = z.object({
   entityType: z.enum(ENTITY_TYPE),
@@ -36,7 +37,7 @@ export async function logActivity(input: unknown): Promise<ActionResult<{ id: st
     // can view every record but should only write to their own team's — and all
     // three detail pages already gate the logging form on canEdit, so checking
     // canView here left the server more permissive than the interface implied.
-    if (!canEdit(me, entity.ownerId)) throw new AuthorizationError();
+    await assertCanEditOwned(me, entity.ownerId);
 
     const [row] = await db
       .insert(activities)
@@ -126,7 +127,7 @@ export async function sendWhatsAppAndLog(input: unknown): Promise<ActionResult<{
     if (!entity) return fail("Related record not found.");
     // Messaging a client is an outbound action taken in the agency's name, so it
     // needs edit permission on the record, not merely the right to read it.
-    if (!canEdit(me, entity.ownerId)) throw new AuthorizationError();
+    await assertCanEditOwned(me, entity.ownerId);
 
     const result = await messaging.sendFollowUp(d.toPhone, { message: d.message });
 

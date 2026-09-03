@@ -44,7 +44,21 @@ export function LeadForm({
   const router = useRouter();
   const [error, setError] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
-  const { register, handleSubmit, watch } = useForm<LeadFormValues>({
+  /*
+   * `formState` is read, and that is not incidental.
+   *
+   * It used to be destructured as `{ register, handleSubmit, watch }` with no `errors`
+   * rendered anywhere. `handleSubmit` refuses to run when a required field is empty, so
+   * tapping Save on a blank name did nothing at all — no message, no red field, no
+   * movement. On a phone, where the library's focus-scroll can land behind the keyboard,
+   * the agent taps Save repeatedly and concludes the CRM is broken.
+   */
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<LeadFormValues>({
     defaultValues: {
       name: "", phone: "", email: "", interest: "", budgetMinRM: "", budgetMaxRM: "",
       preferredAreas: "", projectId: "", assignedTo: "", consentGiven: false, ...defaults,
@@ -83,13 +97,34 @@ export function LeadForm({
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div className="space-y-1.5">
-        <Label htmlFor="name">Name</Label>
-        <Input id="name" {...register("name", { required: true })} />
+        <Label htmlFor="name">
+          Name <span className="text-destructive">*</span>
+        </Label>
+        <Input
+          id="name"
+          aria-invalid={errors.name ? true : undefined}
+          {...register("name", { required: "A name is needed." })}
+        />
+        {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="phone">Phone (E.164)</Label>
-          <Input id="phone" placeholder="+60123456789" {...register("phone", { required: true })} />
+          <Label htmlFor="phone">
+            Phone <span className="text-destructive">*</span>
+          </Label>
+          {/* type="tel" so a phone opens the numeric keypad rather than a QWERTY
+              keyboard — this form is filled in one-handed between viewings. The old
+              label read "Phone (E.164)", a notation no negotiator has heard of. */}
+          <Input
+            id="phone"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            placeholder="012-345 6789"
+            aria-invalid={errors.phone ? true : undefined}
+            {...register("phone", { required: "A phone number is needed." })}
+          />
+          {errors.phone && <p className="text-sm text-destructive">{errors.phone.message}</p>}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="email">Email</Label>

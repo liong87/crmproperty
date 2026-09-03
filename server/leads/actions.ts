@@ -12,12 +12,32 @@ import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { getLeadById } from "./queries";
+import { toE164My } from "./csv";
+import { assertCanEditOwned } from "@/server/auth/ownership";
 
-const phoneRe = /^\+[1-9]\d{6,14}$/;
+/**
+ * Accept a phone number the way a Malaysian actually writes it, and store E.164.
+ *
+ * This used to be a bare `regex(/^\+[1-9]\d{6,14}$/)` with the message "phone must be
+ * E.164, e.g. +60123456789". An agent typing `012-345 6789` — the way the number appears
+ * on the Facebook lead, on a business card and in their own phone — was rejected, and
+ * told so in a notation no property negotiator has heard of. The CSV importer has
+ * accepted all these forms since it was written, and its own on-screen help says so, so
+ * the same number was importable and un-typeable.
+ *
+ * `toE164My` is that importer's normaliser, reused rather than reimplemented: one
+ * definition of what a valid Malaysian number is, covered by csv.test.ts.
+ */
+const phoneField = z
+  .string()
+  .transform((v) => toE164My(v) ?? v)
+  .refine((v) => /^\+[1-9]\d{6,14}$/.test(v), {
+    message: "That does not look like a phone number. Try 012-345 6789 or +60123456789.",
+  });
 
 const createSchema = z.object({
   name: z.string().min(1).max(255),
-  phone: z.string().regex(phoneRe, "phone must be E.164, e.g. +60123456789"),
+  phone: phoneField,
   email: z.string().email().max(320).optional().or(z.literal("")).nullable(),
   interest: z.enum(INTEREST).optional().nullable(),
   budgetMin: z.coerce.number().int().nonnegative().optional().nullable(),
@@ -99,7 +119,7 @@ export async function updateLead(input: unknown): Promise<ActionResult<Lead>> {
     const d = updateSchema.parse(input);
     const lead = await getLeadById(d.id);
     if (!lead) return fail("Lead not found.");
-    assertCanEdit(me, lead.assignedTo);
+    await assertCanEditOwned(me, lead.assignedTo);
     guardConverted(lead);
 
     // Only team leads/admins can reassign.
@@ -142,7 +162,7 @@ export async function disqualifyLead(id: string): Promise<ActionResult<Lead>> {
     const me = await requireDbUser();
     const lead = await getLeadById(id);
     if (!lead) return fail("Lead not found.");
-    assertCanEdit(me, lead.assignedTo);
+    await assertCanEditOwned(me, lead.assignedTo);
     guardConverted(lead);
 
     const [row] = await db

@@ -15,6 +15,7 @@ import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { acceptedType, DOCUMENT_TYPES } from "@/lib/uploads/sniff";
+import { assertCanEditOwned } from "@/server/auth/ownership";
 
 const MAX_BYTES = 15 * 1024 * 1024; // 15 MB — an SPA scan is bigger than a photo.
 const ALLOWED = [
@@ -42,7 +43,7 @@ async function loadEditableDeal(
   const me = await requireDbUser();
   const [deal] = await db.select().from(deals).where(and(eq(deals.id, id), isNull(deals.deletedAt)));
   if (!deal) return { error: fail("Deal not found.") };
-  assertCanEdit(me, deal.assignedTo);
+  await assertCanEditOwned(me, deal.assignedTo);
   return { ok: true, me, deal };
 }
 
@@ -218,7 +219,7 @@ async function loadItem(
 
   const [deal] = await db.select().from(deals).where(eq(deals.id, row.dealId));
   if (!deal) return { error: fail("Deal not found.") };
-  assertCanEdit(me, deal.assignedTo);
+  await assertCanEditOwned(me, deal.assignedTo);
   return { ok: true, me, row };
 }
 

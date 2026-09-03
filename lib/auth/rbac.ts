@@ -38,16 +38,37 @@ export function canView(user: User, ownerId: string | null, teamId?: string | nu
   void teamId;
 }
 
-/** Can this user EDIT a record owned by ownerId (in teamId)? */
-export function canEdit(user: User, ownerId: string | null, teamId?: string | null): boolean {
+/**
+ * Can this user EDIT a record owned by ownerId?
+ *
+ * `editableIds` is the set of people whose records this user may write — for a team
+ * lead, themselves plus their downline, as `visibleUserIds` resolves it. It is REQUIRED,
+ * and that is the point.
+ *
+ * It used to be an optional `teamId` compared against `users.teamId`, and the branch
+ * read `teamId == null || teamId === user.teamId`. Every one of the twenty-odd call
+ * sites omitted the argument, and nothing in the codebase ever writes `users.teamId` —
+ * so the comparison was `undefined == null`, which is true, and every team lead could
+ * write to every record in the agency. Read scope was correctly narrowed by
+ * `ownershipFilter` and the hierarchy in `users.team_lead_id`; write scope was not
+ * narrowed at all, which is the wrong way round.
+ *
+ * Making the parameter required is deliberate: the compiler now refuses to let a caller
+ * forget it, which is the only reason the old version stayed broken so long.
+ *
+ * Use `assertCanEditOwned` in server/auth/ownership.ts rather than calling this
+ * directly — it resolves the set for you from the real hierarchy.
+ */
+export function canEdit(user: User, ownerId: string | null, editableIds: string[]): boolean {
   if (user.role === "admin") return true;
-  if (user.role === "team_lead") return teamId == null || teamId === user.teamId; // team data
-  return ownerId === user.id; // agent: own only
+  if (ownerId != null && ownerId === user.id) return true; // always your own
+  if (user.role === "team_lead") return ownerId != null && editableIds.includes(ownerId);
+  return false; // agent: own only, and that was handled above
 }
 
 /** Assert edit permission or throw. */
-export function assertCanEdit(user: User, ownerId: string | null, teamId?: string | null): void {
-  if (!canEdit(user, ownerId, teamId)) throw new AuthorizationError();
+export function assertCanEdit(user: User, ownerId: string | null, editableIds: string[]): void {
+  if (!canEdit(user, ownerId, editableIds)) throw new AuthorizationError();
 }
 
 /**
@@ -93,20 +114,18 @@ export function ownershipFilterAny(
 export function canEditAny(
   user: User,
   ownerIds: Array<string | null>,
-  teamId?: string | null,
+  editableIds: string[],
 ): boolean {
-  if (user.role === "admin") return true;
-  if (user.role === "team_lead") return teamId == null || teamId === user.teamId;
-  return ownerIds.some((id) => id != null && id === user.id);
+  return ownerIds.some((id) => canEdit(user, id, editableIds));
 }
 
 /** Assert edit permission across several owner roles, or throw. */
 export function assertCanEditAny(
   user: User,
   ownerIds: Array<string | null>,
-  teamId?: string | null,
+  editableIds: string[],
 ): void {
-  if (!canEditAny(user, ownerIds, teamId)) throw new AuthorizationError();
+  if (!canEditAny(user, ownerIds, editableIds)) throw new AuthorizationError();
 }
 
 export function ownershipFilter(

@@ -21,6 +21,7 @@ import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { getLeadById } from "./queries";
+import { assertCanEditOwned } from "@/server/auth/ownership";
 
 /**
  * NOTE ON THIS FILE: it carries "use server", and two Client Components import
@@ -48,7 +49,7 @@ export async function addRemark(input: unknown): Promise<ActionResult<{ id: stri
 
     const lead = await getLeadById(d.leadId);
     if (!lead) return fail("Lead not found.");
-    assertCanEdit(me, lead.assignedTo);
+    await assertCanEditOwned(me, lead.assignedTo);
 
     const body = d.body?.trim() || null;
 

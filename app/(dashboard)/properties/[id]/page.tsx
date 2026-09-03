@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getCurrentDbUser, canEdit } from "@/lib/auth";
+import { getCurrentDbUser } from "@/lib/auth";
 import { getPropertyById } from "@/server/properties/queries";
 import { listPropertyImages } from "@/server/properties/images";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import { listAppointmentsForProperty } from "@/server/appointments/queries";
 import { AppointmentList } from "@/components/appointments/appointment-list";
 import { formatMYR, pricePerSqft } from "@/lib/utils";
 import { propertyStatusTone } from "@/lib/status";
+import { canEditOwned } from "@/server/auth/ownership";
 
 export default async function PropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await getCurrentDbUser();
@@ -22,7 +23,7 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
   const { id } = await params;
   const p = await getPropertyById(id);
   if (!p) notFound();
-  const editable = canEdit(me, p.assignedAgent);
+  const editable = await canEditOwned(me, p.assignedAgent);
   const images = await listPropertyImages(p.id);
 
   return (

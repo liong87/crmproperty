@@ -22,6 +22,7 @@ import {
   grossCommission, releaseStages, splitCommission, validateSplit, validateStages,
   type SplitInput,
 } from "./calc";
+import { assertCanEditOwned } from "@/server/auth/ownership";
 
 const bp = z.coerce.number().int().min(0).max(10_000);
 
@@ -195,7 +196,7 @@ export async function createDealCommission(input: unknown): Promise<ActionResult
       .from(deals)
       .where(and(eq(deals.id, d.dealId), isNull(deals.deletedAt)));
     if (!deal) return fail("Deal not found.");
-    assertCanEdit(me, deal.assignedTo);
+    await assertCanEditOwned(me, deal.assignedTo);
 
     const [existing] = await db
       .select({ id: dealCommissions.id })
@@ -392,7 +393,7 @@ export async function updateCommissionStage(input: unknown): Promise<ActionResul
       .innerJoin(deals, eq(deals.id, dealCommissions.dealId))
       .where(and(eq(dealCommissionStages.id, d.id), isNull(dealCommissionStages.deletedAt)));
     if (!row) return fail("Stage not found.");
-    assertCanEdit(me, row.assignedTo);
+    await assertCanEditOwned(me, row.assignedTo);
 
     const invoicedAt = d.invoicedAt !== undefined ? toDate(d.invoicedAt) : row.invoicedAt;
     const receivedAt = d.receivedAt !== undefined ? toDate(d.receivedAt) : row.receivedAt;
@@ -431,7 +432,7 @@ export async function deleteDealCommission(dealId: string): Promise<ActionResult
       .from(deals)
       .where(and(eq(deals.id, dealId), isNull(deals.deletedAt)));
     if (!deal) return fail("Deal not found.");
-    assertCanEdit(me, deal.assignedTo);
+    await assertCanEditOwned(me, deal.assignedTo);
 
     const now = new Date();
     const [row] = await db

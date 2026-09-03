@@ -27,6 +27,7 @@ import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { getLeadById } from "./queries";
+import { assertCanEditOwned } from "@/server/auth/ownership";
 
 export async function qualifyLead(
   leadId: string,
@@ -37,7 +38,7 @@ export async function qualifyLead(
 
     const lead = await getLeadById(leadId);
     if (!lead) return fail("Lead not found.");
-    assertCanEdit(me, lead.assignedTo);
+    await assertCanEditOwned(me, lead.assignedTo);
 
     // Fast path: already converted, nothing to do.
     if (lead.convertedToContactId) {

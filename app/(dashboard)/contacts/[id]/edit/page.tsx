@@ -1,7 +1,8 @@
 import { notFound, redirect } from "next/navigation";
-import { getCurrentDbUser, canEdit } from "@/lib/auth";
+import { getCurrentDbUser } from "@/lib/auth";
 import { getContactById } from "@/server/contacts/queries";
 import { ContactForm } from "@/components/contacts/contact-form";
+import { canEditOwned } from "@/server/auth/ownership";
 
 export default async function EditContactPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await getCurrentDbUser();
@@ -9,7 +10,7 @@ export default async function EditContactPage({ params }: { params: Promise<{ id
   const { id } = await params;
   const c = await getContactById(id);
   if (!c) notFound();
-  if (!canEdit(me, c.assignedTo)) redirect(`/contacts/${id}`);
+  if (!await canEditOwned(me, c.assignedTo)) redirect(`/contacts/${id}`);
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">

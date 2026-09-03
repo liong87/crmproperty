@@ -11,13 +11,24 @@ import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { getContactById } from "./queries";
+import { assertCanEditOwned } from "@/server/auth/ownership";
+import { toE164My } from "@/server/leads/csv";
 
-const phoneRe = /^\+[1-9]\d{6,14}$/;
+/**
+ * Same rule as leads: accept `012-345 6789` and store E.164. See the note on
+ * `phoneField` in server/leads/actions.ts for why the bare regex was wrong.
+ */
+const phoneField = z
+  .string()
+  .transform((v) => toE164My(v) ?? v)
+  .refine((v) => /^\+[1-9]\d{6,14}$/.test(v), {
+    message: "That does not look like a phone number. Try 012-345 6789 or +60123456789.",
+  });
 
 const updateSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(255).optional(),
-  phone: z.string().regex(phoneRe).optional(),
+  phone: phoneField.optional(),
   email: z.string().email().max(320).optional().or(z.literal("")).nullable(),
   interest: z.enum(INTEREST).optional().nullable(),
   budgetMin: z.coerce.number().int().nonnegative().optional().nullable(),
@@ -36,7 +47,7 @@ export async function updateContact(input: unknown): Promise<ActionResult<Contac
     const d = updateSchema.parse(input);
     const contact = await getContactById(d.id);
     if (!contact) return fail("Contact not found.");
-    assertCanEdit(me, contact.assignedTo);
+    await assertCanEditOwned(me, contact.assignedTo);
 
     const [row] = await db
       .update(contacts)

@@ -14,6 +14,7 @@ import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { getPropertyById } from "./queries";
+import { assertCanEditOwned } from "@/server/auth/ownership";
 
 const phoneRe = /^\+[1-9]\d{6,14}$/;
 const optInt = z.coerce.number().int().nonnegative().optional().nullable();
@@ -91,7 +92,7 @@ export async function updateProperty(input: unknown): Promise<ActionResult<Prope
     const d = updateSchema.parse(input);
     const existing = await getPropertyById(d.id);
     if (!existing) return fail("Property not found.");
-    assertCanEdit(me, existing.assignedAgent);
+    await assertCanEditOwned(me, existing.assignedAgent);
 
     const assignedAgent =
       d.assignedAgent !== undefined && isTeamLeadOrAbove(me) ? d.assignedAgent : existing.assignedAgent;
@@ -141,7 +142,7 @@ export async function changePropertyStatus(
     z.enum(PROPERTY_STATUS).parse(status);
     const existing = await getPropertyById(id);
     if (!existing) return fail("Property not found.");
-    assertCanEdit(me, existing.assignedAgent);
+    await assertCanEditOwned(me, existing.assignedAgent);
     const [row] = await db.update(properties).set({ status }).where(eq(properties.id, id)).returning();
     revalidatePath("/properties");
     revalidatePath(`/properties/${id}`);
@@ -158,7 +159,7 @@ export async function deleteProperty(id: string): Promise<ActionResult<void>> {
     z.string().uuid().parse(id);
     const existing = await getPropertyById(id);
     if (!existing) return fail("Property not found.");
-    assertCanEdit(me, existing.assignedAgent);
+    await assertCanEditOwned(me, existing.assignedAgent);
     await db.update(properties).set({ deletedAt: new Date() }).where(eq(properties.id, id));
     revalidatePath("/properties");
   } catch (err) {

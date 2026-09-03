@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getCurrentDbUser, canEdit, canView, isAdmin } from "@/lib/auth";
+import { getCurrentDbUser, canView, isAdmin } from "@/lib/auth";
 import { getLeadById } from "@/server/leads/queries";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ import { AppointmentList } from "@/components/appointments/appointment-list";
 import { APP_NAME } from "@/lib/constants";
 import { formatMYR, formatCampaignTrail } from "@/lib/utils";
 import { leadStatusTone } from "@/lib/status";
+import { canEditOwned } from "@/server/auth/ownership";
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await getCurrentDbUser();
@@ -30,7 +31,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   // See contacts/[id]/page.tsx - read access needs its own check.
   if (!canView(me, lead.assignedTo)) notFound();
 
-  const editable = canEdit(me, lead.assignedTo) && !lead.convertedToContactId;
+  const editable = await canEditOwned(me, lead.assignedTo) && !lead.convertedToContactId;
   // Null when the lead came from a source with no ad behind it — walk-ins, referrals,
   // a hand-typed enquiry — in which case the field is not rendered at all.
   const campaignTrail = formatCampaignTrail(lead.utmCampaign, lead.utmContent, lead.utmTerm);
@@ -125,7 +126,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         who={lead.name.split(" ")[0] ?? "this lead"}
       />
 
-      <ActivitySection entityType="leads" entityId={lead.id} canLog={canEdit(me, lead.assignedTo)} />
+      <ActivitySection entityType="leads" entityId={lead.id} canLog={await canEditOwned(me, lead.assignedTo)} />
     </div>
   );
 }

@@ -1,8 +1,9 @@
 import { notFound, redirect } from "next/navigation";
-import { getCurrentDbUser, canEdit, isTeamLeadOrAbove } from "@/lib/auth";
+import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { getPropertyById } from "@/server/properties/queries";
 import { listAssignableAgents } from "@/server/leads/queries";
 import { PropertyForm } from "@/components/properties/property-form";
+import { canEditOwned } from "@/server/auth/ownership";
 
 export default async function EditPropertyPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await getCurrentDbUser();
@@ -10,7 +11,7 @@ export default async function EditPropertyPage({ params }: { params: Promise<{ i
   const { id } = await params;
   const p = await getPropertyById(id);
   if (!p) notFound();
-  if (!canEdit(me, p.assignedAgent)) redirect(`/properties/${id}`);
+  if (!await canEditOwned(me, p.assignedAgent)) redirect(`/properties/${id}`);
 
   const canAssign = isTeamLeadOrAbove(me);
   const agents = canAssign ? await listAssignableAgents() : [];

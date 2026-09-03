@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getCurrentDbUser, canView, canEdit } from "@/lib/auth";
+import { getCurrentDbUser, canView } from "@/lib/auth";
 import { getDealDetail, listChecklist } from "@/server/deal-documents/queries";
 import { listStages } from "@/server/deals/queries";
 import { getDealCommission, listSchemes } from "@/server/commission/queries";
@@ -10,6 +10,7 @@ import { DealChecklist } from "@/components/deal-documents/checklist";
 import { DealCommissionPanel } from "@/components/commission/deal-commission";
 import { COMMISSION_ENABLED } from "@/lib/features";
 import { formatMYR, formatBp } from "@/lib/utils";
+import { canEditOwned } from "@/server/auth/ownership";
 
 export default async function DealPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await getCurrentDbUser();
@@ -21,7 +22,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   const { deal, contactName, contactPhone, projectName, propertyTitle } = found;
   if (!canView(me, deal.assignedTo)) redirect("/pipeline");
 
-  const editable = canEdit(me, deal.assignedTo);
+  const editable = await canEditOwned(me, deal.assignedTo);
   const pipeline = deal.dealType === "project" ? "project" : "resale";
   const [checklist, stages, commission, schemes] = await Promise.all([
     listChecklist(id), listStages(pipeline), getDealCommission(id), listSchemes(),

@@ -22,6 +22,7 @@ import { ok, fail } from "@/lib/action-result";
 import { notify } from "@/lib/notify";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
+import { assertCanEditOwned, assertCanEditOwnedAny } from "@/server/auth/ownership";
 
 const scheduleSchema = z
   .object({
@@ -58,7 +59,7 @@ async function resolveClientOwner(
       .from(contacts)
       .where(and(eq(contacts.id, d.contactId), isNull(contacts.deletedAt)));
     if (!row) throw new Error("CLIENT_NOT_FOUND");
-    if (!canEdit(me, row.owner)) throw new AuthorizationError();
+    await assertCanEditOwned(me, row.owner);
     return row.owner;
   }
   const [row] = await db
@@ -66,7 +67,7 @@ async function resolveClientOwner(
     .from(leads)
     .where(and(eq(leads.id, d.leadId!), isNull(leads.deletedAt)));
   if (!row) throw new Error("CLIENT_NOT_FOUND");
-  if (!canEdit(me, row.owner)) throw new AuthorizationError();
+  await assertCanEditOwned(me, row.owner);
   return row.owner;
 }
 
@@ -373,7 +374,7 @@ async function loadEditable(
   if (!row) return { error: fail("Appointment not found.") };
   // Setter or closer, the same pair the list query scopes on. Editable and visible must
   // agree: anything a person can change, they must also be able to see.
-  if (!canEditAny(me, [row.assignedTo, row.closerId])) throw new AuthorizationError();
+  await assertCanEditOwnedAny(me, [row.assignedTo, row.closerId]);
   return { row };
 }
 

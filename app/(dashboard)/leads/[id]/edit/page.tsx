@@ -1,8 +1,9 @@
 import { notFound, redirect } from "next/navigation";
-import { getCurrentDbUser, canEdit, isTeamLeadOrAbove } from "@/lib/auth";
+import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { getLeadById, listAssignableAgents } from "@/server/leads/queries";
 import { listProjectOptions } from "@/server/projects/queries";
 import { LeadForm } from "@/components/leads/lead-form";
+import { canEditOwned } from "@/server/auth/ownership";
 
 export default async function EditLeadPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await getCurrentDbUser();
@@ -10,7 +11,7 @@ export default async function EditLeadPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const lead = await getLeadById(id);
   if (!lead) notFound();
-  if (!canEdit(me, lead.assignedTo) || lead.convertedToContactId) redirect(`/leads/${id}`);
+  if (!await canEditOwned(me, lead.assignedTo) || lead.convertedToContactId) redirect(`/leads/${id}`);
 
   const canAssign = isTeamLeadOrAbove(me);
   const agents = canAssign ? await listAssignableAgents() : [];
