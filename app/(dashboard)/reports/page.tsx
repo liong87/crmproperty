@@ -21,6 +21,27 @@ import { STATUS } from "@/lib/chart-colors";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { formatMYR } from "@/lib/utils";
 
+/** The bar both tabs share. Extracted so the early return cannot drift from the page. */
+function ReportHeader({ me, subtitle }: { me: { role: string }; subtitle: string }) {
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-2 print:hidden">
+      <div>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Report</h1>
+        <p className="text-sm text-muted-foreground">{subtitle}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <PrintButton />
+        {/* Spend is the agency's cost base, not an agent's business. */}
+        {isTeamLeadOrAbove(me as never) && (
+          <Link href="/reports/spend" className="text-sm font-medium underline underline-offset-4">
+            Advertising spend →
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default async function ReportsPage({
   searchParams,
 }: {
@@ -34,11 +55,45 @@ export default async function ReportsPage({
   const days = range.days;
   const tab = params.tab === "campaign" ? "campaign" : "lead";
 
+  /*
+   * ONLY the visible tab's data is fetched.
+   *
+   * Both tabs' queries used to run on every request — eight of them, including a funnel,
+   * a twelve-week trend and a row-per-lead grouping — even when the answer was a card
+   * saying "no ad account connected". That is what pushed the Worker past its CPU limit
+   * and returned Error 1102 instead of a page.
+   *
+   * Cloudflare bills CPU, not wall clock, so waiting on PostgreSQL is free and building
+   * the results is not. The cheapest query is the one that never runs.
+   */
+  const campaign = tab === "campaign";
+
   // Weekly points, floored at 4 so a short window still draws a line, and capped so
   // "Maximum" cannot render hundreds of unreadable buckets.
   const weeks = Math.min(104, Math.max(4, Math.ceil(days / 7)));
 
-  const [r, funnel, trend, activity, bySource, followUp, projects, adConnections] = await Promise.all([
+  /*
+   * The Campaign tab returns BEFORE any Lead-tab query is built.
+   *
+   * All eight used to run on every request — a funnel, a twelve-week trend, a
+   * row-per-lead grouping — even when the answer was a card saying "no ad account
+   * connected". That is what pushed the Worker past its CPU limit and served Error 1102
+   * instead of a page. Cloudflare bills CPU, not wall clock, so waiting on PostgreSQL is
+   * free and assembling results is not: the cheapest query is the one that never runs.
+   */
+  if (campaign) {
+    const adConnections = await listMyAdConnections();
+    return (
+      <div className="space-y-4">
+        <PrintHeader title="Meta ads report" rangeLabel={range.label} filters={[]} />
+        <ReportHeader me={me} subtitle="Lead performance and campaign analytics." />
+        <ReportTabs params={params} />
+        <CampaignTab connections={adConnections} />
+      </div>
+    );
+  }
+
+  const [r, funnel, trend, activity, bySource, followUp, projects] = await Promise.all([
     getReportData(me),
     getFunnel(me, days),
     getFunnelTrend(me, weeks),
@@ -50,8 +105,6 @@ export default async function ReportsPage({
     }),
     getFollowUpByAgent(me, OPEN_STATUSES),
     listProjectOptions(),
-    // Per-user, like every other capture connection: their ad accounts, not the agency's.
-    listMyAdConnections(),
   ]);
 
   // Offered as chips only when leads actually carry them — an empty filter row is
@@ -66,36 +119,15 @@ export default async function ReportsPage({
 
   return (
     <div className="space-y-4">
-      <PrintHeader
-        title={tab === "campaign" ? "Meta ads report" : "Lead performance"}
-        rangeLabel={range.label}
-        filters={activeFilters}
-      />
+      <PrintHeader title="Lead performance" rangeLabel={range.label} filters={activeFilters} />
 
-      <div className="flex flex-wrap items-start justify-between gap-2 print:hidden">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight">Report</h1>
-          <p className="text-sm text-muted-foreground">
-            {r.scope === "team" ? "Lead performance and campaign analytics." : "Your book of business."}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <PrintButton />
-          {/* Spend is the agency's cost base, not an agent's business. */}
-          {isTeamLeadOrAbove(me) && (
-            <Link href="/reports/spend" className="text-sm font-medium underline underline-offset-4">
-              Advertising spend →
-            </Link>
-          )}
-        </div>
-      </div>
+      <ReportHeader
+        me={me}
+        subtitle={r.scope === "team" ? "Lead performance and campaign analytics." : "Your book of business."}
+      />
 
       <ReportTabs params={params} />
 
-      {tab === "campaign" ? (
-        <CampaignTab connections={adConnections} />
-      ) : (
-      <>
       <ReportControls params={params} sources={sourceChips} projects={projects} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -228,8 +260,6 @@ export default async function ReportsPage({
             </Table>
           </CardContent>
         </Card>
-      )}
-      </>
       )}
     </div>
   );
