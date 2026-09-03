@@ -49,7 +49,9 @@ export interface BySourceData {
 }
 
 export interface SourceFilters {
-  sinceDays: number;
+  /** Both ends of the reporting period, resolved once by `resolveRange`. */
+  from: Date;
+  to: Date;
   /** Restrict to one source, as chosen by the chip row. */
   source?: string | null;
   projectId?: string | null;
@@ -83,11 +85,16 @@ function daysAgoIso(days: number): string {
  * a Worker CPU limit for doing the opposite.
  */
 export async function getLeadsBySource(user: User, f: SourceFilters): Promise<BySourceData> {
-  const since = daysAgoIso(f.sinceDays);
+  // ISO strings cast to ::timestamptz, never Date objects: this query contains raw
+  // `sql` fragments, and a Date bound alongside raw SQL throws on Workers only. That
+  // has caused two production outages. See claude/crm-workers-runtime-traps.md.
+  const since = f.from.toISOString();
+  const until = f.to.toISOString();
 
   const where = and(
     isNull(leads.deletedAt),
     sql`${leads.createdAt} >= ${since}::timestamptz`,
+    sql`${leads.createdAt} <= ${until}::timestamptz`,
     ownershipFilter(user, leads.assignedTo),
     ...(f.projectId ? [eq(leads.projectId, f.projectId)] : []),
   );

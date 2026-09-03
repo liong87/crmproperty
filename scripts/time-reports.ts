@@ -16,6 +16,7 @@ import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
 import { getReportData } from "@/server/reports/queries";
 import { getFunnel, getFunnelTrend } from "@/server/reports/funnel";
+import { lastNDays } from "@/lib/reports/range";
 
 async function time<T>(label: string, fn: () => Promise<T>): Promise<void> {
   const t0 = Date.now();
@@ -45,12 +46,12 @@ async function main() {
 
   console.log("Sequential");
   await time("getReportData", () => getReportData(me));
-  await time("getFunnel", () => getFunnel(me));
+  await time("getFunnel", () => getFunnel(me, lastNDays(90)));
   await time("getFunnelTrend (8 weeks)", () => getFunnelTrend(me, 8));
 
   console.log("\nParallel (as the page actually runs them)");
   const t0 = Date.now();
-  await Promise.all([getReportData(me), getFunnel(me), getFunnelTrend(me, 8)]);
+  await Promise.all([getReportData(me), getFunnel(me, lastNDays(90)), getFunnelTrend(me, 8)]);
   console.log(`  all three together                     ${String(Date.now() - t0).padStart(7)} ms`);
 
   process.exit(0);

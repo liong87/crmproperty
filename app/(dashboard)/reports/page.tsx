@@ -52,6 +52,11 @@ export default async function ReportsPage({
 
   const params = await searchParams;
   const range = resolveRange(params);
+  // BOTH ends travel down to every query. Passing only `range.days` and letting each
+  // query re-derive "N days back from now" is how the page came to report 3 Aug – 3 Sep
+  // under a heading that said "Last month", and to ignore a custom January range
+  // entirely. If you add a query here, give it the window, not a day count.
+  const window = { from: range.from, to: range.to };
   const days = range.days;
   const tab = params.tab === "campaign" ? "campaign" : "lead";
 
@@ -95,11 +100,12 @@ export default async function ReportsPage({
 
   const [r, funnel, trend, activity, bySource, followUp, projects] = await Promise.all([
     getReportData(me),
-    getFunnel(me, days),
+    getFunnel(me, window),
     getFunnelTrend(me, weeks),
-    getAgentActivity(me, days),
+    getAgentActivity(me, window),
     getLeadsBySource(me, {
-      sinceDays: days,
+      from: range.from,
+      to: range.to,
       source: params.source ?? null,
       projectId: params.project ?? null,
     }),

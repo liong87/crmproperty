@@ -18,7 +18,7 @@
  * zero means "nothing recorded", which is not the same as "did no work". Treat it as
  * a prompt to ask, never as a verdict.
  */
-import { and, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, gte, lte, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { activities, users, type User } from "@/lib/db/schema";
 import { visibleUserIds } from "@/server/users/hierarchy";
@@ -73,11 +73,14 @@ export function summariseActivity(
   };
 }
 
-export async function getAgentActivity(user: User, sinceDays: number): Promise<AgentActivityData> {
+export async function getAgentActivity(
+  user: User,
+  window: { from: Date; to: Date },
+): Promise<AgentActivityData> {
   // Empty means admin: no restriction. Anything else is an explicit id list, so a
   // Team Lead with no members scopes to themselves rather than to everybody.
   const visibleIds = await visibleUserIds(user);
-  const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+  const { from: since, to: until } = window;
 
   const rows = await db
     .select({
@@ -99,6 +102,7 @@ export async function getAgentActivity(user: User, sinceDays: number): Promise<A
       and(
         eq(activities.createdBy, users.id),
         gte(activities.occurredAt, since),
+        lte(activities.occurredAt, until),
         isNull(activities.deletedAt),
         inArray(activities.type, ["call", "whatsapp"]),
       ),
@@ -115,5 +119,8 @@ export async function getAgentActivity(user: User, sinceDays: number): Promise<A
   // "own" only when the list is literally just this person — a Team Lead with one
   // member is looking at a team, however small.
   const isOwnOnly = visibleIds.length === 1 && visibleIds[0] === user.id;
-  return summariseActivity(rows, isOwnOnly ? "own" : "team", sinceDays);
+  // Whole days spanned, for the caption the table prints. Derived from the window
+  // rather than passed alongside it, so the two can never disagree.
+  const days = Math.max(1, Math.round((until.getTime() - since.getTime()) / 86_400_000));
+  return summariseActivity(rows, isOwnOnly ? "own" : "team", days);
 }

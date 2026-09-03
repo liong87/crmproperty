@@ -138,6 +138,14 @@ async function routeFor(pageId: string | null): Promise<PageRoute | null> {
  * Returns the row id when this delivery is ours to process, or null when somebody
  * already has it.
  */
+/**
+ * How long a `received` row may sit before another delivery may take it over. Well
+ * above a Worker's wall-clock ceiling, so it can only ever catch a stranded row and
+ * never a live one; well below Meta's 36-hour retry window, so a stranded lead is still
+ * recoverable by a later retry.
+ */
+const STALE_CLAIM_MS = 5 * 60 * 1000;
+
 async function claim(change: MetaLeadgenChange): Promise<string | null> {
   try {
     const [row] = await db
@@ -151,7 +159,54 @@ async function claim(change: MetaLeadgenChange): Promise<string | null> {
       })
       .onConflictDoNothing({ target: captureEvents.leadgenId })
       .returning({ id: captureEvents.id });
-    return row?.id ?? null;
+    if (row) return row.id;
+
+    /*
+     * The insert lost the race with an earlier delivery of the SAME lead. That is not
+     * automatically a duplicate — it is only a duplicate if that earlier attempt
+     * actually finished.
+     *
+     * This used to return null unconditionally, and the caller read null as "somebody
+     * already has it". So: the Page token expires, the first delivery fails, the route
+     * answers 503, Meta retries within its 36-hour window exactly as designed — and the
+     * retry hit this conflict and was counted as a duplicate and dropped. The retry
+     * window the whole design leans on did nothing, and a lead the agency paid for was
+     * lost the moment its first attempt failed.
+     *
+     * `failed` is an attempt that ended badly and is always re-claimed.
+     *
+     * `received` is ambiguous, and the distinction matters: it means EITHER another
+     * Worker is processing this lead right now, OR a Worker was killed mid-flight and
+     * left the row stranded. Re-claiming it unconditionally breaks the atomic claim —
+     * four Workers racing the same first delivery would all win, which is exactly what
+     * this function exists to prevent. So a `received` row is re-claimed only once it
+     * is older than STALE_CLAIM_MS, by which point no live attempt can still be running
+     * (a Worker's wall-clock ceiling is far below it).
+     *
+     * `fetched`, `created` and `duplicate` are finished and stay deduped.
+     */
+    const [prior] = await db
+      .select({
+        id: captureEvents.id,
+        status: captureEvents.status,
+        updatedAt: captureEvents.updatedAt,
+      })
+      .from(captureEvents)
+      .where(eq(captureEvents.leadgenId, change.leadgen_id!))
+      .limit(1);
+    if (!prior) return null;
+
+    const stale = Date.now() - prior.updatedAt.getTime() > STALE_CLAIM_MS;
+    const unfinished = prior.status === "failed" || (prior.status === "received" && stale);
+    if (!unfinished) return null;
+
+    // Re-open the row so this attempt owns it and the audit trail shows a retry rather
+    // than a second event.
+    await db
+      .update(captureEvents)
+      .set({ status: "received", error: null, rawPayload: JSON.stringify(change) })
+      .where(eq(captureEvents.id, prior.id));
+    return prior.id;
   } catch (err) {
     /*
      * Never let bookkeeping lose a lead. If the audit insert fails for any reason
@@ -162,6 +217,13 @@ async function claim(change: MetaLeadgenChange): Promise<string | null> {
     return "unrecorded";
   }
 }
+
+/**
+ * Test seam. `claim` is the whole idempotency story and its behaviour depends on a real
+ * unique index, so it is exercised against real PostgreSQL by
+ * scripts/verify-claim-retry.ts rather than mocked.
+ */
+export const claimForTest = claim;
 
 async function settle(
   eventId: string,

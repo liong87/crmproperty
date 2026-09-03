@@ -13,6 +13,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { StatTile } from "@/components/reports/stat-tile";
 import { FunnelBand } from "@/components/dashboard/funnel-band";
 import { RangeFilter, parseRangeDays, rangeLabel } from "@/components/reports/range-filter";
+import { lastNDays } from "@/lib/reports/range";
 import { PageTitle } from "@/components/ui/page-title";
 import { FollowUpList } from "@/components/activities/follow-up-list";
 
@@ -31,7 +32,7 @@ export default async function DashboardPage({
     getReportData(user),
     listUpcomingAppointments(user, 5),
     countAppointmentsNeedingOutcome(user),
-    getFunnel(user, days),
+    getFunnel(user, lastNDays(days)),
     getFunnelTrend(user, 8),
     countStaleLeads(user),
     countDocumentsDue(user),

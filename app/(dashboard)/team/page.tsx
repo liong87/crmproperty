@@ -6,6 +6,7 @@ import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
 import { listTeamMembers } from "@/server/users/hierarchy";
 import { getAgentActivity } from "@/server/reports/activity";
 import { RangeFilter, parseRangeDays, rangeLabel } from "@/components/reports/range-filter";
+import { lastNDays } from "@/lib/reports/range";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +32,7 @@ export default async function TeamPage({
   const days = parseRangeDays((await searchParams).days);
   const [members, activity] = await Promise.all([
     listTeamMembers(me.id),
-    getAgentActivity(me, days),
+    getAgentActivity(me, lastNDays(days)),
   ]);
 
   const byId = new Map(activity.rows.map((r) => [r.id, r]));

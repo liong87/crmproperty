@@ -116,3 +116,15 @@ export function withParam(
   const s = next.toString();
   return s ? `?${s}` : "";
 }
+
+/**
+ * A rolling window ending now, for the screens that genuinely mean "the last N days"
+ * rather than a chosen period — the dashboard and the team page.
+ *
+ * It exists so those callers pass a window like everybody else. The report queries used
+ * to accept a bare day count and derive the window themselves, which is exactly how the
+ * reports page came to ignore the range the user picked.
+ */
+export function lastNDays(days: number, now = new Date()): { from: Date; to: Date } {
+  return { from: new Date(now.getTime() - days * DAY), to: now };
+}

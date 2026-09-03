@@ -11,7 +11,7 @@
  * Every figure is scoped by the caller's role, using the same ownership rules as the
  * rest of the app: an agent sees their own numbers, a team lead sees the team's.
  */
-import { and, count, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, count, eq, gte, lte, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { leads, appointments, projects, users, type User } from "@/lib/db/schema";
 import { ownershipFilter, ownershipFilterAny, isTeamLeadOrAbove } from "@/lib/auth";
@@ -60,20 +60,36 @@ export interface FunnelData {
 
 const share = (n: number, d: number): number | null => (d > 0 ? n / d : null);
 
-function daysAgo(days: number): Date {
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+/**
+ * The window to report over, as resolved once by `resolveRange` and passed down.
+ *
+ * It takes BOTH ends. It used to take a day count and re-derive "N days back from now",
+ * which silently made every bounded range wrong: choosing "Last month" on 3 September
+ * reported 3 August to 3 September while the heading said Last month, and a custom
+ * January range reported the last 31 days and never touched January. A range with no
+ * upper bound cannot express a period that ended.
+ */
+export interface ReportWindow {
+  from: Date;
+  to: Date;
 }
 
 /**
- * @param sinceDays window to report over. A funnel with no time bound flatters itself:
+ * @param window period to report over. A funnel with no time bound flatters itself:
  *   last year's leads have had a year to convert and this month's have not.
  */
-export async function getFunnel(user: User, sinceDays = 90): Promise<FunnelData> {
-  const since = daysAgo(sinceDays);
-  const liveLead = and(isNull(leads.deletedAt), gte(leads.createdAt, since), ownershipFilter(user, leads.assignedTo));
+export async function getFunnel(user: User, window: ReportWindow): Promise<FunnelData> {
+  const { from, to } = window;
+  const liveLead = and(
+    isNull(leads.deletedAt),
+    gte(leads.createdAt, from),
+    lte(leads.createdAt, to),
+    ownershipFilter(user, leads.assignedTo),
+  );
   const liveAppt = and(
     isNull(appointments.deletedAt),
-    gte(appointments.scheduledAt, since),
+    gte(appointments.scheduledAt, from),
+    lte(appointments.scheduledAt, to),
     // Setter or closer: an agent's own numbers must include presentations they ran
     // for somebody else's lead.
     ownershipFilterAny(user, [appointments.assignedTo, appointments.closerId]),
@@ -189,6 +205,10 @@ export async function getFunnel(user: User, sinceDays = 90): Promise<FunnelData>
       conversionFromLeads: share(t.booked, totalLeads),
     },
   ];
+
+  // Derived from the window rather than carried alongside it, so the caption and the
+  // figures can never describe different periods.
+  const sinceDays = Math.max(1, Math.round((to.getTime() - from.getTime()) / 86_400_000));
 
   return {
     scope: isTeamLeadOrAbove(user) ? "team" : "own",
@@ -307,7 +327,7 @@ export interface TrendPoint {
  * notice and everybody would act on.
  */
 export async function getFunnelTrend(user: User, weeks = 12): Promise<TrendPoint[]> {
-  const since = daysAgo(weeks * 7);
+  const since = new Date(Date.now() - weeks * 7 * 24 * 60 * 60 * 1000);
   const own = !isTeamLeadOrAbove(user);
   /**
    * Bound as an ISO STRING with an explicit cast, not as a Date.

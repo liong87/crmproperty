@@ -61,7 +61,7 @@ describe("timestamp parameters in queries that mix raw SQL", () => {
     vi.resetModules();
     const { getLeadsBySource } = await import("./by-source");
 
-    await getLeadsBySource({ id: "u1", role: "admin" } as never, { sinceDays: 30 });
+    await getLeadsBySource({ id: "u1", role: "admin" } as never, { from: new Date(Date.now() - 30 * 86_400_000), to: new Date() });
 
     expect(captured.length).toBeGreaterThan(0);
     for (const params of captured) {
