@@ -1,4 +1,4 @@
-import { and, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { leads, appointments } from "@/lib/db/schema";
 import { ownershipFilter } from "@/lib/auth/rbac";
@@ -57,8 +57,21 @@ export interface SourceFilters {
 
 const rate = (n: number, d: number): number | null => (d > 0 ? n / d : null);
 
-function daysAgo(days: number): Date {
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+/**
+ * ISO string, not a Date, and this is not a style choice.
+ *
+ * A JS Date passed as a parameter to a query that ALSO contains raw `sql` fragments
+ * throws on Cloudflare Workers. Normally drizzle infers the parameter type from the
+ * column it is compared against; once raw SQL is mixed into the same statement that
+ * inference is lost, and postgres-js is handed a Date it cannot serialise.
+ *
+ * It fails only in production. Every local run against real PostgreSQL passes, which is
+ * exactly how this shipped: the query below is full of correlated subqueries, so it is
+ * precisely the shape that breaks. Cast the string instead — see the same fix in
+ * server/leads/working.ts.
+ */
+function daysAgoIso(days: number): string {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
 /**
@@ -70,11 +83,11 @@ function daysAgo(days: number): Date {
  * a Worker CPU limit for doing the opposite.
  */
 export async function getLeadsBySource(user: User, f: SourceFilters): Promise<BySourceData> {
-  const since = daysAgo(f.sinceDays);
+  const since = daysAgoIso(f.sinceDays);
 
   const where = and(
     isNull(leads.deletedAt),
-    gte(leads.createdAt, since),
+    sql`${leads.createdAt} >= ${since}::timestamptz`,
     ownershipFilter(user, leads.assignedTo),
     ...(f.projectId ? [eq(leads.projectId, f.projectId)] : []),
   );
