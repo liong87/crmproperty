@@ -142,12 +142,20 @@ jobs:
           # later, leave nothing; keeping the newest N cannot empty the bucket however
           # long backups have been failing.
           #
-          # THE TRADE at 7: a problem noticed more than a week after it happened is
-          # unrecoverable — a bad migration, a mass edit, or a client deleted in error
-          # and spotted at month end. If that worries you, raise this to 30. A dump of
-          # this database is single-digit megabytes against R2's 10 GB free tier, so
-          # the difference costs approximately nothing.
-          KEEP: "1"
+          # SEVEN. The recovery window is what this number buys, and storage is not
+          # what it costs: a dump of this database is single-digit megabytes against
+          # R2's 10 GB free tier, so 1 and 7 cost the same — nothing.
+          #
+          # What 1 would mean, since it was considered: corrupt data at 4pm Tuesday and
+          # notice it Wednesday lunchtime, and the Wednesday 02:00 run has already
+          # captured the corrupted state and deleted Tuesday's copy — the only backup is
+          # then a backup of the damage. The verification step above does not help; it
+          # checks the dump has the right TABLES, not that the rows inside are correct.
+          # Seven days is how long the agency has to notice a problem.
+          #
+          # Raise it if you want longer. Do not lower it to save money; there is none
+          # to save here.
+          KEEP: "7"
         run: |
           set -euo pipefail
 
@@ -155,10 +163,24 @@ jobs:
           # a dangerous KEEP only failed on days when there happened to be enough files
           # to delete — so a misconfiguration could sit unnoticed until the run that
           # acted on it.
-          if [ "$KEEP" -lt 3 ]; then
-            echo "::error::KEEP is $KEEP - refusing to run with fewer than 3 retained."
+          if [ "$KEEP" -lt 1 ]; then
+            echo "::error::KEEP is $KEEP - that would delete every backup. Refusing."
             exit 1
           fi
+
+          # THE GUARD THAT ACTUALLY MATTERS, and the only one that can save you at
+          # KEEP=1: never delete anything unless THIS run's dump is really in the
+          # bucket. A count-based floor is no protection when the floor is one — the
+          # single file it preserves could be a stale or failed upload. Confirming the
+          # new object exists first means the worst case is "pruning is skipped", never
+          # "the good backup was deleted and the new one never arrived".
+          if ! aws s3api head-object \
+                 --bucket "$R2_BUCKET" --key "db/crm-${STAMP}.dump.gpg" \
+                 --endpoint-url "$R2_ENDPOINT" >/dev/null 2>&1; then
+            echo "::error::Tonight's backup is not in the bucket. Pruning nothing."
+            exit 1
+          fi
+          echo "Confirmed tonight's dump is stored. Safe to prune."
 
           # Sort by KEY, not by upload time. The key carries the dump's own timestamp
           # (crm-2026-09-03T18-00-00Z.dump.gpg), which sorts lexicographically into
