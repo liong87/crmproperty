@@ -9,6 +9,20 @@
 		"nodejs_compat",
 		"global_fetch_strictly_public"
 	],
+	// THE CRM IS REACHABLE AT EXACTLY ONE ADDRESS: crm.lanthornproperties.com.
+	//
+	// Cloudflare Access is attached to that hostname. The workers.dev address is a
+	// different hostname on a different zone, so Access never sees it — leaving it
+	// enabled would mean anyone who knows or guesses
+	// propertyagent-crm.lanthornrealty.workers.dev walks straight past the staff-only
+	// lockdown and reaches the sign-in page. Preview URLs are the same hole with a
+	// per-version name.
+	//
+	// Turning these off is what makes the Access policy a boundary rather than a
+	// suggestion. If a future deploy needs a throwaway URL, put it behind its own
+	// Access application rather than re-enabling these.
+	"workers_dev": false,
+	"preview_urls": false,
 	"assets": {
 		"directory": ".open-next/assets",
 		"binding": "ASSETS"
