@@ -40,7 +40,9 @@ export default async function WorkingLeadsPage({
 
   const sp = await searchParams;
   const tab: WorkingTab =
-    sp.tab === "inactive" || sp.tab === "appointment" ? sp.tab : "active";
+    sp.tab === "inactive" || sp.tab === "appointment" || sp.tab === "handed-over"
+      ? sp.tab
+      : "active";
   const search = sp.q?.trim() || undefined;
   const asList = (v: string | string[] | undefined): string[] =>
     v === undefined ? [] : Array.isArray(v) ? v : [v];
@@ -132,6 +134,7 @@ export default async function WorkingLeadsPage({
         {items.length === 1 ? "lead" : "leads"}{" "}
         {tab === "appointment" ? "with an appointment booked."
           : tab === "inactive" ? "you have closed off."
+          : tab === "handed-over" ? "you handed to a colleague and still have a share in."
           : "to work on, quietest first."}
         {filtered && " Filters applied."}
       </PageTitle>
@@ -142,6 +145,16 @@ export default async function WorkingLeadsPage({
             { href: "/working-leads", label: "Active", count: counts.active, active: tab === "active" },
             { href: "/working-leads?tab=appointment", label: "Appointment", count: counts.appointment, active: tab === "appointment" },
             { href: "/working-leads?tab=inactive", label: "Inactive", count: counts.inactive, active: tab === "inactive" },
+            /* Hidden until there is one. A tab reading "Handed over 0" on every agent's
+               screen from day one teaches everybody to ignore it. */
+            ...(counts.handedOver > 0
+              ? [{
+                  href: "/working-leads?tab=handed-over",
+                  label: "Handed over",
+                  count: counts.handedOver,
+                  active: tab === "handed-over",
+                }]
+              : []),
           ]}
         />
 
@@ -187,6 +200,7 @@ export default async function WorkingLeadsPage({
             filtered ? "No leads match those filters"
               : tab === "active" ? "Nothing to work right now"
               : tab === "appointment" ? "No appointments booked"
+              : tab === "handed-over" ? "You have not handed any leads over"
               : "Nothing marked dead"
           }
           hint={
@@ -195,7 +209,9 @@ export default async function WorkingLeadsPage({
               ? "Leads land here when someone assigns them to you, or when one comes in from a campaign you own."
               : tab === "appointment"
                 ? "Book one from a lead and it will appear here and on the Appointments board."
-                : "Leads marked Not Searching, Unmatched Requirement or Blocked move here, so the active queue stays honest."
+                : tab === "handed-over"
+                  ? "Hand a lead to a colleague from its card and it stays here, so you can see what became of it."
+                  : "Leads marked Not Searching, Unmatched Requirement or Blocked move here, so the active queue stays honest."
           }
         />
       ) : (

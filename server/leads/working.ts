@@ -13,7 +13,7 @@
  * whether somebody rang a client. If this ever gets slow, the fix is a materialised
  * view, not a column nobody can prove is current.
  */
-import { and, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { ACTIVE_STATUSES, OPEN_STATUSES, DEAD_STATUSES, APPOINTMENT_STATUSES, statusGroup } from "@/lib/constants";
 import { db } from "@/lib/db/client";
 import { leads, type User } from "@/lib/db/schema";
@@ -24,7 +24,13 @@ const TOUCH_TYPES = ["call", "whatsapp", "email", "appointment", "viewing"] as c
 /** Most cards anyone will work in a sitting. See the note on the query's limit. */
 export const LIST_CAP = 200;
 
-export type WorkingTab = "active" | "inactive" | "appointment";
+/**
+ * `handed-over` is the odd one out and deliberately so: the other three list leads
+ * ASSIGNED to you, while this lists leads you handed to a colleague and still hold a
+ * setter's claim on. Without it a co-broke disappears the moment you give it away, and
+ * "passed-out leads went dark" is the exact complaint the feature exists to answer.
+ */
+export type WorkingTab = "active" | "inactive" | "appointment" | "handed-over";
 
 export interface WorkingLead {
   id: string;
@@ -49,6 +55,12 @@ export interface WorkingLead {
   latestRemark: string | null;
   latestRemarkAt: Date | null;
   createdAt: Date;
+  /** Set only on a lead that was handed over: the agent who sourced it. */
+  setterId: string | null;
+  setterName: string | null;
+  /** Who is working it now. Only interesting when that is not the viewer. */
+  ownerId: string | null;
+  ownerName: string | null;
 }
 
 /**
@@ -163,12 +175,23 @@ export async function listWorkingLeads(
       openAppointments: openApptSql,
       latestRemark: latestRemarkSql,
       latestRemarkAt: latestRemarkAtSql,
+      setterId: leads.setterId,
+      setterName: sql<string | null>`(select u.name from users u where u.id = ${leads.setterId})`,
+      ownerId: leads.assignedTo,
+      ownerName: sql<string | null>`(select u.name from users u where u.id = ${leads.assignedTo})`,
     })
     .from(leads)
     .where(
       and(
         isNull(leads.deletedAt),
-        eq(leads.assignedTo, user.id),
+        /*
+         * Ownership flips on the handed-over tab: these are leads somebody ELSE is
+         * working, listed for the person who sourced them. `ne` rather than nothing,
+         * so a lead handed out and later handed back stops appearing as outstanding.
+         */
+        tab === "handed-over"
+          ? and(eq(leads.setterId, user.id), ne(leads.assignedTo, user.id))
+          : eq(leads.assignedTo, user.id),
         tab === "inactive"
           ? inArray(leads.status, DEAD_STATUSES)
           : inArray(leads.status, ACTIVE_STATUSES),
@@ -231,10 +254,11 @@ export async function listWorkingLeads(
 
   if (tab === "appointment") return withDerived.filter(onAppointmentTab);
   if (tab === "active") return withDerived.filter((r) => !onAppointmentTab(r));
+  // handed-over and inactive are already fully described by their where clause.
   return withDerived;
 }
 
-export interface TabCounts { active: number; inactive: number; appointment: number }
+export interface TabCounts { active: number; inactive: number; appointment: number; handedOver: number }
 
 export async function countWorkingTabs(
   user: User,
@@ -285,10 +309,30 @@ export async function countWorkingTabs(
     .from(leads)
     .where(and(isNull(leads.deletedAt), eq(leads.assignedTo, user.id), searchClause));
 
+  /*
+   * Counted separately because its ownership clause is the opposite of the other
+   * three — folding it into the same aggregate would mean dropping the assigned_to
+   * filter from the whole query and re-adding it to every branch, which is how the
+   * three existing counts would quietly start including other people's leads.
+   */
+  const [handed] = await db
+    .select({ c: sql<number>`count(*)::int` })
+    .from(leads)
+    .where(
+      and(
+        isNull(leads.deletedAt),
+        eq(leads.setterId, user.id),
+        ne(leads.assignedTo, user.id),
+        inArray(leads.status, ACTIVE_STATUSES),
+        searchClause,
+      ),
+    );
+
   return {
     active: row?.active ?? 0,
     appointment: row?.appointment ?? 0,
     inactive: row?.inactive ?? 0,
+    handedOver: handed?.c ?? 0,
   };
 }
 

@@ -20,6 +20,8 @@ export interface ListLeadsParams {
 /** A lead row plus the name of whoever currently owns it. */
 export type LeadWithAssignee = Lead & {
   assigneeName: string | null;
+  /** Set only when the lead was handed over — the agent who sourced it. */
+  setterName: string | null;
   projectName: string | null;
 };
 
@@ -101,6 +103,12 @@ export async function listLeadsPaginated(
       .select({
         ...getTableColumns(leads),
         assigneeName: users.name,
+        /* Subquery rather than a second join: `users` is already joined on the
+           assignee, and joining it twice needs an alias that every consumer of
+           getTableColumns would then have to know about. */
+        setterName: sql<string | null>`(
+          select u.name from users u where u.id = ${sql.raw('"leads"."setter_id"')}
+        )`,
         projectName: sql<string | null>`(
           select p.name from projects p where p.id = ${sql.raw('"leads"."project_id"')}
         )`,

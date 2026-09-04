@@ -128,6 +128,8 @@ export default async function LeadsPage({
             budgetMax: l.budgetMax,
             assigneeName: l.assigneeName,
             assignedTo: l.assignedTo,
+            setterId: l.setterId,
+            setterName: l.setterName,
             status: l.status,
             createdAt: l.createdAt,
             utmSource: l.utmSource,

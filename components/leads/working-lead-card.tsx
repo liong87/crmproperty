@@ -13,6 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { leadStatusTone } from "@/lib/status";
 import { formatMYR, cn } from "@/lib/utils";
 import { STATUS } from "@/lib/chart-colors";
+import { useMeId } from "@/lib/me-context";
+import { Users } from "lucide-react";
 
 const relTime = (d: Date | null): string => {
   if (!d) return "never contacted";
@@ -43,6 +45,7 @@ export function WorkingLeadCard({
   colleagues?: AssignableUser[];
 }) {
   const router = useRouter();
+  const meId = useMeId();
   const [pending, start] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
   const [done, setDone] = React.useState<string | null>(null);
@@ -86,6 +89,33 @@ export function WorkingLeadCard({
         </div>
         <Badge className={leadStatusTone(lead.status)}>{statusLabel(lead.status)}</Badge>
       </div>
+
+      {/*
+        * THE CO-BROKE MARKER.
+        *
+        * A handed-over lead otherwise looks exactly like an ordinary one, and the claim
+        * that makes it a co-broke lives in a timeline note nobody opens. Both sides get
+        * a line, phrased for whichever of them is reading: the agent working it is told
+        * whose share it carries, and the agent who gave it away is told who has it now.
+        * Money should not be something either of them has to go and look up.
+        */}
+      {lead.setterId && (
+        <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-secondary px-2 py-1 text-xs">
+          <Users className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          {lead.setterId === meId ? (
+            <span>
+              Co-broke — now with{" "}
+              <span className="font-medium">{lead.ownerName ?? "another agent"}</span>. You
+              stay the setter.
+            </span>
+          ) : (
+            <span>
+              Co-broke — <span className="font-medium">{lead.setterName ?? "a colleague"}</span>{" "}
+              is the setter and shares the commission.
+            </span>
+          )}
+        </p>
+      )}
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
         {lead.projectName && <Badge variant="secondary">{lead.projectName}</Badge>}
@@ -146,7 +176,11 @@ export function WorkingLeadCard({
 
         {/* Last of the three, and quietest: handing a lead over is a considered
             decision, not something to sit under a thumb beside "Called". */}
-        <HandOverButton leadId={lead.id} leadName={lead.name} colleagues={colleagues} />
+        {/* Only on a lead you hold. On the Handed over tab somebody else is working
+            it, and offering to give away what you already gave away is nonsense. */}
+        {(lead.ownerId == null || lead.ownerId === meId) && (
+          <HandOverButton leadId={lead.id} leadName={lead.name} colleagues={colleagues} />
+        )}
       </div>
 
       {/* The remark thread. Status moves only from in here, so every change carries
