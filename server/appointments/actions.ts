@@ -23,6 +23,7 @@ import { notify } from "@/lib/notify";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { assertCanEditOwned, assertCanEditOwnedAny } from "@/server/auth/ownership";
+import { openDealForBooking } from "./booking-internal";
 
 const scheduleSchema = z
   .object({
@@ -211,6 +212,32 @@ export async function recordAppointmentOutcome(input: unknown): Promise<ActionRe
         occurredAt: new Date(),
         createdBy: me.id,
       });
+
+      /*
+       * A BOOKING OPENS A DEAL.
+       *
+       * Until this line the pipeline the agency actually sells through — Booked, SPA
+       * Signed, Loan Approved, Completed — together with its paperwork checklist and
+       * the commission engine behind it, all sat downstream of a step nobody took. The
+       * board said "Booked" and nothing else in the system ever heard about it, so the
+       * funnel's last column counted deposits as though they were completed sales.
+       *
+       * Deliberately AFTER the outcome is written, and deliberately unable to fail the
+       * request: see the best-effort note in booking-internal.ts.
+       */
+      if (d.outcome === "booked") {
+        const opened = await openDealForBooking(
+          {
+            id: row.id,
+            contactId: row.contactId,
+            leadId: row.leadId,
+            projectId: row.projectId,
+            propertyId: row.propertyId,
+          },
+          me,
+        );
+        if (opened.dealId && !opened.existing) revalidatePath("/pipeline");
+      }
     } else if (d.status === "no-show") {
       // Worth its own line on the timeline: a no-show is the single most actionable
       // signal in project sales, and it is what the board's no-show rate counts.

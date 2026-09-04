@@ -8,7 +8,7 @@ import { DEAL_TYPE } from "@/lib/constants";
 import { deals, dealStages, contacts, activities, type Deal } from "@/lib/db/schema";
 import { requireDbUser, assertCanEdit, AuthorizationError } from "@/lib/auth";
 import { ok, fail } from "@/lib/action-result";
-import { instantiateChecklist } from "@/server/deal-documents/checklist-internal";
+import { openDeal } from "./create-internal";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { getDealById } from "./queries";
@@ -37,60 +37,35 @@ export async function createDeal(input: unknown): Promise<ActionResult<Deal>> {
     if (!contact) return fail("Contact not found — a deal must be linked to a contact.");
     await assertCanEditOwned(me, contact.assignedTo);
 
-    // A deal against a project is a project deal even if the caller did not say so —
-    // inferring it here stops a booked unit landing in the resale pipeline because a
-    // form forgot a hidden field.
-    const dealType = d.dealType ?? (d.projectId ? "project" : "resale");
-    const pipeline = dealType === "project" ? "project" : "resale";
-
-    // Default to the first (lowest sort_order) stage OF THAT PIPELINE if none provided.
-    let stageId = d.stageId;
-    if (!stageId) {
-      const [first] = await db
-        .select({ id: dealStages.id })
-        .from(dealStages)
-        .where(and(isNull(dealStages.deletedAt), eq(dealStages.pipeline, pipeline)))
-        .orderBy(dealStages.sortOrder)
-        .limit(1);
-      if (!first) {
-        return fail(
-          pipeline === "project"
-            ? "No project stages configured. Run the migrations to seed them."
-            : "No deal stages configured.",
-        );
-      }
-      stageId = first.id;
+    /*
+     * The insert, the checklist and the stage defaulting live in create-internal.ts,
+     * because BOOKING an appointment opens a deal too and authorises on a different
+     * rule — see the note at the top of that file. This function is now the New Deal
+     * form's authorization decision plus the shared write.
+     */
+    const row = await openDeal(
+      {
+        contactId: d.contactId,
+        propertyId: d.propertyId,
+        projectId: d.projectId,
+        dealType: d.dealType,
+        assignedTo: contact.assignedTo,
+        value: d.value,
+        commissionPct: d.commissionPct,
+        stageId: d.stageId,
+      },
+      me,
+    );
+    if (!row) {
+      return fail(
+        (d.dealType ?? (d.projectId ? "project" : "resale")) === "project"
+          ? "No project stages configured. Run the migrations to seed them."
+          : "No deal stages configured.",
+      );
     }
 
-    const [row] = await db
-      .insert(deals)
-      .values({
-        contactId: d.contactId,
-        propertyId: d.propertyId ?? null,
-        projectId: d.projectId ?? null,
-        dealType,
-        stageId,
-        value: d.value ?? null,
-        commissionPct: d.commissionPct ?? null,
-        assignedTo: contact.assignedTo ?? me.id,
-      })
-      .returning();
-
-    await db.insert(activities).values({
-      entityType: "deals",
-      entityId: row!.id,
-      type: "note",
-      body: `Deal created by ${me.name}.`,
-      createdBy: me.id,
-    });
-
-    // The paperwork checklist for this pipeline. Best-effort by design — a deal that
-    // exists without its checklist is recoverable; failing creation over a template
-    // row is not what anyone wants at that moment.
-    await instantiateChecklist(row!.id, pipeline);
-
     revalidatePath("/pipeline");
-    return ok(row!);
+    return ok(row);
   } catch (err) {
     return handle(err, "createDeal");
   }

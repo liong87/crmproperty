@@ -1,19 +1,32 @@
 /**
  * The project sales funnel.
  *
- *   Leads → Appointments set → Showed up → Booked
+ *   Leads → Appointments set → Showed up → Booked → Converted
  *
- * This is the shape the business actually runs on, and it is deliberately built from
- * leads and appointments rather than from deal stages. A deal is created late, only
- * once something is worth calling a deal; the funnel has to describe what happened to
- * every enquiry, including the many that never became one.
+ * The first four stages are built from leads and appointments rather than from deal
+ * stages, deliberately: the funnel has to describe what happened to every enquiry,
+ * including the many that never became a deal.
+ *
+ * THE LAST STAGE IS DIFFERENT, AND IT IS THE POINT.
+ *
+ * A booking is a deposit and a loan application, not a sale. In Malaysian new-launch
+ * sales the bank rejects a real share of them weeks later and the unit comes back, so a
+ * funnel that ends at Booked reports money the agency has not earned. `Converted` counts
+ * the bookings that actually completed — deals that have reached a terminal WON stage —
+ * and it is the only figure here that commission should ever be reconciled against.
+ *
+ * It is counted by WHEN THE BOOKING HAPPENED, not when the deal completed: of the units
+ * booked in this period, how many have since gone all the way. That makes the most
+ * recent period read low, which is honest — those deals are still at the bank — and it
+ * keeps every column of one row describing the same cohort. A conversion figure dated by
+ * completion would let a February booking flatter an August report.
  *
  * Every figure is scoped by the caller's role, using the same ownership rules as the
  * rest of the app: an agent sees their own numbers, a team lead sees the team's.
  */
 import { and, count, eq, gte, lte, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { leads, appointments, projects, users, type User } from "@/lib/db/schema";
+import { leads, appointments, projects, users, deals, dealStages, type User } from "@/lib/db/schema";
 import { ownershipFilter, ownershipFilterAny, isTeamLeadOrAbove } from "@/lib/auth";
 
 /**
@@ -27,7 +40,7 @@ const NO_PROJECT_LABEL = "No project · resale & rental";
 const NO_AGENT_LABEL = "No owner";
 
 export interface FunnelStage {
-  key: "leads" | "appointments" | "showed-up" | "booked";
+  key: "leads" | "appointments" | "showed-up" | "booked" | "converted";
   label: string;
   count: number;
   /** Share of the stage above. Null for the first stage, which has nothing above it. */
@@ -95,9 +108,29 @@ export async function getFunnel(user: User, window: ReportWindow): Promise<Funne
     ownershipFilterAny(user, [appointments.assignedTo, appointments.closerId]),
   );
 
+  /*
+   * Deals OPENED in this window that have since reached a terminal won stage.
+   *
+   * Keyed off `deals.createdAt` because a deal is opened the moment its appointment is
+   * booked (see server/appointments/booking-internal.ts), so creation date IS booking
+   * date and the cohort matches the four stages above it.
+   *
+   * `is_won AND is_terminal` rather than the stage NAME: deal_stages is editable in the
+   * product, and renaming "Completed" must not silently zero the agency's conversions.
+   */
+  const liveConverted = and(
+    isNull(deals.deletedAt),
+    gte(deals.createdAt, from),
+    lte(deals.createdAt, to),
+    eq(dealStages.isWon, true),
+    eq(dealStages.isTerminal, true),
+    ownershipFilter(user, deals.assignedTo),
+  );
+
   const [
     leadTotals,
     apptTotals,
+    convertedTotals,
     leadsByProject,
     apptsByProject,
     leadsByAgent,
@@ -115,6 +148,12 @@ export async function getFunnel(user: User, window: ReportWindow): Promise<Funne
       })
       .from(appointments)
       .where(liveAppt),
+
+    db
+      .select({ c: count() })
+      .from(deals)
+      .innerJoin(dealStages, eq(deals.stageId, dealStages.id))
+      .where(liveConverted),
 
     db
       .select({ id: leads.projectId, name: projects.name, c: count() })
@@ -180,6 +219,7 @@ export async function getFunnel(user: User, window: ReportWindow): Promise<Funne
 
   const totalLeads = leadTotals[0]?.c ?? 0;
   const t = apptTotals[0] ?? { total: 0, showedUp: 0, noShow: 0, booked: 0 };
+  const converted = convertedTotals[0]?.c ?? 0;
 
   const stages: FunnelStage[] = [
     { key: "leads", label: "Leads", count: totalLeads, conversionFromPrevious: null, conversionFromLeads: null },
@@ -203,6 +243,15 @@ export async function getFunnel(user: User, window: ReportWindow): Promise<Funne
       count: t.booked,
       conversionFromPrevious: share(t.booked, t.showedUp),
       conversionFromLeads: share(t.booked, totalLeads),
+    },
+    {
+      key: "converted",
+      label: "Converted",
+      count: converted,
+      // Against Booked, this reads as the survival rate through the bank — the single
+      // number that says how much of what the board celebrates turns into commission.
+      conversionFromPrevious: share(converted, t.booked),
+      conversionFromLeads: share(converted, totalLeads),
     },
   ];
 

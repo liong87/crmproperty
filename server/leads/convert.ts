@@ -21,13 +21,14 @@ import { z } from "zod";
 import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
-import { leads, contacts, activities } from "@/lib/db/schema";
+import { leads } from "@/lib/db/schema";
 import { requireDbUser, assertCanEdit, AuthorizationError } from "@/lib/auth";
 import { ok, fail } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { getLeadById } from "./queries";
 import { assertCanEditOwned } from "@/server/auth/ownership";
+import { convertLeadToContact } from "./convert-internal";
 
 export async function qualifyLead(
   leadId: string,
@@ -40,73 +41,18 @@ export async function qualifyLead(
     if (!lead) return fail("Lead not found.");
     await assertCanEditOwned(me, lead.assignedTo);
 
-    // Fast path: already converted, nothing to do.
-    if (lead.convertedToContactId) {
-      return ok({ contactId: lead.convertedToContactId, alreadyConverted: true });
-    }
-
-    const outcome = await db.transaction(async (tx) => {
-      // 1. Create the contact, copying person + consent fields.
-      const [contact] = await tx
-        .insert(contacts)
-        .values({
-          name: lead.name,
-          phone: lead.phone,
-          email: lead.email,
-          interest: lead.interest,
-          budgetMin: lead.budgetMin,
-          budgetMax: lead.budgetMax,
-          preferredAreas: lead.preferredAreas,
-          assignedTo: lead.assignedTo,
-          consentGivenAt: lead.consentGivenAt,
-          consentSource: lead.consentSource,
-          sourceLeadId: lead.id,
-        })
-        .returning({ id: contacts.id });
-
-      const contactId = contact!.id;
-
-      // 2. Claim the lead CONDITIONALLY. If another request converted it between
-      //    our read and now, this matches zero rows and we abandon the contact by
-      //    rolling the whole transaction back.
-      const claimed = await tx
-        .update(leads)
-        .set({ status: "closed", convertedToContactId: contactId })
-        .where(and(eq(leads.id, leadId), isNull(leads.convertedToContactId)))
-        .returning({ contactId: leads.convertedToContactId });
-
-      if (claimed.length === 0) {
-        // Lost the race. Roll back so no orphaned contact is left behind.
-        tx.rollback();
-      }
-
-      // 3. Audit trail on both records.
-      await tx.insert(activities).values([
-        {
-          entityType: "leads",
-          entityId: leadId,
-          type: "note",
-          body: `Qualified by ${me.name}; converted to contact.`,
-          createdBy: me.id,
-        },
-        {
-          entityType: "contacts",
-          entityId: contactId,
-          type: "note",
-          body: `Created from qualified lead by ${me.name}.`,
-          createdBy: me.id,
-        },
-      ]);
-
-      return contactId;
-    });
-
-    const contactId = outcome;
+    /*
+     * The transaction itself lives in convert-internal.ts, because BOOKING an
+     * appointment converts a lead too and authorises on a different rule — see the
+     * long note at the top of that file. This function is now just the Qualify
+     * button's authorization decision plus the shared write.
+     */
+    const outcome = await convertLeadToContact(lead, me, "Qualified");
 
     revalidatePath("/leads");
     revalidatePath(`/leads/${leadId}`);
     revalidatePath("/contacts");
-    return ok({ contactId, alreadyConverted: false });
+    return ok(outcome);
   } catch (err) {
     // A rolled-back transaction means we lost the conversion race. Return the
     // winner's contact rather than an error - the user's intent was satisfied.

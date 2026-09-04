@@ -19,8 +19,13 @@
  * Funnel stages are ORDERED — swapping them changes the meaning — so they take a
  * one-hue ramp rather than categorical hues, and the reader sees the sequence in the
  * colour. Darkest at the end, because the end is the goal.
+ *
+ * The fifth step was APPENDED rather than inserted when Converted joined the funnel, so
+ * every stage that already had a colour kept it — a reader who learned the strip does
+ * not have to relearn it — and the goal stays the darkest swatch. ΔL against #124746 is
+ * ~0.12, comfortably over the 0.06 floor this ramp holds itself to.
  */
-export const FUNNEL_RAMP = ["#35b3b1", "#26908e", "#1b6b69", "#124746"] as const;
+export const FUNNEL_RAMP = ["#35b3b1", "#26908e", "#1b6b69", "#124746", "#0a2b2a"] as const;
 
 /**
  * Categorical series identity, in FIXED order. Slot 1 is leads, 2 appointments,

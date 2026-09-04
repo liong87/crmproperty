@@ -2,14 +2,25 @@ import { FUNNEL_RAMP } from "@/lib/chart-colors";
 import type { FunnelStage } from "@/server/reports/funnel";
 
 /**
- * The funnel as one horizontal strip: the four stages in order, each with its count
- * and how much of the previous stage survived to it.
+ * The funnel as one horizontal strip: every stage in order, each with its count and how
+ * much of the previous stage survived to it.
  *
  * The stages are ordered, so they take the single-hue ramp rather than categorical
  * colours, darkening toward the goal. The percentage under each stage is drop-off from
  * the STAGE BEFORE, not from the top — "half the people who showed up booked" is a
- * number an agent can act on; "3% of all leads booked" only ever reads as bad.
+ * number an agent can act on; "3% of all leads booked" only ever reads as bad. Under
+ * the last stage that percentage is the survival rate through the bank, which is the
+ * number this whole strip exists to show.
+ *
+ * The column count is looked up rather than interpolated: Tailwind only ships classes
+ * it can see written out, so `sm:grid-cols-${n}` would compile to nothing and silently
+ * collapse the strip into one column.
  */
+const COLUMNS: Record<number, string> = {
+  4: "sm:grid-cols-4",
+  5: "sm:grid-cols-5",
+  6: "sm:grid-cols-6",
+};
 export function FunnelStrip({ stages, periodLabel }: { stages: FunnelStage[]; periodLabel: string }) {
   return (
     <div className="overflow-hidden rounded-xl border bg-card">
@@ -17,7 +28,9 @@ export function FunnelStrip({ stages, periodLabel }: { stages: FunnelStage[]; pe
         <h2 className="text-sm font-semibold">Your funnel</h2>
         <span className="text-xs text-muted-foreground">{periodLabel}</span>
       </div>
-      <div className="grid grid-cols-2 divide-y sm:grid-cols-4 sm:divide-y-0 sm:divide-x">
+      <div
+        className={`grid grid-cols-2 divide-y sm:divide-y-0 sm:divide-x ${COLUMNS[stages.length] ?? "sm:grid-cols-4"}`}
+      >
         {stages.map((s, i) => {
           const colour = FUNNEL_RAMP[i] ?? FUNNEL_RAMP[FUNNEL_RAMP.length - 1] ?? "#124746";
           const pct = s.conversionFromPrevious;
