@@ -1,6 +1,6 @@
 "use server";
 /**
- * Internal co-broke: hand a lead to a colleague and keep a claim on it.
+ * Internal co-broke: give a lead to a colleague and keep a claim on it.
  *
  * WHY THIS IS NOT `assignLead`:
  *
@@ -8,7 +8,7 @@
  * lead, and it takes the lead off one agent and gives it to another with no residue —
  * which is right for correcting an assignment, and wrong for co-broking.
  *
- * This is an AGENT giving away their own lead. Two differences follow from that:
+ * This is an AGENT co-broking their own lead. Two differences follow from that:
  *
  *   1. The agent needs no special role. They own the lead; they may pass it on. What
  *      they cannot do is take somebody else's, and the ownership check below is what
@@ -21,8 +21,8 @@
  *      reason to sit on it until it goes cold rather than give a colleague the
  *      commission, which is the exact behaviour a co-broke feature exists to stop.
  *
- * The hand-off LANDS. There is no accept step, matching the automatic pass-on that
- * already works this way: five people share a room, and a hand-off is normally agreed
+ * The co-broke LANDS. There is no accept step, matching the automatic pass-on that
+ * already works this way: five people share a room, and a co-broke is normally agreed
  * out loud before anyone clicks. Both agents are notified, and the move is written to
  * the append-only `lead_assignments` trail plus the lead's timeline, so it is never
  * something either of them discovers by accident.
@@ -45,7 +45,7 @@ const schema = z.object({
   note: z.string().max(500).optional().nullable(),
 });
 
-export async function handOffLead(input: unknown): Promise<ActionResult<Lead>> {
+export async function coBrokeLead(input: unknown): Promise<ActionResult<Lead>> {
   try {
     const me = await requireDbUser();
     const d = schema.parse(input);
@@ -64,12 +64,12 @@ export async function handOffLead(input: unknown): Promise<ActionResult<Lead>> {
      */
     const mine = lead.assignedTo != null && lead.assignedTo === me.id;
     if (!mine && !isTeamLeadOrAbove(me)) {
-      return fail("You can only hand over a lead assigned to you.");
+      return fail("You can only co-broke a lead assigned to you.");
     }
 
     // A converted lead is read-only; the client relationship lives on the contact now.
     if (lead.convertedToContactId) {
-      return fail("This lead has been qualified — hand over the contact instead.");
+      return fail("This lead has already been qualified into a contact, so it can no longer be co-broked.");
     }
     if (lead.assignedTo === d.toUserId) {
       return fail("That agent already has this lead.");
@@ -88,7 +88,7 @@ export async function handOffLead(input: unknown): Promise<ActionResult<Lead>> {
       .set({
         assignedTo: d.toUserId,
         /*
-         * FIRST HAND-OFF WINS. A lead passed from Aisyah to Wei Ming to Siew Ling
+         * THE FIRST CO-BROKE WINS. A lead passed from Aisyah to Wei Ming to Siew Ling
          * still credits Aisyah, who is the person who actually brought it in.
          * Overwriting on each hop would quietly transfer the setter's claim to
          * whoever happened to touch it second.
@@ -107,7 +107,7 @@ export async function handOffLead(input: unknown): Promise<ActionResult<Lead>> {
       : null;
     const note = d.note?.trim() || null;
 
-    // The trail and the notifications are best-effort: the hand-off itself has already
+    // The trail and the notifications are best-effort: the co-broke itself has already
     // happened, and telling the agent it failed when it did not is worse than a
     // missing note.
     try {
@@ -125,7 +125,7 @@ export async function handOffLead(input: unknown): Promise<ActionResult<Lead>> {
         entityId: d.leadId,
         type: "note",
         body:
-          `Handed over from ${fromName ?? "Unassigned"} to ${target.name} by ${me.name}. ` +
+          `Co-broked from ${fromName ?? "Unassigned"} to ${target.name} by ${me.name}. ` +
           `${fromName ?? "The previous owner"} stays the setter on this lead.` +
           (note ? ` Note: ${note}` : ""),
         createdBy: me.id,
@@ -134,8 +134,8 @@ export async function handOffLead(input: unknown): Promise<ActionResult<Lead>> {
       const key = `co-broke:${d.leadId}:${Date.now()}`;
       await notify({
         userId: d.toUserId,
-        kind: "lead-handed-over",
-        title: `Lead handed to you: ${lead.name}`,
+        kind: "lead-co-broked",
+        title: `Co-broke from ${fromName ?? "a colleague"}: ${lead.name}`,
         body: `${lead.phone} — from ${fromName ?? "an unassigned record"}.${note ? ` ${note}` : ""}`,
         link: `/leads/${d.leadId}`,
         entityType: "leads",
@@ -147,8 +147,8 @@ export async function handOffLead(input: unknown): Promise<ActionResult<Lead>> {
       if (previousOwner && previousOwner !== me.id) {
         await notify({
           userId: previousOwner,
-          kind: "lead-handed-over",
-          title: `Your lead moved to ${target.name}: ${lead.name}`,
+          kind: "lead-co-broked",
+          title: `Co-broked to ${target.name}: ${lead.name}`,
           body: `You stay the setter on this lead.${note ? ` ${note}` : ""}`,
           link: `/leads/${d.leadId}`,
           entityType: "leads",
@@ -157,7 +157,7 @@ export async function handOffLead(input: unknown): Promise<ActionResult<Lead>> {
         });
       }
     } catch (trailErr) {
-      monitoring.captureException(trailErr, { where: "handOffLead.trail", leadId: d.leadId });
+      monitoring.captureException(trailErr, { where: "coBrokeLead.trail", leadId: d.leadId });
     }
 
     revalidatePath("/leads");
@@ -168,7 +168,7 @@ export async function handOffLead(input: unknown): Promise<ActionResult<Lead>> {
     if (err instanceof AuthorizationError) return fail(err.message);
     if (err instanceof z.ZodError) return fail(err.issues.map((i) => i.message).join("; "));
     if (err instanceof Error && err.message === "UNAUTHENTICATED") return fail("Please sign in.");
-    monitoring.captureException(err, { where: "handOffLead" });
-    return fail("Failed to hand over the lead.");
+    monitoring.captureException(err, { where: "coBrokeLead" });
+    return fail("Failed to co-broke this lead.");
   }
 }

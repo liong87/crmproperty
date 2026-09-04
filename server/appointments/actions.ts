@@ -51,7 +51,7 @@ const scheduleSchema = z
  * rather than in the diary of whoever happened to book it — a manager scheduling on an
  * agent's behalf is not taking the appointment.
  *
- * `sourcedBy` is set only when the lead was HANDED OVER by a colleague, and is the
+ * `sourcedBy` is set only when the lead was CO-BROKED by a colleague, and is the
  * agent who brought it in. See the note on `leads.setter_id`: an internal co-broke
  * keeps the first agent's claim, and this is where that claim turns into the
  * setter/closer split the commission engine already knows how to pay.
@@ -67,7 +67,7 @@ async function resolveClientOwner(
       .where(and(eq(contacts.id, d.contactId), isNull(contacts.deletedAt)));
     if (!row) throw new Error("CLIENT_NOT_FOUND");
     await assertCanEditOwned(me, row.owner);
-    // A contact carries no hand-off claim: conversion happens after the split has
+    // A contact carries no co-broke claim: conversion happens after the split has
     // already been recorded on the appointment that produced the deal.
     return { owner: row.owner, sourcedBy: null };
   }
@@ -99,7 +99,7 @@ export async function scheduleAppointment(input: unknown): Promise<ActionResult<
     const explicitCloser = await assertValidCloser(d.closerId);
 
     /*
-     * INTERNAL CO-BROKE. On a lead a colleague handed over, the agent who sourced it is
+     * INTERNAL CO-BROKE. On a lead a colleague co-broked, the agent who sourced it is
      * the setter and the agent working it now is the closer — exactly the pair
      * `deal_commission_splits` pays out on. The rule itself lives in lib/leads/co-broke
      * so it can be tested: every wrong answer here still produces a valid-looking

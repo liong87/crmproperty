@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 
 const KIND_LABEL: Record<string, string> = {
   "lead-passed-on": "Lead passed on",
+  "lead-co-broked": "Co-broke",
   "lead-assigned": "New lead",
   "document-due": "Paperwork",
   "appointment-reminder": "Appointment",

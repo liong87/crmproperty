@@ -2,11 +2,16 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, UserPlus } from "lucide-react";
-import { handOffLead } from "@/server/leads/hand-off";
+import { coBrokeLead } from "@/server/leads/co-broke-lead";
 import type { AssignableUser } from "@/server/users/queries";
 
 /**
- * Hand this lead to a colleague, keeping the setter's claim on it.
+ * Co-broke this lead with a colleague: they work it, you keep the setter's claim.
+ *
+ * The label is "Co-broke" and not "Hand over" because that is the word the agency
+ * actually uses, and a control named in the vocabulary of the trade needs no
+ * explaining. "Hand over" also described the wrong thing — it sounds like giving a
+ * lead away, which is precisely what this is not.
  *
  * Collapsed to a single quiet button until pressed, because on a queue card the two
  * actions that matter are Called and WhatsApp — a permanently open agent picker beside
@@ -16,7 +21,7 @@ import type { AssignableUser } from "@/server/users/queries";
  * whether to give a lead away is deciding about money, and a feature whose whole
  * purpose is "you keep a share" fails if that promise lives only in a help page.
  */
-export function HandOverButton({
+export function CoBrokeButton({
   leadId,
   leadName,
   colleagues,
@@ -43,7 +48,7 @@ export function HandOverButton({
         className="inline-flex h-11 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
       >
         <UserPlus className="h-4 w-4" />
-        Hand over
+        Co-broke
       </button>
     );
   }
@@ -52,8 +57,8 @@ export function HandOverButton({
     if (!to) return;
     setError(null);
     start(async () => {
-      const res = await handOffLead({ leadId, toUserId: to, note: note.trim() || null });
-      if (!res.success) return setError(res.error ?? "Could not hand this lead over.");
+      const res = await coBrokeLead({ leadId, toUserId: to, note: note.trim() || null });
+      if (!res.success) return setError(res.error ?? "Could not co-broke this lead.");
       setOpen(false);
       router.refresh();
     });
@@ -61,11 +66,11 @@ export function HandOverButton({
 
   return (
     <div className="w-full space-y-2 rounded-md border bg-muted/40 p-2">
-      <label className="block text-xs font-medium" htmlFor={`handover-${leadId}`}>
-        Hand {leadName} to
+      <label className="block text-xs font-medium" htmlFor={`co-broke-${leadId}`}>
+        Co-broke {leadName} with
       </label>
       <select
-        id={`handover-${leadId}`}
+        id={`co-broke-${leadId}`}
         value={to}
         onChange={(e) => setTo(e.target.value)}
         className="h-11 w-full rounded-md border bg-background px-2 text-sm"
@@ -101,7 +106,7 @@ export function HandOverButton({
           className="inline-flex h-11 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground disabled:opacity-50"
         >
           {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          Hand over
+          Co-broke
         </button>
         <button
           type="button"

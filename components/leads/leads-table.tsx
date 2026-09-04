@@ -53,7 +53,7 @@ export interface LeadRow {
   budgetMax: number | null;
   assigneeName: string | null;
   assignedTo: string | null;
-  /** Set only on a handed-over lead: the agent who sourced it and shares the commission. */
+  /** Set only on a co-broked lead: the agent who sourced it and shares the commission. */
   setterId: string | null;
   setterName: string | null;
   status: string;
@@ -224,7 +224,7 @@ export function LeadsTable({
                 ) : (
                   who(l.assigneeName, l.assignedTo, meId)
                 )}
-                {/* A handed-over lead looks identical to a reassigned one without
+                {/* A co-broked lead looks identical to a reassigned one without
                     this line, and the difference is who gets paid. */}
                 {l.setterId && (
                   <span className="mt-0.5 block whitespace-nowrap text-xs text-muted-foreground">

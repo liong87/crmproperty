@@ -25,12 +25,12 @@ const TOUCH_TYPES = ["call", "whatsapp", "email", "appointment", "viewing"] as c
 export const LIST_CAP = 200;
 
 /**
- * `handed-over` is the odd one out and deliberately so: the other three list leads
+ * `co-broke` is the odd one out and deliberately so: the other three list leads
  * ASSIGNED to you, while this lists leads you handed to a colleague and still hold a
  * setter's claim on. Without it a co-broke disappears the moment you give it away, and
  * "passed-out leads went dark" is the exact complaint the feature exists to answer.
  */
-export type WorkingTab = "active" | "inactive" | "appointment" | "handed-over";
+export type WorkingTab = "active" | "inactive" | "appointment" | "co-broke";
 
 export interface WorkingLead {
   id: string;
@@ -185,11 +185,11 @@ export async function listWorkingLeads(
       and(
         isNull(leads.deletedAt),
         /*
-         * Ownership flips on the handed-over tab: these are leads somebody ELSE is
+         * Ownership flips on the co-broke tab: these are leads somebody ELSE is
          * working, listed for the person who sourced them. `ne` rather than nothing,
          * so a lead handed out and later handed back stops appearing as outstanding.
          */
-        tab === "handed-over"
+        tab === "co-broke"
           ? and(eq(leads.setterId, user.id), ne(leads.assignedTo, user.id))
           : eq(leads.assignedTo, user.id),
         tab === "inactive"
@@ -254,7 +254,7 @@ export async function listWorkingLeads(
 
   if (tab === "appointment") return withDerived.filter(onAppointmentTab);
   if (tab === "active") return withDerived.filter((r) => !onAppointmentTab(r));
-  // handed-over and inactive are already fully described by their where clause.
+  // co-broke and inactive are already fully described by their where clause.
   return withDerived;
 }
 

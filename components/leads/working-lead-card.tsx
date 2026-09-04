@@ -6,7 +6,7 @@ import { Phone, MessageCircle, CalendarPlus, Check, Loader2, Clock } from "lucid
 import { logActivity } from "@/server/activities/actions";
 import { statusLabel } from "@/lib/constants";
 import { RemarkThread } from "./remark-thread";
-import { HandOverButton } from "./hand-over-button";
+import { CoBrokeButton } from "./co-broke-button";
 import type { AssignableUser } from "@/server/users/queries";
 import type { WorkingLead } from "@/server/leads/working";
 import { Badge } from "@/components/ui/badge";
@@ -93,7 +93,7 @@ export function WorkingLeadCard({
       {/*
         * THE CO-BROKE MARKER.
         *
-        * A handed-over lead otherwise looks exactly like an ordinary one, and the claim
+        * A co-broked lead otherwise looks exactly like an ordinary one, and the claim
         * that makes it a co-broke lives in a timeline note nobody opens. Both sides get
         * a line, phrased for whichever of them is reading: the agent working it is told
         * whose share it carries, and the agent who gave it away is told who has it now.
@@ -176,10 +176,10 @@ export function WorkingLeadCard({
 
         {/* Last of the three, and quietest: handing a lead over is a considered
             decision, not something to sit under a thumb beside "Called". */}
-        {/* Only on a lead you hold. On the Handed over tab somebody else is working
-            it, and offering to give away what you already gave away is nonsense. */}
+        {/* Only on a lead you hold. On the Co-broke tab somebody else is working it,
+            and offering to co-broke what you already co-broked is nonsense. */}
         {(lead.ownerId == null || lead.ownerId === meId) && (
-          <HandOverButton leadId={lead.id} leadName={lead.name} colleagues={colleagues} />
+          <CoBrokeButton leadId={lead.id} leadName={lead.name} colleagues={colleagues} />
         )}
       </div>
 

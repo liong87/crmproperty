@@ -1,5 +1,5 @@
 /**
- * Does the "Handed over" tab list the right leads for the right person?
+ * Does the "Co-broke" tab list the right leads for the right person?
  *
  * The risk it guards is specific: every other tab on that screen filters on
  * `assigned_to = me`, and this one inverts that — leads somebody ELSE is working, shown
@@ -32,7 +32,7 @@ const STAMP = Date.now();
 const PHONES = [`+6011${STAMP % 10000000}`, `+6012${STAMP % 10000000}`, `+6013${STAMP % 10000000}`];
 
 async function main() {
-  console.log("\nhanded-over tab — real PostgreSQL\n");
+  console.log("\nco-broke tab — real PostgreSQL\n");
 
   const mk = async (tag: string, role: string) =>
     (
@@ -53,28 +53,28 @@ async function main() {
   const ravi = await mk("ravi", "agent"); // nothing to do with it
 
   await db.insert(leads).values([
-    // Handed from Aisyah to Wei Ming.
-    { name: "Handed", phone: PHONES[0]!, source: "manual", assignedTo: weiming.id, setterId: aisyah.id, status: "new" },
-    // Aisyah's own, never handed over.
+    // Co-broked from Aisyah to Wei Ming.
+    { name: "CoBroked", phone: PHONES[0]!, source: "manual", assignedTo: weiming.id, setterId: aisyah.id, status: "new" },
+    // Aisyah's own, never co-broked.
     { name: "Kept", phone: PHONES[1]!, source: "manual", assignedTo: aisyah.id, status: "new" },
-    // Handed out and handed back: setter_id survives, but it is not outstanding.
+    // Co-broked out and back again: setter_id survives, but it is not outstanding.
     { name: "Returned", phone: PHONES[2]!, source: "manual", assignedTo: aisyah.id, setterId: aisyah.id, status: "new" },
   ]);
 
-  const names = async (u: User, tab: "active" | "handed-over") =>
+  const names = async (u: User, tab: "active" | "co-broke") =>
     (await listWorkingLeads(u, tab)).map((r) => r.name).sort();
 
   // The giver sees what she handed out — and only that.
-  check("the setter sees the lead she handed over", await names(aisyah, "handed-over"), ["Handed"]);
-  check("a lead handed back is no longer outstanding", (await names(aisyah, "handed-over")).includes("Returned"), false);
+  check("the setter sees the lead she co-broked", await names(aisyah, "co-broke"), ["CoBroked"]);
+  check("a lead co-broked back is no longer outstanding", (await names(aisyah, "co-broke")).includes("Returned"), false);
 
   // The receiver sees it as ordinary work, not on the handed-over tab.
-  check("the receiver works it on Active", await names(weiming, "active"), ["Handed"]);
-  check("the receiver's handed-over tab is empty", await names(weiming, "handed-over"), []);
+  check("the receiver works it on Active", await names(weiming, "active"), ["CoBroked"]);
+  check("the receiver's co-broke tab is empty", await names(weiming, "co-broke"), []);
 
   // THE LEAK TEST. An uninvolved agent must see none of it.
   check("an unrelated agent sees nothing on Active", await names(ravi, "active"), []);
-  check("an unrelated agent sees nothing handed over", await names(ravi, "handed-over"), []);
+  check("an unrelated agent sees nothing co-broked", await names(ravi, "co-broke"), []);
 
   // Aisyah's own queue must not include the one she gave away.
   check("the giver's Active queue no longer holds it", await names(aisyah, "active"), ["Kept", "Returned"]);
@@ -83,11 +83,11 @@ async function main() {
   const aCounts = await countWorkingTabs(aisyah);
   check("the tab count matches the list", aCounts.handedOver, 1);
   check("and the giver's active count is unaffected", aCounts.active, 2);
-  check("the receiver has nothing handed over", (await countWorkingTabs(weiming)).handedOver, 0);
+  check("the receiver has nothing co-broked", (await countWorkingTabs(weiming)).handedOver, 0);
   check("an unrelated agent counts zero", (await countWorkingTabs(ravi)).handedOver, 0);
 
   // Both names travel with the row, or neither side can be told who they share it with.
-  const [handed] = await listWorkingLeads(aisyah, "handed-over");
+  const [handed] = await listWorkingLeads(aisyah, "co-broke");
   check("the row names who has it now", handed?.ownerName, weiming.name);
   check("and who the setter is", handed?.setterName, aisyah.name);
 
