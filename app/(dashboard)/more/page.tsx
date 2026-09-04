@@ -55,9 +55,12 @@ export default async function MorePage() {
 function Section({ title, entries }: { title: string; entries: Entry[] }) {
   return (
     <div>
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.09em] text-muted-foreground/70">
+      {/* A real heading at full token contrast. Ten-pixel uppercase at 70% alpha was
+          both the smallest and the faintest text on the screen, and the two group
+          labels are the only structure this page has. */}
+      <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">
         {title}
-      </p>
+      </h2>
       <div className="grid gap-3 sm:grid-cols-2">
         {entries.map(({ href, label, desc, icon: Icon }) => (
           <Link

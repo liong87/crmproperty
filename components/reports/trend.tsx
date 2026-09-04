@@ -33,7 +33,7 @@ export function TrendChart({ points }: { points: TrendPoint[] }) {
   if (points.length < 2) {
     return (
       <Card>
-        <CardHeader><CardTitle>Trend</CardTitle></CardHeader>
+        <CardHeader><CardTitle as="h3">Trend</CardTitle></CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
             Not enough history yet — a trend needs at least two weeks of activity.
@@ -58,7 +58,8 @@ export function TrendChart({ points }: { points: TrendPoint[] }) {
   return (
     <Card>
       <CardHeader className="flex-row items-baseline justify-between gap-3">
-        <CardTitle>Trend</CardTitle>
+        {/* h3: nested under the page's "Funnel · <range>" section heading. */}
+        <CardTitle as="h3">Trend</CardTitle>
         <div className="flex items-center gap-3">
           {/* Legend is always present for >= 2 series: identity is never colour alone. */}
           <div className="flex flex-wrap gap-3">
@@ -72,7 +73,14 @@ export function TrendChart({ points }: { points: TrendPoint[] }) {
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="overflow-x-auto">
+        {/* The plot is 34rem at its narrowest, so it scrolls on a phone — and a scroll
+            region with no tab stop cannot be reached without a pointer. */}
+        <div
+          role="region"
+          aria-label="Weekly trend chart"
+          tabIndex={0}
+          className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        >
           <svg
             viewBox={`0 0 ${W} ${H}`}
             className="h-[220px] w-full min-w-[34rem]"
@@ -164,12 +172,18 @@ export function TrendChart({ points }: { points: TrendPoint[] }) {
 
         {/* The table-view twin: every value readable without colour or hover. */}
         {showTable && (
-          <div className="overflow-x-auto border-t pt-3">
+          <div
+            role="region"
+            aria-label="Weekly trend as a table"
+            tabIndex={0}
+            className="overflow-x-auto border-t pt-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          >
             <table className="w-full min-w-[24rem] text-sm">
+              <caption className="sr-only">Leads, appointments and bookings by week</caption>
               <thead>
                 <tr className="text-left text-xs text-muted-foreground">
-                  <th className="py-1 font-medium">Week</th>
-                  {LINES.map((l) => <th key={l.key} className="py-1 text-right font-medium">{l.label}</th>)}
+                  <th scope="col" className="py-1 font-medium">Week</th>
+                  {LINES.map((l) => <th scope="col" key={l.key} className="py-1 text-right font-medium">{l.label}</th>)}
                 </tr>
               </thead>
               <tbody>

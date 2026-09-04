@@ -10,7 +10,7 @@ import { requireDbUser, assertCanEdit, isTeamLeadOrAbove, AuthorizationError } f
 import {
   LISTING_TYPE, PROPERTY_TYPE, TENURE, TITLE_TYPE, FURNISHING, PROPERTY_STATUS,
 } from "@/lib/constants";
-import { ok, fail } from "@/lib/action-result";
+import { ok, fail, failFromZod } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { getPropertyById } from "./queries";
@@ -170,7 +170,7 @@ export async function deleteProperty(id: string): Promise<ActionResult<void>> {
 
 function handle(err: unknown, where: string): ActionResult<never> {
   if (err instanceof AuthorizationError) return fail(err.message);
-  if (err instanceof z.ZodError) return fail(err.issues.map((i) => i.message).join("; "));
+  if (err instanceof z.ZodError) return failFromZod(err);
   if (err instanceof Error && err.message === "UNAUTHENTICATED") return fail("Please sign in.");
   monitoring.captureException(err, { where });
   return fail("Something went wrong.");

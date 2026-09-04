@@ -13,7 +13,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { leads, users, projects } from "@/lib/db/schema";
 import { requireDbUser, assertRole, AuthorizationError } from "@/lib/auth";
-import { ok, fail } from "@/lib/action-result";
+import { ok, fail, failFromZod } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { addSystemRemark } from "./remarks-internal";
@@ -140,7 +140,10 @@ export async function revokeLeads(input: unknown): Promise<ActionResult<{ revoke
 
 function handle(err: unknown, where: string): ActionResult<never> {
   if (err instanceof AuthorizationError) return fail("Only a team lead or admin can do that.");
-  if (err instanceof z.ZodError) return fail(err.issues.map((i) => i.message).join("; "));
+  // failFromZod, not a joined list of messages: the join threw away issue.path, which
+  // is the only thing that lets the form put "that is not a phone number" beside the
+  // phone input instead of at the bottom of the page.
+  if (err instanceof z.ZodError) return failFromZod(err);
   if (err instanceof Error && err.message === "UNAUTHENTICATED") return fail("Please sign in.");
   monitoring.captureException(err, { where });
   return fail("Something went wrong.");

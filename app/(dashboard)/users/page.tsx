@@ -3,6 +3,7 @@ import { getCurrentDbUser, isAdmin, isTeamLeadOrAbove } from "@/lib/auth";
 import { listUsers } from "@/server/users/actions";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { FormAlert } from "@/components/ui/alert";
 import { UserRowControls } from "@/components/users/user-row-controls";
 import { TeamLeadPicker } from "@/components/users/team-lead-picker";
 import { listPossibleLeads } from "@/server/users/hierarchy";
@@ -29,7 +30,7 @@ export default async function UsersPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold">Users</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Users</h1>
         <p className="text-sm text-muted-foreground">
           {canManage
             ? "Roles, access, and who reports to which Team Lead."
@@ -37,10 +38,10 @@ export default async function UsersPage() {
         </p>
       </div>
 
-      {!res.success && <p className="text-sm text-destructive">{res.error}</p>}
+      {!res.success && <FormAlert>{res.error}</FormAlert>}
 
-      <Table>
-        <THead>
+      <Table label="Users">
+        <THead sticky>
           <TR>
             <TH>Name</TH>
             <TH>Email</TH>
@@ -75,6 +76,7 @@ export default async function UsersPage() {
                 {canManage ? (
                   <UserRowControls
                     userId={u.id}
+                    name={u.name}
                     role={u.role as Role}
                     active={u.active}
                     disabled={u.id === me.id}
@@ -87,7 +89,8 @@ export default async function UsersPage() {
           ))}
           {users.length === 0 && (
             <TR>
-              <TD colSpan={4} className="text-center text-muted-foreground">No users yet.</TD>
+              {/* Five columns, not four — a short colSpan leaves a stray empty cell. */}
+              <TD colSpan={5} className="text-center text-muted-foreground">No users yet.</TD>
             </TR>
           )}
         </TBody>

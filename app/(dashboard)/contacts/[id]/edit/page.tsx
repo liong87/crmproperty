@@ -14,7 +14,7 @@ export default async function EditContactPage({ params }: { params: Promise<{ id
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <h1 className="text-xl font-semibold">Edit Contact</h1>
+      <h1 className="font-display text-2xl font-bold tracking-tight">Edit contact</h1>
       <ContactForm
         contactId={c.id}
         defaults={{

@@ -10,7 +10,7 @@ export default async function NewPropertyPage() {
   const agents = canAssign ? await listAssignableAgents() : [];
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <h1 className="text-xl font-semibold">New Property</h1>
+      <h1 className="font-display text-2xl font-bold tracking-tight">New property</h1>
       <PropertyForm mode="create" agents={agents} canAssign={canAssign} />
     </div>
   );

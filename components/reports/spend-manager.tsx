@@ -11,6 +11,7 @@ import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
+import { FormAlert } from "@/components/ui/alert";
 import { formatMYR } from "@/lib/utils";
 
 /** A cost per lead is a small number; whole ringgit hides the difference. */
@@ -101,10 +102,14 @@ export function SpendManager({
           <CardTitle>Record what a campaign cost</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {/* Every control here is wired to its label. They were four bare <Label>s
+              with no htmlFor and four inputs with no id, so the whole row announced as
+              unnamed edit fields and clicking a label focused nothing. */}
           <div className="grid gap-3 sm:grid-cols-4">
             <div className="space-y-1.5">
-              <Label className="text-xs">Campaign</Label>
+              <Label className="text-xs" htmlFor="spend-campaign">Campaign</Label>
               <Input
+                id="spend-campaign"
                 list="known-campaigns"
                 placeholder="Skyline August"
                 value={draft.campaign}
@@ -120,8 +125,8 @@ export function SpendManager({
               </datalist>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Channel</Label>
-              <Select value={draft.source} disabled={pending} onChange={(e) => set("source", e.target.value)}>
+              <Label className="text-xs" htmlFor="spend-source">Channel</Label>
+              <Select id="spend-source" value={draft.source} disabled={pending} onChange={(e) => set("source", e.target.value)}>
                 <option value="meta">meta</option>
                 <option value="google">google</option>
                 <option value="tiktok">tiktok</option>
@@ -129,8 +134,9 @@ export function SpendManager({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Month</Label>
+              <Label className="text-xs" htmlFor="spend-month">Month</Label>
               <Input
+                id="spend-month"
                 type="month"
                 value={draft.month}
                 disabled={pending}
@@ -138,8 +144,9 @@ export function SpendManager({
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Amount (RM)</Label>
+              <Label className="text-xs" htmlFor="spend-amount">Amount (RM)</Label>
               <Input
+                id="spend-amount"
                 inputMode="decimal"
                 placeholder="3,500"
                 value={draft.amount}
@@ -148,7 +155,7 @@ export function SpendManager({
               />
             </div>
           </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <FormAlert>{error}</FormAlert>}
           <div className="flex items-center gap-3">
             <Button size="sm" disabled={pending} onClick={onSave}>
               {pending ? "Saving…" : "Save figure"}
@@ -172,8 +179,10 @@ export function SpendManager({
               from Meta and Google, or from the campaign column of a CSV import.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
+            // No wrapping overflow-x-auto here: Table brings its own named, focusable
+            // scroll region, and a second container around it swallows that tab stop.
+            <div>
+              <Table label="Cost per lead by campaign">
                 <THead>
                   <TR>
                     <TH>Month</TH>

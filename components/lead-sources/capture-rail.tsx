@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Facebook, Plus, RefreshCw, Unplug, Loader2, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FormAlert } from "@/components/ui/alert";
 import { setPageSubscriptions, disconnectAccount } from "@/server/capture/actions";
 import type { CaptureAccountView } from "@/server/capture/queries";
 import { cn } from "@/lib/utils";
@@ -171,9 +172,9 @@ function AccountBlock({
       </div>
 
       {expired && (
-        <p className="mt-2 rounded-lg bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
+        <FormAlert className="mt-2 px-2 py-1.5 text-xs">
           This connection has expired, so leads have stopped arriving. Re-sync to restore it.
-        </p>
+        </FormAlert>
       )}
 
       {live.length > 0 && (
@@ -264,7 +265,7 @@ function AccountBlock({
         </div>
       )}
 
-      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+      {error && <FormAlert className="mt-2">{error}</FormAlert>}
     </div>
   );
 }

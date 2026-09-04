@@ -99,7 +99,9 @@ export function AppNav({ groups, variant }: { groups: NavGroup[]; variant: "side
 
   if (variant === "sidebar") {
     return (
-      <nav className="flex flex-col gap-4">
+      // Named: an unlabelled <nav> is unusable in a landmark list, and this one is
+      // wrapped in an <aside>, so without a name it reads as "complementary".
+      <nav aria-label="Main" className="flex flex-col gap-4">
         {visible.map((group) => {
           if (group.label === null) {
             return (
@@ -152,7 +154,7 @@ export function AppNav({ groups, variant }: { groups: NavGroup[]; variant: "side
   ];
 
   return (
-    <nav className="flex gap-1 overflow-x-auto px-2 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <nav aria-label="Main" className="flex gap-1 overflow-x-auto px-2 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {barLinks.map((l) => {
         const Icon = ICONS[l.href] ?? LayoutDashboard;
         return (
@@ -164,7 +166,9 @@ export function AppNav({ groups, variant }: { groups: NavGroup[]; variant: "side
               "flex shrink-0 flex-col items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-medium transition-colors",
               active(l.href)
               ? "bg-brand-gradient text-primary-foreground"
-              : "text-muted-foreground",
+              // text-muted-foreground on the tinted canvas is 4.6:1 — fine for a label,
+              // but these sit under 18px icons and are the only wayfinding on a phone.
+              : "text-foreground/70",
             )}
           >
             <span className="relative">

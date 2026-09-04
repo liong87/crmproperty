@@ -82,6 +82,36 @@
     -webkit-font-smoothing: antialiased;
   }
   h1 { font-family: var(--font-display), Georgia, serif; letter-spacing: -0.015em; }
+
+  /*
+   * Reduced motion.
+   *
+   * The app animates little, but "little" is not "none": the segmented tab, every
+   * button hover, the row hover tint and the drag feedback on the appointment board
+   * all transition. A vestibular-disorder setting has to be honoured globally rather
+   * than remembered at each call site, so it is enforced here once.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /*
+   * A visible focus ring on every interactive element, including plain links, which
+   * previously relied on the UA default and lost it wherever `outline-none` was set
+   * for a custom ring.
+   */
+  :where(a, button, [role="button"], summary):focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: 0.375rem;
+  }
 }
 
 @layer components {
@@ -105,6 +135,29 @@
       hsl(172 52% 38% / 0.16),
       transparent 60%
     );
+  }
+
+
+  /*
+   * Skip link. Fifteen sidebar links plus the help icon and the account button sit
+   * ahead of the page content in tab order on every single route; without this a
+   * keyboard user pays that toll on every navigation.
+   */
+  .skip-link {
+    position: absolute;
+    left: 0.75rem;
+    top: -3rem;
+    z-index: 60;
+    border-radius: 0.75rem;
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    padding: 0.5rem 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: top 120ms ease;
+  }
+  .skip-link:focus {
+    top: 0.75rem;
   }
 
   /* One gradient for primary surfaces, so there is a single thing to maintain. */
@@ -214,3 +267,4 @@
     content: "";
   }
 }
+

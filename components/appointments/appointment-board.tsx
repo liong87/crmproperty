@@ -2,10 +2,11 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { GripVertical, Loader2 } from "lucide-react";
+import { AlertTriangle, GripVertical, Loader2 } from "lucide-react";
 import { moveAppointmentToColumn } from "@/server/appointments/actions";
 import type { AppointmentRow } from "@/server/appointments/queries";
 import { Select } from "@/components/ui/select";
+import { FormAlert, LiveStatus } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import { who } from "@/lib/user-name";
 
@@ -64,6 +65,17 @@ const COLLAPSED_BY_DEFAULT = new Set(["not-interested", "cancelled"]);
  * This is the highest-value detail on the board: an agent glancing at Scheduled sees
  * what is urgent without reading a single date.
  */
+/**
+ * Past its time and still nobody has said what happened.
+ *
+ * Shares its rule with `bannerTone` on purpose: the rose banner and the word "Overdue"
+ * must never disagree. The word is what makes the state readable at all to a reader who
+ * cannot separate rose from amber, or on a printed board.
+ */
+export function isOverdue(a: { scheduledAt: Date; status: string }): boolean {
+  return a.status === "scheduled" && a.scheduledAt.getTime() < Date.now();
+}
+
 export function bannerTone(a: { scheduledAt: Date; status: string }): string {
   const days = (a.scheduledAt.getTime() - Date.now()) / 86_400_000;
   if (a.status === "scheduled" && days < 0) {
@@ -109,6 +121,10 @@ export function AppointmentBoard({
   const [over, setOver] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  // What just happened to a card, for anyone not watching it move. A drag that lands
+  // announces nothing on its own, and a drag that is refused and springs back reads as
+  // a bug rather than a rejection.
+  const [announce, setAnnounce] = React.useState("");
 
   // Server data wins whenever it arrives — otherwise a refresh elsewhere in the page
   // would leave this board showing a state nobody has any more.
@@ -133,14 +149,19 @@ export function AppointmentBoard({
     setBusy(id);
     setError(null);
 
+    const toLabel = local.find((c) => c.key === toKey)?.label ?? toKey;
     void (async () => {
       const res = await moveAppointmentToColumn({ id, column: toKey });
       setBusy(null);
       if (!res.success) {
         setLocal(before);
-        setError(res.error ?? "Could not move that appointment.");
+        setAnnounce("");
+        setError(
+          `${card.clientName} could not be moved to ${toLabel} — put back in ${from.label}. ${res.error ?? "Please try again."}`,
+        );
         return;
       }
+      setAnnounce(`${card.clientName} moved to ${toLabel}.`);
       // Refresh so the no-show rate and the counts above the board follow the card.
       router.refresh();
     })();
@@ -148,9 +169,17 @@ export function AppointmentBoard({
 
   return (
     <div className="space-y-3">
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <FormAlert>{error}</FormAlert>}
+      <LiveStatus>{announce}</LiveStatus>
 
-      <div className="flex gap-3 overflow-x-auto pb-4">
+      {/* The columns run off every phone, so the strip is a named, focusable region —
+          a scroll container with no tab stop cannot be reached without a pointer. */}
+      <div
+        role="region"
+        aria-label="Appointment board"
+        tabIndex={0}
+        className="flex gap-3 overflow-x-auto pb-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
         {local.map((col) => (
           <div
             key={col.key}
@@ -172,9 +201,12 @@ export function AppointmentBoard({
             )}
           >
             <div className="flex items-center justify-between border-b border-white/60 px-3 py-2.5 dark:border-gray-700/60">
-              <span className={cn("text-[10px] font-bold uppercase tracking-wide", COLUMN_TINT[col.key]?.label)}>
+              {/* A real heading at a readable size. 10px uppercase with letter-spacing
+                  is below the point where these labels stay legible, and a styled span
+                  left the board with no structure to navigate by. */}
+              <h2 className={cn("text-[11px] font-bold uppercase tracking-wide", COLUMN_TINT[col.key]?.label)}>
                 {col.label}
-              </span>
+              </h2>
               <span className="text-xs font-semibold tabular-nums text-muted-foreground">
                 {col.items.length}
               </span>
@@ -183,7 +215,7 @@ export function AppointmentBoard({
             <div className="p-2">
             {col.items.length === 0 ? (
               <div className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">
-                Empty
+                Nothing in {col.label}
               </div>
             ) : (
               <ul className="space-y-2">
@@ -204,16 +236,26 @@ export function AppointmentBoard({
                       busy === a.id && "opacity-60",
                     )}
                   >
-                    {/* Time-coded banner. Hue = urgency, never stage. */}
+                    {/* Time-coded banner. Hue = urgency, never stage — and never hue
+                        alone: past-due says so in words as well, because rose against
+                        amber is exactly the pair the commonest colour deficiency loses. */}
                     <div className={cn("px-3 py-2", bannerTone(a))}>
                       <div className="flex items-center justify-between gap-1.5">
                         <div className="flex min-w-0 flex-1 items-center gap-1 text-[11px] font-semibold leading-tight">
-                          <span className="truncate opacity-90">{a.subjectTitle}</span>
+                          {/* Full strength: at 90% over an already-tinted banner this
+                              was the one string on the board below 4.5:1. */}
+                          <span className="truncate">{a.subjectTitle}</span>
                         </div>
                         <span className="shrink-0 text-[11px] font-semibold tabular-nums">
                           {timeFmt.format(a.scheduledAt)}
                         </span>
                       </div>
+                      {isOverdue(a) && (
+                        <p className="mt-1 flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide">
+                          <AlertTriangle aria-hidden="true" className="h-3 w-3 shrink-0" />
+                          Overdue — needs an outcome
+                        </p>
+                      )}
                     </div>
 
                     <div className="flex items-start gap-2 p-3">
@@ -244,7 +286,7 @@ export function AppointmentBoard({
                           closing it themselves, which is the common case and does not
                           need two rows to say so.
                         */}
-                        <p className="mt-1.5 text-[9px] uppercase tracking-wide text-muted-foreground/70">
+                        <p className="mt-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
                           {a.closerId && a.closerId !== a.setterId ? "Setter / Closer" : "Closer"}
                         </p>
                         <p className="truncate text-[11px]">
@@ -264,15 +306,27 @@ export function AppointmentBoard({
                       {busy === a.id && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />}
                     </div>
 
+                    {/*
+                      Always drawn, never revealed on hover.
+                      It was `sm:opacity-0` with an aria-hidden grip as the only other
+                      hint, so on a desktop a keyboard user saw nothing at all until
+                      focus landed inside an invisible control. This is also the ONLY
+                      way to move a card without a mouse, which is not something to hide.
+                    */}
                     <Select
-                      aria-label={`Move ${a.clientName}'s appointment`}
-                      className="mx-3 mb-3 h-8 w-[calc(100%-1.5rem)] text-xs opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
+                      aria-label={`Stage for ${a.clientName}'s appointment`}
+                      className="mx-3 mb-3 h-8 w-[calc(100%-1.5rem)] border-input/70 text-xs transition-colors hover:border-input focus:border-input"
                       value={col.key}
                       disabled={busy === a.id}
                       onChange={(e) => move(a.id, e.target.value)}
                     >
                       {local.map((c) => (
-                        <option key={c.key} value={c.key}>Move to: {c.label}</option>
+                        <option key={c.key} value={c.key}>
+                          {/* The selected option states where the card IS. Reading
+                              "Move to: Scheduled" as the current value described an
+                              action that was not happening and never would. */}
+                          {c.key === col.key ? c.label : `Move to ${c.label}`}
+                        </option>
                       ))}
                     </Select>
                   </li>

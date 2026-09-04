@@ -53,7 +53,14 @@ export function FilterDropdown({
       if (menu.current?.contains(t) || btn.current?.contains(t)) return;
       setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    // Escape hands focus back to the chip. The menu is portalled to the body, so
+    // closing it any other way leaves focus at the end of the document and the next
+    // Tab restarts from the top of the page.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      btn.current?.focus();
+    };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
     window.addEventListener("scroll", close, true);

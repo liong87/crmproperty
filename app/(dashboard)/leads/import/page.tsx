@@ -11,7 +11,7 @@ export default async function ImportLeadsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div>
-        <h1 className="text-xl font-semibold">Import leads</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Import leads</h1>
         <p className="text-sm text-muted-foreground">Bulk-add leads from a CSV file. Duplicates are merged by phone or email.</p>
       </div>
       <CsvImport canDistribute={canDistribute} />

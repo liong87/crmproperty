@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { changePropertyStatus } from "@/server/properties/actions";
 import { PROPERTY_STATUS } from "@/lib/constants";
 import { Select } from "@/components/ui/select";
+import { FormAlert } from "@/components/ui/alert";
 
 export function StatusControl({ propertyId, status }: { propertyId: string; status: string }) {
   const router = useRouter();
@@ -22,10 +23,10 @@ export function StatusControl({ propertyId, status }: { propertyId: string; stat
 
   return (
     <div>
-      <Select className="h-9 w-40" value={status} disabled={pending} onChange={(e) => onChange(e.target.value)}>
+      <Select aria-label="Listing status" className="h-9 w-40" value={status} disabled={pending} onChange={(e) => onChange(e.target.value)}>
         {PROPERTY_STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
       </Select>
-      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+      {error && <FormAlert className="mt-1">{error}</FormAlert>}
     </div>
   );
 }

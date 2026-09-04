@@ -24,7 +24,7 @@ export default async function CommissionSettingsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold">Commission</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Commission</h1>
         <p className="text-sm text-muted-foreground">
           How the developer&rsquo;s commission is released across a transaction, and how it
           is split. Changing a scheme affects new deals only — a deal keeps the rates it

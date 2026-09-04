@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { FormAlert } from "@/components/ui/alert";
 
 const PROVIDERS = ["meta", "tally", "typeform", "googleads", "generic"] as const;
 
@@ -142,7 +143,7 @@ export function LeadSourceManager({
         ))}
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <FormAlert>{error}</FormAlert>}
 
       {!adding && <Button size="sm" variant="outline" onClick={() => setAdding(true)}>Map a form</Button>}
 

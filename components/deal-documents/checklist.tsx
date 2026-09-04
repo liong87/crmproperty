@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { FormAlert } from "@/components/ui/alert";
 import { STATUS } from "@/lib/chart-colors";
 import { isoToLocalInput } from "@/lib/utils";
 
@@ -171,7 +172,7 @@ export function DealChecklist({
         })}
       </ul>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <FormAlert>{error}</FormAlert>}
 
       {canEdit && (
         <div className="flex flex-wrap items-end gap-2 border-t pt-3">

@@ -8,6 +8,7 @@ import type { PickableListing } from "@/server/matching/queries";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { FormAlert } from "@/components/ui/alert";
 import { formatMYR } from "@/lib/utils";
 
 /**
@@ -167,7 +168,7 @@ export function WhatsAppButton({
       <p className="text-xs text-muted-foreground">
         Opens WhatsApp with this message ready — you still press send there.
       </p>
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <FormAlert>{error}</FormAlert>}
       <div className="flex gap-2">
         <Button onClick={send} disabled={pending || !msg}>
           {pending ? "Opening…" : "Open WhatsApp"}

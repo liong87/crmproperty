@@ -33,32 +33,55 @@ export function StatusCell({
   const [rect, setRect] = React.useState<{ top: number; left: number } | null>(null);
   const btn = React.useRef<HTMLButtonElement>(null);
   const menu = React.useRef<HTMLDivElement>(null);
+  const remarkId = React.useId();
+
+  const place = React.useCallback(() => {
+    const r = btn.current?.getBoundingClientRect();
+    if (r) setRect({ top: r.bottom + 4, left: Math.min(r.left, window.innerWidth - 268) });
+  }, []);
 
   React.useEffect(() => {
     if (!open) return;
-    const r = btn.current?.getBoundingClientRect();
-    if (r) setRect({ top: r.bottom + 4, left: Math.min(r.left, window.innerWidth - 268) });
+    place();
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
       if (menu.current?.contains(t) || btn.current?.contains(t)) return;
       close();
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
-    const onScroll = () => close();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && dismiss();
+    /*
+     * Scrolling REPOSITIONS the menu; it used to close it. The list is eleven statuses
+     * long and the table scrolls under it, so the one gesture that lets you see the
+     * option you are reaching for was also the gesture that slammed the menu shut.
+     * Capture phase: it is the table that scrolls, not the window, and a bubbling
+     * listener on window never hears that.
+     */
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", onScroll, true);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
     };
-  }, [open]);
+  }, [open, place]);
 
   function close() { setOpen(false); setPicked(null); setBody(""); setError(null); }
 
+  /**
+   * Closing on purpose — Escape, Cancel, or the chip itself — hands focus back to the
+   * chip. Closing because of a click somewhere else must NOT: the click already has a
+   * destination, and pulling focus away from it is worse than leaving it alone.
+   */
+  function dismiss() { close(); btn.current?.focus(); }
+
   function save() {
     if (!picked) return;
+    // Enter held down fires repeatedly. Without this the lead gets two remarks and two
+    // status changes from one keypress, and the thread reads as if it happened twice.
+    if (pending) return;
     setPending(true);
     setError(null);
     void (async () => {
@@ -75,13 +98,13 @@ export function StatusCell({
       <button
         ref={btn}
         type="button"
-        onClick={() => (open ? close() : setOpen(true))}
+        onClick={() => (open ? dismiss() : setOpen(true))}
         aria-haspopup="listbox"
         aria-expanded={open}
         className="inline-flex items-center gap-1 rounded-full transition-opacity hover:opacity-80"
       >
         <Badge className={leadStatusTone(status)}>{statusLabel(status)}</Badge>
-        <ChevronDown className="h-3 w-3 shrink-0 opacity-40" />
+        <ChevronDown aria-hidden="true" className="h-3 w-3 shrink-0 opacity-40" />
       </button>
 
       {open && rect && typeof document !== "undefined" &&
@@ -92,7 +115,7 @@ export function StatusCell({
             className="z-50 overflow-hidden rounded-xl border bg-card shadow-lg"
           >
             {!picked ? (
-              <div role="listbox" className="max-h-72 overflow-y-auto p-1">
+              <div role="listbox" aria-label={`Status for ${leadName}`} className="max-h-72 overflow-y-auto p-1">
                 {LEAD_STATUS_META.map((s) => (
                   <button
                     key={s.value}
@@ -105,8 +128,10 @@ export function StatusCell({
                       s.value === status && "font-semibold",
                     )}
                   >
-                    <span className={cn("h-2 w-2 shrink-0 rounded-full", leadStatusTone(s.value))} />
-                    {s.label}
+                    {/* The tone belongs on a badge carrying the word, not on an 8px
+                        dot: a colour with no text beside it is unreadable to anyone
+                        who does not already know the palette. */}
+                    <Badge className={leadStatusTone(s.value)}>{s.label}</Badge>
                   </button>
                 ))}
               </div>
@@ -116,26 +141,33 @@ export function StatusCell({
                   {leadName} &rarr;{" "}
                   <span className="font-semibold text-foreground">{statusLabel(picked)}</span>
                 </p>
+                {/* A placeholder is not a name: it disappears the moment you type, and
+                    it is never read as the field's label. */}
+                <label htmlFor={remarkId} className="sr-only">
+                  What happened? Remark for {leadName} (optional)
+                </label>
                 <input
+                  id={remarkId}
                   autoFocus
                   value={body}
+                  disabled={pending}
                   onChange={(e) => setBody(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") { e.preventDefault(); save(); }
-                    if (e.key === "Escape") close();
+                    if (e.key === "Escape") dismiss();
                   }}
                   placeholder="What happened? (optional)"
-                  className="mt-2 w-full border-0 border-b border-input bg-transparent py-1 text-sm outline-none placeholder:text-muted-foreground focus:border-primary"
+                  className="mt-2 w-full border-0 border-b border-input bg-transparent py-1 text-sm outline-none placeholder:text-muted-foreground focus:border-primary disabled:opacity-60"
                 />
-                {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
+                {error && <p role="alert" className="mt-1.5 text-xs text-destructive">{error}</p>}
                 <div className="mt-3 flex justify-end gap-1.5">
-                  <button type="button" onClick={close}
-                    className="rounded-lg px-2.5 py-1 text-xs text-muted-foreground hover:bg-secondary">
+                  <button type="button" onClick={dismiss} disabled={pending}
+                    className="rounded-lg px-2.5 py-1 text-xs text-muted-foreground hover:bg-secondary disabled:opacity-50">
                     Cancel
                   </button>
                   <button type="button" onClick={save} disabled={pending}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-brand-gradient px-2.5 py-1 text-xs font-semibold text-primary-foreground disabled:opacity-50">
-                    {pending && <Loader2 className="h-3 w-3 animate-spin" />}
+                    {pending && <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />}
                     Save
                   </button>
                 </div>

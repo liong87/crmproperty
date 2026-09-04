@@ -15,7 +15,7 @@ import { db } from "@/lib/db/client";
 import { projects, projectUnitTypes, type Project, type ProjectUnitType } from "@/lib/db/schema";
 import { requireDbUser, assertRole, AuthorizationError } from "@/lib/auth";
 import { PROPERTY_TYPE, TENURE, TITLE_TYPE, PROJECT_STATUS } from "@/lib/constants";
-import { ok, fail } from "@/lib/action-result";
+import { ok, fail, failFromZod } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { getProjectById, getUnitTypeById } from "./queries";
@@ -284,7 +284,7 @@ export async function deleteUnitType(id: string): Promise<ActionResult<void>> {
 
 function handle(err: unknown, where: string): ActionResult<never> {
   if (err instanceof AuthorizationError) return fail("You do not have permission to change projects.");
-  if (err instanceof z.ZodError) return fail(err.issues.map((i) => i.message).join("; "));
+  if (err instanceof z.ZodError) return failFromZod(err);
   if (err instanceof Error && err.message === "UNAUTHENTICATED") return fail("Please sign in.");
   monitoring.captureException(err, { where });
   return fail("Something went wrong.");

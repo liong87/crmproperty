@@ -30,13 +30,13 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
     <div className="mx-auto max-w-3xl space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h1 className="text-xl font-semibold">{p.title}</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight">{p.title}</h1>
           <p className="text-sm text-muted-foreground">{p.area}, {p.state}</p>
         </div>
         <div className="flex items-center gap-2">
           {editable ? <StatusControl propertyId={p.id} status={p.status} /> : <Badge className={propertyStatusTone(p.status)}>{p.status}</Badge>}
           {editable && <Link href={`/properties/${p.id}/edit`}><Button size="sm" variant="outline">Edit</Button></Link>}
-          {editable && <DeletePropertyButton propertyId={p.id} />}
+          {editable && <DeletePropertyButton propertyId={p.id} title={p.title} />}
         </div>
       </div>
 

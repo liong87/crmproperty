@@ -28,7 +28,7 @@ export function TeamProgressTable({ data }: { data: TeamProgressData }) {
         Share of chapters each agent has marked as watched. A blank column is a topic with
         no chapters yet.
       </p>
-      <Table>
+      <Table label="Team progress by topic">
         <THead>
           <TR>
             <TH>Agent</TH>

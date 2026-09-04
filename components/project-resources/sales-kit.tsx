@@ -19,6 +19,7 @@ import type { KitGroup } from "@/server/project-resources/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FormAlert } from "@/components/ui/alert";
 
 /**
  * What a link should READ as in the list.
@@ -214,7 +215,7 @@ export function SalesKit({
         </section>
       ))}
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <FormAlert>{error}</FormAlert>}
 
       {canPublish && !adding && (
         <Button size="sm" variant="outline" onClick={() => setAdding(true)}>

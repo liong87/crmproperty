@@ -1,11 +1,15 @@
 "use client";
 import * as React from "react";
 import { deleteProperty } from "@/server/properties/actions";
-import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ui/confirm-button";
+import { FormAlert } from "@/components/ui/alert";
 
-/** Two-step delete: click reveals confirm, second click soft-deletes. */
-export function DeletePropertyButton({ propertyId }: { propertyId: string }) {
-  const [armed, setArmed] = React.useState(false);
+/**
+ * Soft-delete, behind an arm-then-confirm. The question names the listing: on a detail
+ * page the heading has scrolled away as often as not, and "Are you sure?" is not a
+ * question anybody can answer.
+ */
+export function DeletePropertyButton({ propertyId, title }: { propertyId: string; title: string }) {
   const [error, setError] = React.useState<string | null>(null);
   const [pending, start] = React.useTransition();
 
@@ -14,20 +18,22 @@ export function DeletePropertyButton({ propertyId }: { propertyId: string }) {
     start(async () => {
       const res = await deleteProperty(propertyId);
       // Success redirects; only failures return here.
-      if (res && !res.success) { setError(res.error); setArmed(false); }
+      if (res && !res.success) setError(res.error);
     });
   }
 
-  if (!armed) {
-    return <Button size="sm" variant="outline" onClick={() => setArmed(true)}>Delete</Button>;
-  }
   return (
-    <div className="flex items-center gap-2">
-      <Button size="sm" variant="destructive" disabled={pending} onClick={onDelete}>
-        {pending ? "Deleting…" : "Confirm delete"}
-      </Button>
-      <Button size="sm" variant="ghost" disabled={pending} onClick={() => setArmed(false)}>Cancel</Button>
-      {error && <span className="text-xs text-destructive">{error}</span>}
+    <div className="flex flex-wrap items-center gap-2">
+      <ConfirmButton
+        variant="outline"
+        onConfirm={onDelete}
+        question={`Delete “${title}”?`}
+        confirmLabel={pending ? "Deleting…" : "Delete listing"}
+        pending={pending}
+      >
+        Delete
+      </ConfirmButton>
+      {error && <FormAlert className="w-full">{error}</FormAlert>}
     </div>
   );
 }

@@ -27,7 +27,9 @@ function ReportHeader({ me, subtitle }: { me: { role: string }; subtitle: string
   return (
     <div className="flex flex-wrap items-start justify-between gap-2 print:hidden">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight">Report</h1>
+        {/* "Reports", matching the nav link and the /more tile. A page whose title
+            disagrees with the link that reached it reads as the wrong page. */}
+        <h1 className="font-display text-2xl font-bold tracking-tight">Reports</h1>
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -138,10 +140,13 @@ export default async function ReportsPage({
       <ReportControls params={params} sources={sourceChips} projects={projects} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Total leads" value={String(r.totalLeads)} />
+        <StatCard label="Total leads" value={String(r.totalLeads)} href="/leads" />
+        {/* Qualified spans two statuses and /leads filters on one, so no URL lists the
+            rows this number counted. Conversion is a ratio and has no rows at all.
+            Both stay inert rather than pointing at a different set. */}
         <StatCard label="Qualified" value={String(r.qualifiedLeads)} />
         <StatCard label="Conversion" value={`${Math.round(r.conversionRate * 100)}%`} />
-        <StatCard label="Open pipeline" value={formatMYR(r.openPipelineValue)} />
+        <StatCard label="Open pipeline" value={formatMYR(r.openPipelineValue)} href="/pipeline" />
       </div>
 
       {/*
@@ -153,7 +158,12 @@ export default async function ReportsPage({
         <h2 className="text-base font-semibold">Funnel · {range.label}</h2>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      {/*
+        grid-cols-1 is load-bearing. With no explicit single column the implicit track
+        sizes to the cards' MAX-content — 586px, from the trend plot's min-width — and
+        that is what made the report body 602px wide on a 390px phone.
+      */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <FunnelChart data={funnel} />
         <TrendChart points={trend} />
       </div>
@@ -200,7 +210,7 @@ export default async function ReportsPage({
               page, so these counts only mean something once the team logs calls there.
             </p>
           ) : (
-            <Table>
+            <Table label={activity.scope === "team" ? "Outreach by agent" : "Your outreach"}>
               <THead>
                 <TR>
                   <TH>Agent</TH>
@@ -213,8 +223,17 @@ export default async function ReportsPage({
                 {activity.rows.map((a) => (
                   <TR key={a.id}>
                     <TD className="font-medium">{a.name}</TD>
-                    {/* Quietest first, so the row that needs a conversation is at the top. */}
-                    <TD className={`text-right ${a.calls === 0 ? "text-destructive" : ""}`}>{a.calls}</TD>
+                    {/* Quietest first, so the row that needs a conversation is at the top.
+                        "none logged" spells out what the red was saying on its own — a
+                        zero in a column of small numbers is easy to miss, and impossible
+                        to spot at all once the colour is gone. */}
+                    {a.calls === 0 ? (
+                      <TD className="text-right text-destructive">
+                        0 <span className="whitespace-nowrap">· none logged</span>
+                      </TD>
+                    ) : (
+                      <TD className="text-right">{a.calls}</TD>
+                    )}
                     <TD className="text-right">{a.whatsapp}</TD>
                     <TD className="text-right text-muted-foreground">{a.leadsTouched}</TD>
                   </TR>
@@ -225,14 +244,14 @@ export default async function ReportsPage({
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>Leads by status</CardTitle></CardHeader>
-          <CardContent><BarList rows={r.leadsByStatus} /></CardContent>
+          <CardContent><BarList label="Leads by status" rows={r.leadsByStatus} /></CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle>Properties by status</CardTitle></CardHeader>
-          <CardContent><BarList rows={r.propertiesByStatus} /></CardContent>
+          <CardContent><BarList label="Properties by status" rows={r.propertiesByStatus} /></CardContent>
         </Card>
       </div>
 
@@ -240,6 +259,7 @@ export default async function ReportsPage({
         <CardHeader><CardTitle>Pipeline by stage</CardTitle></CardHeader>
         <CardContent>
           <BarList
+            label="Pipeline by stage"
             rows={r.dealsByStage.map((s) => ({ label: s.label, value: s.count, sub: `${s.count} · ${formatMYR(s.value)}` }))}
           />
         </CardContent>
@@ -247,14 +267,14 @@ export default async function ReportsPage({
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
         <StatCard label="Activities (7 days)" value={String(r.activitiesLast7Days)} />
-        <StatCard label="Deal stages" value={String(r.dealsByStage.length)} />
+        <StatCard label="Deal stages" value={String(r.dealsByStage.length)} href="/pipeline" />
       </div>
 
       {r.leaderboard.length > 0 && (
         <Card>
           <CardHeader><CardTitle>Agent leaderboard</CardTitle></CardHeader>
           <CardContent>
-            <Table>
+            <Table label="Agent leaderboard">
               <THead><TR><TH>Agent</TH><TH>Leads</TH><TH>Contacts</TH><TH>Won value</TH></TR></THead>
               <TBody>
                 {r.leaderboard.map((a) => (

@@ -44,7 +44,7 @@ export function FunnelStrip({ stages, periodLabel }: { stages: FunnelStage[]; pe
                 className="absolute inset-x-4 top-0 h-[3px] rounded-b"
                 style={{ backgroundColor: colour }}
               />
-              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 {s.label}
               </p>
               <p className="mt-1.5 text-2xl font-semibold leading-none">{s.count}</p>

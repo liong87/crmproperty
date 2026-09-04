@@ -36,7 +36,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{contact.name}</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{contact.name}</h1>
         {editable && <Link href={`/contacts/${contact.id}/edit`}><Button size="sm" variant="outline">Edit</Button></Link>}
       </div>
       <Card>

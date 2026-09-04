@@ -28,7 +28,7 @@ export default async function SpendPage() {
         <Link href="/reports" className="text-sm text-muted-foreground hover:underline">
           ← Reports
         </Link>
-        <h1 className="mt-1 text-xl font-semibold">Advertising spend</h1>
+        <h1 className="mt-1 font-display text-2xl font-bold tracking-tight">Advertising spend</h1>
         <p className="text-sm text-muted-foreground">
           What each campaign cost, against what it produced. Last three months.
           Cost per <strong>booking</strong> is the one to judge a live campaign on — a

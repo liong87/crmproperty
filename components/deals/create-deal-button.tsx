@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { FormAlert } from "@/components/ui/alert";
 
 /**
  * Create a deal against a contact.
@@ -50,7 +51,8 @@ export function CreateDealButton({
     });
   }
 
-  if (!open) return <Button onClick={() => setOpen(true)}>Create Deal</Button>;
+  // Sentence case, and "deal" — the one noun this app uses for the record.
+  if (!open) return <Button onClick={() => setOpen(true)}>Create deal</Button>;
 
   return (
     <div className="space-y-3 rounded-lg border p-4">
@@ -70,10 +72,13 @@ export function CreateDealButton({
         <Label htmlFor="dealValue">Deal value (RM)</Label>
         <Input id="dealValue" type="number" min="0" value={valueRM} onChange={(e) => setValueRM(e.target.value)} />
       </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <FormAlert>{error}</FormAlert>}
       <div className="flex gap-2">
         <Button onClick={submit} disabled={pending}>{pending ? "Creating…" : "Create"}</Button>
-        <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+        {/* Disabled while the create is in flight. Cancel used to stay live, so the
+            form could be torn down mid-write and the deal would appear with nobody
+            expecting it. */}
+        <Button variant="ghost" disabled={pending} onClick={() => setOpen(false)}>Cancel</Button>
       </div>
     </div>
   );

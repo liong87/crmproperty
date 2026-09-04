@@ -6,6 +6,7 @@ import { CheckCircle2, Circle, Paperclip, Loader2, Download } from "lucide-react
 import { markWatched, attachmentUrl } from "@/server/learning/actions";
 import { cn } from "@/lib/utils";
 import type { TopicDetail } from "@/server/learning/queries";
+import { FormAlert } from "@/components/ui/alert";
 
 /**
  * Turn a YouTube or Vimeo watch link into something an iframe can play.
@@ -169,7 +170,7 @@ export function TopicPlayer({ topic }: { topic: TopicDetail }) {
             </div>
           )}
 
-          {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+          {error && <FormAlert className="mt-3">{error}</FormAlert>}
         </div>
       </div>
 

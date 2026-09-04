@@ -40,7 +40,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold">{project.name}</h1>
+            <h1 className="font-display text-2xl font-bold tracking-tight">{project.name}</h1>
             <Badge className={projectStatusTone(project.status)}>{project.status}</Badge>
           </div>
           <p className="text-sm text-muted-foreground">
@@ -51,7 +51,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <div className="flex flex-wrap items-center gap-2">
             <ProjectStatusControl projectId={project.id} status={project.status} />
             <Link href={`/projects/${project.id}/edit`}><Button size="sm" variant="outline">Edit</Button></Link>
-            <DeleteProjectButton projectId={project.id} />
+            <DeleteProjectButton projectId={project.id} name={project.name} />
           </div>
         )}
       </div>

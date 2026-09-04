@@ -41,7 +41,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     <div className="mx-auto max-w-2xl space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">{lead.name}</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight">{lead.name}</h1>
           {/* statusLabel: the raw slug is "no-pick-up" / "unmatched-req". */}
           <Badge className={leadStatusTone(lead.status)}>{statusLabel(lead.status)}</Badge>
         </div>

@@ -66,8 +66,8 @@ export default async function TeamPage({
               </p>
             </CardHeader>
             <CardContent>
-              <Table>
-                <THead>
+              <Table label="Team activity">
+                <THead sticky>
                   <TR>
                     <TH>Person</TH>
                     <TH>Calls</TH>

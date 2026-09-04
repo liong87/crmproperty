@@ -36,7 +36,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
           ← Pipeline
         </Link>
         <div className="mt-1 flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-semibold">{contactName}</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight">{contactName}</h1>
           <Badge variant="outline">{deal.dealType === "project" ? "new launch" : deal.dealType}</Badge>
           {stage && <Badge>{stage.name}</Badge>}
         </div>

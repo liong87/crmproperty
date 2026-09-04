@@ -1,8 +1,11 @@
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 export interface FunnelStageDatum {
   label: string;
   value: number;
+  /** The cohort this stage counted, where one can be listed. Makes the name a link. */
+  href?: string;
 }
 
 /**
@@ -98,7 +101,24 @@ export function FunnelBand({
   const ink = (i: number) => ({ color: `var(--stage-${rampIndex(i, n)}-ink)` });
 
   return (
-    <div className={cn("px-5 pb-5", className)}>
+    /*
+     * The band scrolls inside its own named region rather than widening the page.
+     * Five stage names cannot compress below their own min-content, so on a 390px
+     * phone the grid pushed the whole document sideways; giving the band a floor and
+     * letting it scroll here keeps the taper readable and the page body honest. The
+     * region is focusable because a scroll container with no tab stop is unreachable
+     * without a pointer.
+     */
+    <div
+      role="region"
+      aria-label="Funnel by stage"
+      tabIndex={0}
+      className={cn(
+        "overflow-x-auto px-5 pb-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+        className,
+      )}
+    >
+      <div className="min-w-[22rem]">
       <div className="grid" style={cols}>
         {stages.map((s, i) => (
           <div
@@ -106,7 +126,19 @@ export function FunnelBand({
             className="border-l border-line-soft px-1.5 pb-2.5 pt-3.5 text-center text-[10.5px] font-semibold uppercase tracking-[0.11em] first:border-l-0"
             style={ink(i)}
           >
-            {s.label}
+            {/* A stage is a cohort, so where the list exists the name opens it. Without
+                this the reader could see the drop-off and had nowhere to go with it. */}
+            {s.href ? (
+              <Link
+                href={s.href}
+                className="rounded underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {s.label}
+                <span className="sr-only"> — {s.value} of {max}</span>
+              </Link>
+            ) : (
+              s.label
+            )}
           </div>
         ))}
       </div>
@@ -166,6 +198,7 @@ export function FunnelBand({
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );

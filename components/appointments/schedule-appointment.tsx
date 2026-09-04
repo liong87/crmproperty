@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { FormAlert } from "@/components/ui/alert";
 import { localInputToIso, formatMYR } from "@/lib/utils";
 
 export interface PickableProject {
@@ -149,7 +150,7 @@ export function ScheduleAppointment({
         />
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <FormAlert>{error}</FormAlert>}
 
       <div className="flex gap-2">
         <Button onClick={submit} disabled={pending}>

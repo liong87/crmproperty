@@ -14,6 +14,7 @@ import { QueueSearch } from "@/components/leads/queue-search";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageTitle } from "@/components/ui/page-title";
 import { Segmented } from "@/components/ui/segmented";
+import { buttonVariants } from "@/components/ui/button";
 import { STATUS } from "@/lib/chart-colors";
 import { cn } from "@/lib/utils";
 
@@ -93,6 +94,8 @@ export default async function WorkingLeadsPage({
     return true;
   });
   const filtered = productSel.length + statusSel.length + (waOnly ? 1 : 0) > 0 || Boolean(search);
+  /** Everything dropped except which tab you are standing on. */
+  const clearedHref = tab === "active" ? "/working-leads" : `/working-leads?tab=${tab}`;
 
   // The WhatsApp opener. A saved per-workspace template is Configuration work (spec
   // §12.6); until that exists this is a sensible default rather than a blank message.
@@ -104,6 +107,16 @@ export default async function WorkingLeadsPage({
       : rate.pct >= 0.7 ? STATUS.good
       : rate.pct >= 0.4 ? STATUS.warning
       : STATUS.critical;
+  /*
+   * The verdict in words. The percentage was coloured green/amber/red and nothing else
+   * said which of the three it was — the one reading of this tile that matters is
+   * invisible in greyscale, and to about one man in twelve in colour.
+   */
+  const pctVerdict =
+    rate.pct == null ? null
+      : rate.pct >= 0.7 ? "on top of it"
+      : rate.pct >= 0.4 ? "slipping"
+      : "behind";
 
   return (
     <div className="space-y-5">
@@ -114,7 +127,7 @@ export default async function WorkingLeadsPage({
           /* The follow-up pill. The design system puts one number and a clause in the
              header; this is the second number the product genuinely nags you about. */
           <div className="rounded-2xl border border-gray-100 bg-card px-4 py-2.5 dark:border-gray-800">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Followed up · {rate.days} days
             </p>
             <p className="mt-0.5 text-sm">
@@ -127,6 +140,7 @@ export default async function WorkingLeadsPage({
               <span className="tabular-nums text-muted-foreground">
                 {rate.followed}/{rate.total} touched
               </span>
+              {pctVerdict && <span className="ml-1 text-muted-foreground">· {pctVerdict}</span>}
             </p>
           </div>
         }
@@ -190,6 +204,17 @@ export default async function WorkingLeadsPage({
           options={[{ value: "1", label: "Has a WhatsApp number", count: rows.filter((r) => r.phone).length }]}
         />
         {waOnly && <ActiveFilterChip param="wa" value="1" label="WhatsApp" />}
+
+        {filtered && (
+          /* One control that undoes the lot. Removing chips one at a time is fine while
+             you remember what you set; after a search and two chips it is guesswork. */
+          <Link
+            href={clearedHref}
+            className="flex shrink-0 items-center gap-1 rounded-full border border-input px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
+          >
+            Clear filters
+          </Link>
+        )}
       </div>
       </Suspense>
 
@@ -212,6 +237,20 @@ export default async function WorkingLeadsPage({
                 : tab === "co-broke"
                   ? "Co-broke a lead from its card and it stays here, so you can see what became of it."
                   : "Leads marked Not Searching, Unmatched Requirement or Blocked move here, so the active queue stays honest."
+          }
+          /* An empty state with nothing to press is a dead end: the filtered one hands
+             back the unfiltered queue, the genuinely empty one hands over the database,
+             which is where the lead you are thinking of actually is. */
+          action={
+            filtered ? (
+              <Link href={clearedHref} className={cn(buttonVariants({ variant: "outline" }))}>
+                Clear filters
+              </Link>
+            ) : (
+              <Link href="/leads" className={cn(buttonVariants({ variant: "outline" }))}>
+                Open the lead database
+              </Link>
+            )
           }
         />
       ) : (

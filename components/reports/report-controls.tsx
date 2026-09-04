@@ -126,6 +126,10 @@ export function ReportTabs({ params, basePath = "/reports" }: { params: ReportPa
  * screen: the filters are in the URL, and the URL is not on the printout. Whoever is
  * handed the page has to be able to see what window and what filters produced these
  * numbers, or they will read them as "the business" rather than "Meta leads in August".
+ *
+ * The title is a `<p>`, not an `<h1>`. It is in the DOM on screen too (only `display:
+ * none`), so as a heading it gave /reports two h1s — and this one is a letterhead, not
+ * the page's subject. The screen h1 remains the single one.
  */
 export function PrintHeader({
   title,
@@ -138,8 +142,8 @@ export function PrintHeader({
 }) {
   return (
     <div className="hidden print:mb-4 print:block print:border-b print:pb-3">
-      <p className="text-[10px] uppercase tracking-wider text-gray-500">Lanthorn Properties CRM</p>
-      <h1 className="font-display text-lg font-bold">{title}</h1>
+      <p className="text-[11px] uppercase tracking-wider text-gray-600">Lanthorn Properties CRM</p>
+      <p className="font-display text-lg font-bold">{title}</p>
       <p className="mt-0.5 text-[11px] text-gray-600">
         {rangeLabel}
         {filters.length > 0 ? ` · ${filters.join(" · ")}` : " · no filters"} · generated{" "}

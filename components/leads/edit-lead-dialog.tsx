@@ -1,10 +1,13 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { X, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { updateLead } from "@/server/leads/actions";
 import { INTEREST } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { Field } from "@/components/ui/field";
+import { FormAlert } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -36,6 +39,17 @@ const stamp = (d: Date) =>
   }).format(d);
 
 /**
+ * Whole ringgit, digits only, with the separators people paste out of a listing.
+ *
+ * `inputMode="numeric"` rather than `type="number"`, matching lead-form: a number input
+ * silently discards "850,000" on some browsers, scrolls its own value on a trackpad,
+ * and reports an empty string for anything it dislikes — so the rejection has to be
+ * ours, said in words, rather than the browser's, said not at all.
+ */
+const MONEY = /^\d{1,12}$/;
+const cleanMoney = (v: string) => v.replace(/[\s,]/g, "");
+
+/**
  * Edit a lead over the table, without navigating.
  *
  * The whole point: every edit used to cost a page load out and a page load back, losing
@@ -56,8 +70,11 @@ export function EditLeadDialog({
   const router = useRouter();
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
+  const [confirmDiscard, setConfirmDiscard] = React.useState(false);
+  const nameRef = React.useRef<HTMLInputElement>(null);
 
-  const [f, setF] = React.useState({
+  const initial = React.useMemo(() => ({
     name: lead.name,
     phone: lead.phone,
     email: lead.email ?? "",
@@ -71,23 +88,47 @@ export function EditLeadDialog({
     utmContent: lead.utmContent ?? "",
     utmTerm: lead.utmTerm ?? "",
     info: lead.info ?? "",
-  });
+  }), [lead]);
+
+  const [f, setF] = React.useState(initial);
   const set = <K extends keyof typeof f>(k: K, v: string) => setF((p) => ({ ...p, [k]: v }));
 
-  React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  const dirty = React.useMemo(
+    () => (Object.keys(initial) as (keyof typeof initial)[]).some((k) => f[k] !== initial[k]),
+    [f, initial],
+  );
+
+  /*
+   * Escape and the backdrop go through here, not straight to `onClose`.
+   *
+   * Escape is a reflex, and the dialog is a form: dismissing it used to throw away
+   * every edit in it with no way back and no acknowledgement that anything was lost.
+   */
+  const requestClose = React.useCallback(() => {
+    if (dirty && !pending) setConfirmDiscard(true);
+    else onClose();
+  }, [dirty, pending, onClose]);
 
   const canSave = f.name.trim().length > 0 && f.phone.trim().length > 0 && !pending;
   // Meta carries a campaign hierarchy; everything else has one meaningful detail.
   const isMeta = f.source === "webhook" || f.source === "api";
 
   function save() {
+    const next: Record<string, string> = {};
+    for (const k of ["budgetMin", "budgetMax"] as const) {
+      const v = cleanMoney(f[k]);
+      if (v !== "" && !MONEY.test(v)) next[k] = "Whole ringgit only, e.g. 850000.";
+    }
+    if (Object.keys(next).length > 0) {
+      setFieldErrors(next);
+      setError("Check the budget — it must be a number in whole ringgit.");
+      return;
+    }
+
     setError(null);
+    setFieldErrors({});
     setPending(true);
-    const rm = (v: string) => (v.trim() === "" ? null : Math.round(Number(v) * 100));
+    const rm = (v: string) => (cleanMoney(v) === "" ? null : Math.round(Number(cleanMoney(v)) * 100));
     void (async () => {
       const res = await updateLead({
         id: lead.id,
@@ -105,129 +146,184 @@ export function EditLeadDialog({
         info: f.info.trim() || null,
       });
       setPending(false);
-      if (!res.success) return setError(res.error ?? "Could not save.");
+      if (!res.success) {
+        // The server knows which field it rejected; print it beside that field rather
+        // than as one more sentence at the bottom of a long form.
+        setFieldErrors(res.fieldErrors ?? {});
+        return setError(res.error ?? "Could not save.");
+      }
       onClose();
       router.refresh();
     })();
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-sm sm:p-8"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Edit lead"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    <Dialog
+      open
+      onClose={requestClose}
+      title="Edit lead"
+      /* The phone as subtitle, so you can confirm you opened the right row. */
+      description={lead.phone}
+      className="sm:max-w-xl"
+      // Focus lands on the first field rather than the close button, which is what the
+      // dialog would otherwise pick. Cast: React 19 types a null-initialised ref as
+      // `RefObject<T | null>`, and Dialog asks for `RefObject<HTMLElement>`.
+      initialFocus={nameRef as React.RefObject<HTMLElement>}
+      footer={
+        <>
+          <Button type="button" variant="ghost" onClick={requestClose} disabled={pending}>Cancel</Button>
+          <Button type="button" onClick={save} disabled={!canSave}>
+            {pending && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />}
+            Save changes
+          </Button>
+        </>
+      }
     >
-      <div className="w-full max-w-xl rounded-2xl border border-gray-100 bg-card shadow-lg dark:border-gray-800">
-        <div className="flex items-start justify-between border-b p-5">
-          <div>
-            <h2 className="font-display text-lg font-bold tracking-tight">Edit lead</h2>
-            {/* The phone as subtitle, so you can confirm you opened the right row. */}
-            <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">{lead.phone}</p>
-          </div>
-          <button type="button" onClick={onClose} aria-label="Close"
-            className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary">
-            <X className="h-4 w-4" />
-          </button>
+      <div className="space-y-4">
+        {confirmDiscard && (
+          <FormAlert focusOnMount>
+            <p>Discard your changes to {lead.name}?</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button type="button" variant="destructive" size="sm" onClick={onClose}>Discard</Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmDiscard(false)}>
+                Keep editing
+              </Button>
+            </div>
+          </FormAlert>
+        )}
+
+        <Field id="e-name" label="Full name" required error={fieldErrors.name}>
+          {(p) => (
+            <Input
+              {...p}
+              ref={nameRef}
+              autoComplete="name"
+              value={f.name}
+              onChange={(e) => set("name", e.target.value)}
+            />
+          )}
+        </Field>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field id="e-phone" label="Contact number" required error={fieldErrors.phone}>
+            {(p) => (
+              <Input
+                {...p}
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={f.phone}
+                onChange={(e) => set("phone", e.target.value)}
+                placeholder="+60123456789"
+              />
+            )}
+          </Field>
+          <Field id="e-email" label="Email" error={fieldErrors.email}>
+            {(p) => (
+              <Input
+                {...p}
+                type="email"
+                autoComplete="email"
+                value={f.email}
+                onChange={(e) => set("email", e.target.value)}
+                placeholder="optional"
+              />
+            )}
+          </Field>
         </div>
 
-        <div className="space-y-4 p-5">
-          <div>
-            <Label htmlFor="e-name">Full name <span className="text-destructive">*</span></Label>
-            <Input id="e-name" value={f.name} onChange={(e) => set("name", e.target.value)} />
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="e-phone">Contact number <span className="text-destructive">*</span></Label>
-              <Input id="e-phone" value={f.phone} onChange={(e) => set("phone", e.target.value)}
-                placeholder="+60123456789" />
-            </div>
-            <div>
-              <Label htmlFor="e-email">Email</Label>
-              <Input id="e-email" value={f.email} onChange={(e) => set("email", e.target.value)}
-                placeholder="optional" />
-            </div>
-          </div>
-
-          <div>
-            <Label htmlFor="e-project">Product</Label>
-            <Select id="e-project" value={f.projectId} onChange={(e) => set("projectId", e.target.value)}>
+        <Field id="e-project" label="Product" error={fieldErrors.projectId}>
+          {(p) => (
+            <Select {...p} value={f.projectId} onChange={(e) => set("projectId", e.target.value)}>
               <option value="">No project · resale &amp; rental</option>
-              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {projects.map((pr) => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
             </Select>
-          </div>
+          )}
+        </Field>
 
-          {/* Structured qualification — the thing the competitor keeps in one freeform
-              blob and therefore cannot filter or match on. */}
-          <Section label="Qualification" />
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div>
-              <Label htmlFor="e-interest">Interest</Label>
-              <Select id="e-interest" value={f.interest} onChange={(e) => set("interest", e.target.value)}>
+        {/* Structured qualification — the thing the competitor keeps in one freeform
+            blob and therefore cannot filter or match on. */}
+        <Section label="Qualification" />
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field id="e-interest" label="Interest" error={fieldErrors.interest}>
+            {(p) => (
+              <Select {...p} value={f.interest} onChange={(e) => set("interest", e.target.value)}>
                 <option value="">—</option>
                 {INTEREST.map((i) => <option key={i} value={i} className="capitalize">{i}</option>)}
               </Select>
-            </div>
-            <div>
-              <Label htmlFor="e-bmin">Budget from (RM)</Label>
-              <Input id="e-bmin" inputMode="numeric" value={f.budgetMin}
-                onChange={(e) => set("budgetMin", e.target.value)} placeholder="450000" />
-            </div>
-            <div>
-              <Label htmlFor="e-bmax">Budget to (RM)</Label>
-              <Input id="e-bmax" inputMode="numeric" value={f.budgetMax}
-                onChange={(e) => set("budgetMax", e.target.value)} placeholder="700000" />
-            </div>
+            )}
+          </Field>
+          <Field id="e-bmin" label="Budget from (RM)" error={fieldErrors.budgetMin}>
+            {(p) => (
+              <Input
+                {...p}
+                inputMode="numeric"
+                value={f.budgetMin}
+                onChange={(e) => set("budgetMin", e.target.value)}
+                placeholder="450000"
+              />
+            )}
+          </Field>
+          <Field id="e-bmax" label="Budget to (RM)" error={fieldErrors.budgetMax}>
+            {(p) => (
+              <Input
+                {...p}
+                inputMode="numeric"
+                value={f.budgetMax}
+                onChange={(e) => set("budgetMax", e.target.value)}
+                placeholder="700000"
+              />
+            )}
+          </Field>
+        </div>
+
+        <Section label="Source" />
+        <p className="text-xs text-muted-foreground">
+          Where it came from: <span className="font-medium capitalize text-foreground">{f.source}</span>.
+          How it arrived is a fact about the past, so it is not editable — only the
+          detail beneath it is.
+        </p>
+        {isMeta ? (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field id="e-camp" label="Campaign">
+              {(p) => <Input {...p} value={f.utmCampaign} onChange={(e) => set("utmCampaign", e.target.value)} />}
+            </Field>
+            <Field id="e-adset" label="Ad set">
+              {(p) => <Input {...p} value={f.utmContent} onChange={(e) => set("utmContent", e.target.value)} />}
+            </Field>
+            <Field id="e-ad" label="Ad">
+              {(p) => <Input {...p} value={f.utmTerm} onChange={(e) => set("utmTerm", e.target.value)} />}
+            </Field>
           </div>
+        ) : (
+          <Field id="e-detail" label="Detail">
+            {(p) => (
+              <Input
+                {...p}
+                value={f.sourceDetail}
+                onChange={(e) => set("sourceDetail", e.target.value)}
+                placeholder="Landing page, form name, referrer…"
+              />
+            )}
+          </Field>
+        )}
 
-          <Section label="Source" />
-          <p className="text-xs text-muted-foreground">
-            Where it came from: <span className="font-medium capitalize text-foreground">{f.source}</span>.
-            How it arrived is a fact about the past, so it is not editable — only the
-            detail beneath it is.
-          </p>
-          {isMeta ? (
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div>
-                <Label htmlFor="e-camp">Campaign</Label>
-                <Input id="e-camp" value={f.utmCampaign} onChange={(e) => set("utmCampaign", e.target.value)} />
-              </div>
-              <div>
-                <Label htmlFor="e-adset">Ad set</Label>
-                <Input id="e-adset" value={f.utmContent} onChange={(e) => set("utmContent", e.target.value)} />
-              </div>
-              <div>
-                <Label htmlFor="e-ad">Ad</Label>
-                <Input id="e-ad" value={f.utmTerm} onChange={(e) => set("utmTerm", e.target.value)} />
-              </div>
-            </div>
-          ) : (
-            <div>
-              <Label htmlFor="e-detail">Detail</Label>
-              <Input id="e-detail" value={f.sourceDetail} onChange={(e) => set("sourceDetail", e.target.value)}
-                placeholder="Landing page, form name, referrer…" />
-            </div>
-          )}
-
-          <Section label="Lead info" />
-          <Textarea rows={3} value={f.info} onChange={(e) => set("info", e.target.value)}
-            placeholder="Anything the structured fields above do not cover…" />
-
-          <p className="text-xs text-muted-foreground">Entered {stamp(lead.createdAt)}</p>
-          {error && <p className="text-sm text-destructive">{error}</p>}
+        <Section label="Lead info" />
+        <div className="space-y-1.5">
+          <Label htmlFor="e-info">Lead info</Label>
+          <Textarea
+            id="e-info"
+            rows={3}
+            value={f.info}
+            onChange={(e) => set("info", e.target.value)}
+            placeholder="Anything the structured fields above do not cover…"
+          />
         </div>
 
-        <div className="flex justify-end gap-2 border-t p-5">
-          <Button type="button" variant="ghost" onClick={onClose} disabled={pending}>Cancel</Button>
-          <Button type="button" onClick={save} disabled={!canSave}>
-            {pending && <Loader2 className="h-4 w-4 animate-spin" />}
-            Save changes
-          </Button>
-        </div>
+        <p className="text-xs text-muted-foreground">Entered {stamp(lead.createdAt)}</p>
+        {error && <FormAlert>{error}</FormAlert>}
       </div>
-    </div>
+    </Dialog>
   );
 }
 

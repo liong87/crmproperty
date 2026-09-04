@@ -1,11 +1,11 @@
 "use client";
 import * as React from "react";
 import { deleteProject } from "@/server/projects/actions";
-import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ui/confirm-button";
+import { FormAlert } from "@/components/ui/alert";
 
-/** Two-step delete: click reveals confirm, second click soft-deletes. */
-export function DeleteProjectButton({ projectId }: { projectId: string }) {
-  const [armed, setArmed] = React.useState(false);
+/** Soft-delete, behind an arm-then-confirm that names the project. */
+export function DeleteProjectButton({ projectId, name }: { projectId: string; name: string }) {
   const [error, setError] = React.useState<string | null>(null);
   const [pending, start] = React.useTransition();
 
@@ -14,20 +14,22 @@ export function DeleteProjectButton({ projectId }: { projectId: string }) {
     start(async () => {
       const res = await deleteProject(projectId);
       // Success redirects; only failures return here.
-      if (res && !res.success) { setError(res.error); setArmed(false); }
+      if (res && !res.success) setError(res.error);
     });
   }
 
-  if (!armed) {
-    return <Button size="sm" variant="outline" onClick={() => setArmed(true)}>Delete</Button>;
-  }
   return (
-    <div className="flex items-center gap-2">
-      <Button size="sm" variant="destructive" disabled={pending} onClick={onDelete}>
-        {pending ? "Deleting…" : "Confirm delete"}
-      </Button>
-      <Button size="sm" variant="ghost" disabled={pending} onClick={() => setArmed(false)}>Cancel</Button>
-      {error && <span className="text-xs text-destructive">{error}</span>}
+    <div className="flex flex-wrap items-center gap-2">
+      <ConfirmButton
+        variant="outline"
+        onConfirm={onDelete}
+        question={`Delete “${name}”?`}
+        confirmLabel={pending ? "Deleting…" : "Delete project"}
+        pending={pending}
+      >
+        Delete
+      </ConfirmButton>
+      {error && <FormAlert className="w-full">{error}</FormAlert>}
     </div>
   );
 }

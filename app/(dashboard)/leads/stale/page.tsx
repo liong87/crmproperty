@@ -46,7 +46,7 @@ export default async function StaleLeadsPage({
         <Link href="/leads" className="text-sm text-muted-foreground hover:underline">
           ← Leads
         </Link>
-        <h1 className="mt-1 text-xl font-semibold">Going cold</h1>
+        <h1 className="mt-1 font-display text-2xl font-bold tracking-tight">Going cold</h1>
         <p className="text-sm text-muted-foreground">
           Open leads with nothing logged for {days} day{days === 1 ? "" : "s"} or more,
           coldest first.

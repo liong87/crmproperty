@@ -5,6 +5,8 @@ import { addPoolMember, setPoolMemberActive, movePoolMember, removePoolMember } 
 import type { PoolRow } from "@/server/projects/queries";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { ConfirmButton } from "@/components/ui/confirm-button";
+import { FormAlert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 
 /**
@@ -88,9 +90,17 @@ export function PoolManager({
                   >
                     {m.active ? "Pause" : "Resume"}
                   </Button>
-                  <Button size="sm" variant="ghost" disabled={pending} onClick={() => run(() => removePoolMember(m.id))}>
+                  {/* Removing loses their place in the rotation and their history with
+                      it — which is precisely what Pause exists to avoid. Ask first, and
+                      name the person, because the buttons in this row all look alike. */}
+                  <ConfirmButton
+                    onConfirm={() => run(() => removePoolMember(m.id))}
+                    question={`Remove ${m.name} from the pool?`}
+                    confirmLabel="Remove"
+                    pending={pending}
+                  >
                     Remove
-                  </Button>
+                  </ConfirmButton>
                 </div>
               )}
             </li>
@@ -106,11 +116,11 @@ export function PoolManager({
           : "Pass-on is off for this project. Set it on the project's edit page to move stalled leads on automatically."}
       </p>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <FormAlert>{error}</FormAlert>}
 
       {canEdit && available.length > 0 && (
         <div className="flex flex-wrap items-end gap-2">
-          <Select className="h-9 w-56" value={pick} onChange={(e) => setPick(e.target.value)}>
+          <Select aria-label="Add someone to this pool" className="h-9 w-56" value={pick} onChange={(e) => setPick(e.target.value)}>
             <option value="">Add someone…</option>
             {available.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </Select>

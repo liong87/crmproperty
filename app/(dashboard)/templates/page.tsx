@@ -20,7 +20,7 @@ export default async function TemplatesPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <div>
-        <h1 className="text-xl font-semibold">Message templates</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Message templates</h1>
         <p className="text-sm text-muted-foreground">
           Saved messages agents can send with one click. Placeholders are filled in from
           the client&apos;s record.

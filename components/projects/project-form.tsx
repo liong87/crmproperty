@@ -8,7 +8,8 @@ import {
 } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field } from "@/components/ui/field";
+import { FormAlert } from "@/components/ui/alert";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { percentToBp } from "@/lib/utils";
@@ -26,6 +27,18 @@ const empty: ProjectFormValues = {
   address: "", galleryAddress: "", tenure: "", titleType: "", launchDate: "",
   expectedVpDate: "", totalUnits: "", bumiQuotaPct: "", bumiDiscountPct: "",
   rebatePackage: "", developerCommissionPct: "", passOnAfterDays: "", status: "open", notes: "",
+};
+
+/**
+ * The server speaks in basis points and ISO instants; this form is in percent and
+ * dates. A Zod field error keyed to the server's name would otherwise never reach the
+ * input the user has to fix.
+ */
+const SERVER_FIELD_ALIASES: Record<string, keyof ProjectFormValues> = {
+  bumiDiscountBp: "bumiDiscountPct",
+  developerCommissionBp: "developerCommissionPct",
+  launchAt: "launchDate",
+  expectedVpAt: "expectedVpDate",
 };
 
 /**
@@ -49,13 +62,28 @@ export function ProjectForm({
 }) {
   const router = useRouter();
   const [error, setError] = React.useState<string | null>(null);
+  const [serverFields, setServerFields] = React.useState<Partial<Record<keyof ProjectFormValues, string>>>({});
   const [pending, start] = React.useTransition();
-  const { register, handleSubmit } = useForm<ProjectFormValues>({
+  /*
+   * `formState` is read here for the same reason it is on the lead form: registering a
+   * field as `{ required: true }` with no message and nothing rendered made Save a
+   * no-op on a blank Project name — the submit was refused in the library and the
+   * screen did not change.
+   */
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, submitCount },
+  } = useForm<ProjectFormValues>({
     defaultValues: { ...empty, ...defaults },
   });
 
+  const fieldError = (name: keyof ProjectFormValues) =>
+    (errors[name]?.message as string | undefined) ?? serverFields[name];
+
   const onSubmit = handleSubmit((v) => {
     setError(null);
+    setServerFields({});
     const num = (s: string) => (s === "" ? null : Number(s));
     const payload = {
       name: v.name,
@@ -81,65 +109,118 @@ export function ProjectForm({
     start(async () => {
       const res =
         mode === "create" ? await createProject(payload) : await updateProject({ ...payload, id: projectId });
-      if (!res.success) return setError(res.error);
+      if (!res.success) {
+        setError(res.error);
+        if (res.fieldErrors) {
+          setServerFields(
+            Object.fromEntries(
+              Object.entries(res.fieldErrors).map(([k, m]) => [SERVER_FIELD_ALIASES[k] ?? k, m]),
+            ),
+          );
+        }
+        return;
+      }
       const id = "id" in res.data ? res.data.id : projectId;
       router.push(`/projects/${id}`);
       router.refresh();
     });
   });
 
+  const blocked = Object.keys(errors).length > 0;
+
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form onSubmit={onSubmit} noValidate className="space-y-4">
+      {/* Announced and focused, so a refused submit is heard rather than guessed at. */}
+      {blocked && (
+        <FormAlert key={`invalid-${submitCount}`} focusOnMount>
+          This project is not saved yet — the fields marked below need attention.
+        </FormAlert>
+      )}
+      {error && <FormAlert key={`error-${submitCount}`} focusOnMount>{error}</FormAlert>}
+
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Project name"><Input {...register("name", { required: true })} /></Field>
-        <Field label="Developer"><Input {...register("developer")} /></Field>
-        <Field label="State"><Select {...register("state")}>{MALAYSIAN_STATES.map((x) => <option key={x} value={x}>{x}</option>)}</Select></Field>
-        <Field label="Area"><Input {...register("area", { required: true })} /></Field>
+        <Field id="name" label="Project name" required error={fieldError("name")}>
+          {(p) => <Input {...p} {...register("name", { required: "Give the project a name." })} />}
+        </Field>
+        <Field id="developer" label="Developer" error={fieldError("developer")}>
+          {(p) => <Input {...p} {...register("developer")} />}
+        </Field>
+        <Field id="state" label="State" required error={fieldError("state")}>
+          {(p) => <Select {...p} {...register("state")}>{MALAYSIAN_STATES.map((x) => <option key={x} value={x}>{x}</option>)}</Select>}
+        </Field>
+        <Field id="area" label="Area" required error={fieldError("area")}>
+          {(p) => <Input {...p} placeholder="Mont Kiara" {...register("area", { required: "Which area is it in?" })} />}
+        </Field>
       </div>
 
-      <Field label="Address"><Input {...register("address")} /></Field>
-      <Field label="Sales gallery address">
-        <Input placeholder="Where appointments are held" {...register("galleryAddress")} />
+      <Field id="address" label="Address" error={fieldError("address")}>
+        {(p) => <Input {...p} {...register("address")} />}
+      </Field>
+      <Field id="galleryAddress" label="Sales gallery address" error={fieldError("galleryAddress")}>
+        {(p) => <Input {...p} placeholder="Where appointments are held" {...register("galleryAddress")} />}
       </Field>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Property type"><Select {...register("propertyType")}><option value="">—</option>{PROPERTY_TYPE.map((x) => <option key={x} value={x}>{x}</option>)}</Select></Field>
-        <Field label="Tenure"><Select {...register("tenure")}><option value="">—</option>{TENURE.map((x) => <option key={x} value={x}>{x}</option>)}</Select></Field>
-        <Field label="Title type"><Select {...register("titleType")}><option value="">—</option>{TITLE_TYPE.map((x) => <option key={x} value={x}>{x}</option>)}</Select></Field>
-        <Field label="Launch date"><Input type="date" {...register("launchDate")} /></Field>
-        <Field label="Expected VP"><Input type="date" {...register("expectedVpDate")} /></Field>
-        <Field label="Total units"><Input type="number" min="0" {...register("totalUnits")} /></Field>
+        <Field id="propertyType" label="Property type" error={fieldError("propertyType")}>
+          {(p) => <Select {...p} {...register("propertyType")}><option value="">—</option>{PROPERTY_TYPE.map((x) => <option key={x} value={x}>{x}</option>)}</Select>}
+        </Field>
+        <Field id="tenure" label="Tenure" error={fieldError("tenure")}>
+          {(p) => <Select {...p} {...register("tenure")}><option value="">—</option>{TENURE.map((x) => <option key={x} value={x}>{x}</option>)}</Select>}
+        </Field>
+        <Field id="titleType" label="Title type" error={fieldError("titleType")}>
+          {(p) => <Select {...p} {...register("titleType")}><option value="">—</option>{TITLE_TYPE.map((x) => <option key={x} value={x}>{x}</option>)}</Select>}
+        </Field>
+        <Field id="launchDate" label="Launch date" error={fieldError("launchDate")}>
+          {(p) => <Input {...p} type="date" {...register("launchDate")} />}
+        </Field>
+        <Field id="expectedVpDate" label="Expected VP" error={fieldError("expectedVpDate")}>
+          {(p) => <Input {...p} type="date" {...register("expectedVpDate")} />}
+        </Field>
+        <Field id="totalUnits" label="Total units" error={fieldError("totalUnits")}>
+          {(p) => <Input {...p} type="number" min="0" {...register("totalUnits")} />}
+        </Field>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Bumi quota (%)"><Input type="number" min="0" max="100" {...register("bumiQuotaPct")} /></Field>
-        <Field label="Bumi discount (%)"><Input type="number" min="0" max="100" step="0.01" {...register("bumiDiscountPct")} /></Field>
-        <Field label="Developer commission (%)"><Input type="number" min="0" max="100" step="0.01" {...register("developerCommissionPct")} /></Field>
+        <Field id="bumiQuotaPct" label="Bumi quota (%)" error={fieldError("bumiQuotaPct")}>
+          {(p) => <Input {...p} type="number" min="0" max="100" {...register("bumiQuotaPct")} />}
+        </Field>
+        <Field id="bumiDiscountPct" label="Bumi discount (%)" error={fieldError("bumiDiscountPct")}>
+          {(p) => <Input {...p} type="number" min="0" max="100" step="0.01" {...register("bumiDiscountPct")} />}
+        </Field>
+        <Field id="developerCommissionPct" label="Developer commission (%)" error={fieldError("developerCommissionPct")}>
+          {(p) => <Input {...p} type="number" min="0" max="100" step="0.01" {...register("developerCommissionPct")} />}
+        </Field>
       </div>
 
-      <Field label="Rebate package">
-        <Textarea rows={2} placeholder="10% early bird, free legal fees, free S&amp;P" {...register("rebatePackage")} />
+      <Field id="rebatePackage" label="Rebate package" error={fieldError("rebatePackage")}>
+        {(p) => <Textarea {...p} rows={2} placeholder="10% early bird, free legal fees, free S&amp;P" {...register("rebatePackage")} />}
       </Field>
-      <Field label="Pass leads on after (days)">
-        <Input type="number" min="1" max="365" placeholder="Leave empty to never pass on" {...register("passOnAfterDays")} />
-        <p className="text-xs text-muted-foreground">
-          A lead with nothing logged for this many days moves to the next person in this
-          project&rsquo;s pool. Both agents are told and the hand-over is recorded. Applies
-          only to this project&rsquo;s leads — resale leads are never moved automatically.
-        </p>
+      <Field
+        id="passOnAfterDays"
+        label="Pass leads on after (days)"
+        error={fieldError("passOnAfterDays")}
+        hint={
+          <>
+            A lead with nothing logged for this many days moves to the next person in this
+            project&rsquo;s pool. Both agents are told and the hand-over is recorded. Applies
+            only to this project&rsquo;s leads — resale leads are never moved automatically.
+          </>
+        }
+      >
+        {(p) => <Input {...p} type="number" min="1" max="365" placeholder="Leave empty to never pass on" {...register("passOnAfterDays")} />}
       </Field>
-      <Field label="Notes"><Textarea rows={3} {...register("notes")} /></Field>
-      <Field label="Status"><Select {...register("status")}>{PROJECT_STATUS.map((x) => <option key={x} value={x}>{x}</option>)}</Select></Field>
+      <Field id="notes" label="Notes" error={fieldError("notes")}>
+        {(p) => <Textarea {...p} rows={3} {...register("notes")} />}
+      </Field>
+      <Field id="status" label="Status" error={fieldError("status")}>
+        {(p) => <Select {...p} {...register("status")}>{PROJECT_STATUS.map((x) => <option key={x} value={x}>{x}</option>)}</Select>}
+      </Field>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex gap-2">
         <Button type="submit" disabled={pending}>{pending ? "Saving…" : "Save"}</Button>
-        <Button type="button" variant="ghost" onClick={() => router.back()}>Cancel</Button>
+        <Button type="button" variant="ghost" disabled={pending} onClick={() => router.back()}>Cancel</Button>
       </div>
     </form>
   );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="space-y-1.5"><Label>{label}</Label>{children}</div>;
 }

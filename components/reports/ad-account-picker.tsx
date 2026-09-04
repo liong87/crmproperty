@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Unplug } from "lucide-react";
 import { setAdAccountSelected, disconnectAccount } from "@/server/capture/actions";
 import type { AdAccountView } from "@/server/capture/queries";
+import { FormAlert } from "@/components/ui/alert";
 
 /**
  * Which of your ad accounts the report covers.
@@ -70,7 +71,7 @@ export function AdAccountPicker({
           Saving…
         </p>
       )}
-      {error && <p className="px-2 text-xs text-destructive">{error}</p>}
+      {error && <FormAlert className="px-2">{error}</FormAlert>}
 
       {/* Unticking excludes an account from the report; this removes the connection
           itself. Two different things, so both need to be reachable — and the

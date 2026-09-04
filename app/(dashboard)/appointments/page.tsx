@@ -46,7 +46,9 @@ export default async function AppointmentsPage({
         count={counts.ongoing}
         actions={
           <div className="rounded-2xl border border-gray-100 bg-card px-4 py-2.5 dark:border-gray-800">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+            {/* text-muted-foreground, not gray-400: a 4px-tall uppercase label at
+                2.8:1 on the card was the least legible text in the app. */}
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Followed up · {rate.days} days
             </p>
             <p className="mt-0.5 text-sm">
@@ -102,7 +104,10 @@ async function BoardView({
       <EmptyState
         icon={CalendarCheck}
         title="No appointments yet"
-        hint="Book one from a lead or a contact and it will appear here."
+        /* "Schedule", not "book", everywhere in this area. Booked already means
+           something else here — it is the funnel stage for a client who has booked a
+           UNIT — so using it for the diary would make the two impossible to tell apart. */
+        hint="Schedule one from a lead or a contact and it will appear here."
       />
     );
   }
@@ -161,7 +166,7 @@ async function ScheduleView({
       <EmptyState
         icon={CalendarCheck}
         title="No appointments scheduled"
-        hint="Book one from a lead or a contact and it will appear here."
+        hint="Schedule one from a lead or a contact and it will appear here."
       />
     );
   }

@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
+import { FormAlert } from "@/components/ui/alert";
 import { formatMYR, formatBp } from "@/lib/utils";
 
 const dateValue = (d: Date | string | null) =>
@@ -105,7 +106,7 @@ export function DealCommissionPanel({
             {pending ? "Calculating…" : "Calculate commission"}
           </Button>
         </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <FormAlert>{error}</FormAlert>}
       </div>
     );
   }
@@ -134,7 +135,7 @@ export function DealCommissionPanel({
 
       <div>
         <h3 className="mb-1.5 text-sm font-semibold">Release stages</h3>
-        <Table>
+        <Table label="Commission release stages">
           <THead>
             <TR><TH>Stage</TH><TH>Share</TH><TH>Amount</TH><TH>Expected</TH><TH>Invoiced</TH><TH>Received</TH></TR>
           </THead>
@@ -173,7 +174,7 @@ export function DealCommissionPanel({
 
       <div>
         <h3 className="mb-1.5 text-sm font-semibold">Split</h3>
-        <Table>
+        <Table label="Commission split">
           <THead>
             <TR><TH>Party</TH><TH>Who</TH><TH>Share</TH><TH>Amount</TH></TR>
           </THead>
@@ -190,7 +191,7 @@ export function DealCommissionPanel({
         </Table>
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <FormAlert>{error}</FormAlert>}
 
       {canEdit && (
         <div className="flex items-center gap-2 border-t pt-3">

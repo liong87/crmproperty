@@ -13,7 +13,7 @@ export default async function NewLeadPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <h1 className="text-xl font-semibold">New Lead</h1>
+      <h1 className="font-display text-2xl font-bold tracking-tight">New lead</h1>
       <LeadForm mode="create" agents={agents} canAssign={canAssign} projects={projects} />
     </div>
   );

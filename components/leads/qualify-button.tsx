@@ -3,8 +3,20 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { qualifyLead } from "@/server/leads/convert";
 import { disqualifyLead } from "@/server/leads/actions";
-import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ui/confirm-button";
+import { FormAlert } from "@/components/ui/alert";
 
+/**
+ * The two one-way doors on a lead.
+ *
+ * Both ask before they act, and the delete button is the reason why: deleting a lead is
+ * SOFT and reversible, and it asked twice — while qualifying, which converts the lead
+ * into a contact and leaves the lead itself read-only for good, was one click on a
+ * button labelled with an arrow. The confirmation belongs on the irreversible action.
+ *
+ * "Qualify → Contact" also described the plumbing rather than the act; the button now
+ * says what the person is doing.
+ */
 export function QualifyButton({ leadId }: { leadId: string }) {
   const router = useRouter();
   const [pending, start] = React.useTransition();
@@ -30,11 +42,29 @@ export function QualifyButton({ leadId }: { leadId: string }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex gap-2">
-        <Button onClick={onQualify} disabled={pending}>Qualify → Contact</Button>
-        <Button variant="outline" onClick={onDisqualify} disabled={pending}>Disqualify</Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <ConfirmButton
+          variant="default"
+          size="default"
+          question="Qualify as a contact? The lead becomes read-only and cannot be turned back."
+          confirmLabel="Qualify"
+          pending={pending}
+          onConfirm={onQualify}
+        >
+          Qualify as contact
+        </ConfirmButton>
+        <ConfirmButton
+          variant="outline"
+          size="default"
+          question="Disqualify this lead? It leaves the working queue and stops being followed up."
+          confirmLabel="Disqualify"
+          pending={pending}
+          onConfirm={onDisqualify}
+        >
+          Disqualify
+        </ConfirmButton>
       </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <FormAlert>{error}</FormAlert>}
     </div>
   );
 }

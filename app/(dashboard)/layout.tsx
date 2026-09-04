@@ -7,6 +7,7 @@ import { countActiveWorkingLeads } from "@/server/leads/working";
 import { APP_NAME } from "@/lib/constants";
 import { COMMISSION_ENABLED } from "@/lib/features";
 import { BookOpen } from "lucide-react";
+import { GlobalSearch } from "@/components/search/global-search";
 import { MeProvider } from "@/lib/me-context";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -112,15 +113,22 @@ export default async function DashboardLayout({ children }: { children: React.Re
      */
     <MeProvider id={user.id}>
     <div className="app-shell min-h-dvh sm:flex">
+      {/* Fifteen nav links sit ahead of the content in tab order on every route. */}
+      <a href="#main" className="skip-link">
+        Skip to main content
+      </a>
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col sm:flex">
-        <div className="px-4 py-5">
+        <div className="px-4 pb-3 pt-5">
           <Link href="/dashboard" className="block font-display text-lg font-semibold leading-tight text-primary">
             {APP_NAME}
           </Link>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {user.name} · {ROLE_LABEL[user.role] ?? user.role}
           </p>
+        </div>
+        <div className="px-4 pb-1">
+          <GlobalSearch />
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-4">
           <AppNav groups={groups} variant="sidebar" />
@@ -144,16 +152,29 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile top bar */}
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200/70 bg-card/80 px-4 py-3 backdrop-blur sm:hidden">
-          <Link href="/dashboard" className="font-display text-base font-semibold text-primary">{APP_NAME}</Link>
-          <UserButton />
+        <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-gray-200/70 bg-card/80 px-4 py-3 backdrop-blur sm:hidden">
+          <Link href="/dashboard" className="min-w-0 truncate font-display text-base font-semibold text-primary">{APP_NAME}</Link>
+          <div className="flex shrink-0 items-center gap-1">
+            {/*
+              The nav is filtered by role on the server, so on a phone — where the name
+              and role never appeared at all — a team lead and an agent saw two different
+              menus with nothing on screen explaining why.
+            */}
+            <span className="mr-1 hidden text-[11px] text-muted-foreground xs:inline">
+              {ROLE_LABEL[user.role] ?? user.role}
+            </span>
+            <GlobalSearch variant="icon" />
+            <UserButton />
+          </div>
         </header>
         {/* Mobile nav */}
         <div className="sticky top-[57px] z-10 border-b border-gray-200/70 bg-card/80 backdrop-blur sm:hidden">
           <AppNav groups={groups} variant="bar" />
         </div>
 
-        <main className="mx-auto w-full max-w-5xl flex-1 p-4 sm:p-6">{children}</main>
+        <main id="main" tabIndex={-1} className="mx-auto w-full max-w-5xl flex-1 p-4 outline-none sm:p-6">
+          {children}
+        </main>
       </div>
     </div>
     </MeProvider>

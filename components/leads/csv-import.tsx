@@ -3,6 +3,8 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { importLeadsFromCsv, type ImportSummary } from "@/server/leads/import";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { FormAlert } from "@/components/ui/alert";
 
 export function CsvImport({ canDistribute = false }: { canDistribute?: boolean }) {
   const router = useRouter();
@@ -32,31 +34,45 @@ export function CsvImport({ canDistribute = false }: { canDistribute?: boolean }
     <div className="space-y-4">
       <div className="rounded-lg border bg-card p-4 text-sm">
         <p className="font-medium">CSV format</p>
-        <p className="mt-1 text-muted-foreground">
-          First row must be headers. Recognised columns:
-          <code className="mx-1 rounded bg-secondary px-1">name</code>
-          <code className="mx-1 rounded bg-secondary px-1">phone</code>
-          <code className="mx-1 rounded bg-secondary px-1">email</code>
-          <code className="mx-1 rounded bg-secondary px-1">interest</code>
-          <code className="mx-1 rounded bg-secondary px-1">preferredAreas</code>
-          <code className="mx-1 rounded bg-secondary px-1">budgetMin</code>
-          <code className="mx-1 rounded bg-secondary px-1">budgetMax</code>.
-          <code className="mx-1 rounded bg-secondary px-1">consent</code>.
-          Column names are matched loosely, so exports from Facebook Lead Ads
-          (“Full Name”, “Phone Number”) and Google Ads work without editing the file.
-          Phone accepts 012-345 6789 or +60123456789. Budgets accept 850000, “RM 850,000” or 850k.
-        </p>
+        <div className="mt-1 text-muted-foreground">
+          <p>First row must be headers. Recognised columns:</p>
+          {/* A wrapping chip row, not inline <code> inside a paragraph: the inline
+              version could not break between the chips and pushed the page wider than
+              the viewport on a tablet and a phone. */}
+          <ul className="mt-1.5 flex flex-wrap gap-1">
+            {["name", "phone", "email", "interest", "preferredAreas", "budgetMin", "budgetMax", "consent"].map((c) => (
+              <li key={c}>
+                <code className="rounded bg-secondary px-1.5 py-0.5 text-xs">{c}</code>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2">
+            Column names are matched loosely, so exports from Facebook Lead Ads (“Full Name”,
+            “Phone Number”) and Google Ads work without editing the file. Phone accepts
+            012-345 6789 or +60123456789. Budgets accept 850000, “RM 850,000” or 850k.
+          </p>
+        </div>
       </div>
 
-      <input type="file" accept=".csv,text/csv" onChange={onFile}
-        className="block w-full text-sm file:mr-3 file:rounded-md file:border file:bg-secondary file:px-3 file:py-2 file:text-sm" />
+      {/* Both controls were unlabelled: a file input whose only description is the
+          browser's own "Choose file", and a textarea named by a placeholder that
+          disappears the moment anything is pasted into it. */}
+      <div className="space-y-1.5">
+        <Label htmlFor="csv-file">Choose a CSV file</Label>
+        <input id="csv-file" type="file" accept=".csv,text/csv" onChange={onFile}
+          className="block w-full text-sm file:mr-3 file:rounded-md file:border file:bg-secondary file:px-3 file:py-2 file:text-sm" />
+      </div>
 
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder={"name,phone,email,interest,preferredAreas,budgetMin,budgetMax\nAli,+60123456789,ali@mail.com,buy,Mont Kiara,800000,1200000"}
-        className="h-40 w-full rounded-md border border-input bg-background p-3 font-mono text-xs"
-      />
+      <div className="space-y-1.5">
+        <Label htmlFor="csv-text">Or paste the rows here</Label>
+        <textarea
+          id="csv-text"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={"name,phone,email,interest,preferredAreas,budgetMin,budgetMax\nAli,+60123456789,ali@mail.com,buy,Mont Kiara,800000,1200000"}
+          className="h-40 w-full rounded-xl border border-input bg-background p-3 font-mono text-xs focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
+        />
+      </div>
 
       {canDistribute ? (
         <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
@@ -80,7 +96,7 @@ export function CsvImport({ canDistribute = false }: { canDistribute?: boolean }
         </p>
       )}
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <FormAlert>{error}</FormAlert>}
 
       <Button onClick={run} disabled={pending || !text.trim()}>
         {pending ? "Importing…" : "Import leads"}

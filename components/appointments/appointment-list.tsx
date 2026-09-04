@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/select";
 import { who } from "@/lib/user-name";
 import { useMeId } from "@/lib/me-context";
 import { Textarea } from "@/components/ui/textarea";
+import { FormAlert } from "@/components/ui/alert";
 import { appointmentStatusTone, appointmentOutcomeTone, humaniseSlug } from "@/lib/status";
 
 /** Malaysia time, whatever the device is set to — agents book in local time. */
@@ -114,7 +115,7 @@ function AppointmentCard({ v }: { v: AppointmentRow }) {
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Anything longer worth keeping."
           />
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <FormAlert>{error}</FormAlert>}
           <div className="flex flex-wrap gap-2">
             <Button size="sm" disabled={pending} onClick={() => save("showed-up")}>
               {pending ? "Saving…" : "Showed up"}

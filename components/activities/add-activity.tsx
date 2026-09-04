@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FormAlert } from "@/components/ui/alert";
 import { localInputToIso } from "@/lib/utils";
 
 export function AddActivity({ entityType, entityId }: { entityType: string; entityId: string }) {
@@ -53,7 +54,7 @@ export function AddActivity({ entityType, entityId }: { entityType: string; enti
         <Label htmlFor="actBody">Notes</Label>
         <Textarea id="actBody" value={body} onChange={(e) => setBody(e.target.value)} placeholder="What happened?" />
       </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <FormAlert>{error}</FormAlert>}
       <Button onClick={submit} disabled={pending || (!body && !followUp)}>{pending ? "Logging…" : "Log activity"}</Button>
     </div>
   );

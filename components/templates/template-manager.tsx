@@ -14,6 +14,8 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmButton } from "@/components/ui/confirm-button";
+import { FormAlert } from "@/components/ui/alert";
 
 /** Sample values for the live preview — recognisably fake, so nobody mistakes it for real data. */
 const PREVIEW = {
@@ -232,7 +234,7 @@ export function TemplateManager({ initial }: { initial: TemplateRow[] }) {
           Available to agents
         </label>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <FormAlert>{error}</FormAlert>}
 
         <div className="flex gap-2">
           <Button onClick={save} disabled={pending || !form.key || !form.body}>
@@ -268,9 +270,16 @@ export function TemplateManager({ initial }: { initial: TemplateRow[] }) {
                 <Button size="sm" variant="outline" onClick={() => edit(t)} disabled={pending}>
                   Edit
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => remove(t.id)} disabled={pending}>
+                {/* Deleting a template takes it out of every agent's send menu, so it
+                    asks first and says which one. */}
+                <ConfirmButton
+                  onConfirm={() => remove(t.id)}
+                  question={`Delete the “${t.key}” template?`}
+                  confirmLabel="Delete template"
+                  pending={pending}
+                >
                   Delete
-                </Button>
+                </ConfirmButton>
               </div>
             </li>
           ))}

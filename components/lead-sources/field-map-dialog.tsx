@@ -1,13 +1,15 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { SlidersHorizontal, X } from "lucide-react";
+import { SlidersHorizontal } from "lucide-react";
 import { loadFormQuestions, saveFieldMap } from "@/server/lead-sources/meta-forms";
 import { MAPPABLE_FIELDS, type LeadFieldMap } from "@/lib/lead-forms/field-map";
 import type { RemoteFormQuestion } from "@/lib/leadads/interface";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Dialog } from "@/components/ui/dialog";
+import { FormAlert } from "@/components/ui/alert";
 
 /**
  * Which question on a Facebook form answers which of our fields.
@@ -15,6 +17,10 @@ import { Select } from "@/components/ui/select";
  * Only worth opening for a form that asks something unexpected. Meta's standard
  * questions are already understood, so the honest default is "guess", and this screen
  * says as much rather than demanding six selections from someone whose form is fine.
+ *
+ * It is a real dialog now. It was a panel that pushed the card open in place with no
+ * role, no modality and no focus handling: nothing announced that six selects had
+ * appeared, and Escape did nothing.
  */
 export function FieldMapDialog({
   sourceId, label, current,
@@ -52,30 +58,24 @@ export function FieldMapDialog({
     });
   }
 
-  if (!open) {
-    return (
+  return (
+    <>
       <Button type="button" variant="ghost" size="sm" onClick={onOpen}>
-        <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" />
+        <SlidersHorizontal aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
         {current && Object.keys(current).length > 0 ? "Fields mapped" : "Map fields"}
       </Button>
-    );
-  }
 
-  return (
-    <div className="mt-3 rounded-lg border bg-card p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-medium">{label}</p>
-          <p className="text-xs text-muted-foreground">
-            {questions ? `${questions.length} question${questions.length === 1 ? "" : "s"} on this form` : "Reading the form…"}
-          </p>
-        </div>
-        <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)} aria-label="Close">
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-
-      {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        title={label}
+        description={
+          questions
+            ? `${questions.length} question${questions.length === 1 ? "" : "s"} on this form`
+            : "Reading the form…"
+        }
+      >
+      {error && <FormAlert>{error}</FormAlert>}
 
       {questions && (
         <>
@@ -129,6 +129,7 @@ export function FieldMapDialog({
           </div>
         </>
       )}
-    </div>
+      </Dialog>
+    </>
   );
 }

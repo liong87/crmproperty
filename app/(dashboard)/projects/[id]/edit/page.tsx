@@ -47,7 +47,7 @@ export default async function EditProjectPage({ params }: { params: Promise<{ id
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <h1 className="text-xl font-semibold">Edit Project</h1>
+      <h1 className="font-display text-2xl font-bold tracking-tight">Edit project</h1>
       <ProjectForm mode="edit" projectId={project.id} defaults={defaults} />
     </div>
   );

@@ -37,7 +37,7 @@ export function SourceTable({ data }: { data: BySourceData }) {
             a campaign or a walk-in.
           </p>
         ) : (
-          <Table>
+          <Table label="Leads by source">
             <THead>
               <TR>
                 <TH>Source</TH>
@@ -134,7 +134,7 @@ export function FollowUpTable({
         </p>
       </CardHeader>
       <CardContent>
-        <Table>
+        <Table label="Follow-up rate by agent">
           <THead>
             <TR>
               <TH>Agent</TH>
@@ -150,14 +150,18 @@ export function FollowUpTable({
                 <TD className="text-right tabular-nums">{r.openLeads}</TD>
                 <TD className="text-right tabular-nums">{r.touched}</TD>
                 {/* Only an untouched pile is called out. A partial rate is normal work in
-                    progress, and colouring it would cry wolf. */}
-                <TD
-                  className={`text-right tabular-nums font-medium ${
-                    r.rate !== null && r.rate === 0 && r.openLeads > 0 ? "text-destructive" : ""
-                  }`}
-                >
-                  {pct(r.rate)}
-                </TD>
+                    progress, and colouring it would cry wolf.
+
+                    "None worked" is spelled out beside the zero: red on its own said
+                    nothing to a greyscale printout or to a reader who cannot separate
+                    it from the other figures in the column. */}
+                {r.rate !== null && r.rate === 0 && r.openLeads > 0 ? (
+                  <TD className="text-right font-medium tabular-nums text-destructive">
+                    {pct(r.rate)} <span className="whitespace-nowrap font-normal">· none worked</span>
+                  </TD>
+                ) : (
+                  <TD className="text-right font-medium tabular-nums">{pct(r.rate)}</TD>
+                )}
               </TR>
             ))}
           </TBody>

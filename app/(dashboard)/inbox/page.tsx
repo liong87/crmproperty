@@ -43,7 +43,7 @@ export default async function InboxPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="font-display text-xl font-semibold">Inbox</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Inbox</h1>
         <p className="text-sm text-muted-foreground">
           {isTeamLeadOrAbove(me) ? "Everything open across the team." : "Everything waiting on you."}
           {overdue > 0 && ` · ${overdue} follow-up${overdue === 1 ? "" : "s"} overdue`}

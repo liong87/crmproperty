@@ -7,7 +7,7 @@ import { db } from "@/lib/db/client";
 import { contacts, type Contact } from "@/lib/db/schema";
 import { requireDbUser, assertCanEdit, AuthorizationError } from "@/lib/auth";
 import { INTEREST } from "@/lib/constants";
-import { ok, fail } from "@/lib/action-result";
+import { ok, fail, failFromZod } from "@/lib/action-result";
 import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { getContactById } from "./queries";
@@ -73,7 +73,7 @@ export async function updateContact(input: unknown): Promise<ActionResult<Contac
     return ok(row!);
   } catch (err) {
     if (err instanceof AuthorizationError) return fail(err.message);
-    if (err instanceof z.ZodError) return fail(err.issues.map((i) => i.message).join("; "));
+    if (err instanceof z.ZodError) return failFromZod(err);
     if (err instanceof Error && err.message === "UNAUTHENTICATED") return fail("Please sign in.");
     monitoring.captureException(err, { where: "updateContact" });
     return fail("Something went wrong.");

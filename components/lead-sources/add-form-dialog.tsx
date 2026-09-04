@@ -2,13 +2,15 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Plus, X, Check, ChevronDown, FileText, Loader2, CircleAlert } from "lucide-react";
+import { Plus, Check, ChevronDown, FileText, Loader2 } from "lucide-react";
 import {
   listAvailableForms,
   listFormFields,
   addPageForm,
   type AvailablePage,
 } from "@/server/capture/actions";
+import { Dialog } from "@/components/ui/dialog";
+import { FormAlert } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 
 /**
@@ -23,6 +25,10 @@ import { cn } from "@/lib/utils";
  * Opening the dialog reads the pages live. Questions are fetched only when a row is
  * expanded, because one Graph call per form would make a page with thirty Messenger
  * auto-forms take ten seconds to open.
+ *
+ * The shell is the shared `Dialog`. This one had `role="dialog"` and nothing else: no
+ * focus trap, no Escape, no focus returned to the New button — so once it was open the
+ * only way out with a keyboard was to reload the page.
  */
 export function AddFormDialog({ disabled }: { disabled?: boolean }) {
   const router = useRouter();
@@ -69,39 +75,23 @@ export function AddFormDialog({ disabled }: { disabled?: boolean }) {
         New
       </button>
 
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Add a lead form"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setOpen(false);
-          }}
-        >
-          <div className="w-full max-w-lg rounded-2xl border bg-card shadow-lg">
-            <header className="flex items-start justify-between gap-3 border-b px-5 py-4">
-              <div className="min-w-0">
-                <h2 className="truncate text-base font-semibold">
-                  {page ? page.pageName : "Your Facebook pages"}
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  Pick a form — its id comes from Facebook, you never type one.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Close"
-                className="shrink-0 rounded-md p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-              >
-                <X className="h-4 w-4" aria-hidden />
-              </button>
-            </header>
-
-            {/* Only shown when there is a choice to make. */}
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        title={page ? page.pageName : "Your Facebook pages"}
+        description="Pick a form — its id comes from Facebook, you never type one."
+        className="sm:max-w-lg"
+      >
+          <div>
+            {/* Only shown when there is a choice to make. The page chips scroll on a
+                phone, so the strip is a named region with a tab stop of its own. */}
             {pages && pages.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto border-b px-5 py-2">
+              <div
+                role="region"
+                aria-label="Your Facebook pages"
+                tabIndex={0}
+                className="-mx-5 flex gap-2 overflow-x-auto border-b px-5 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              >
                 {pages.map((p, i) => (
                   <button
                     key={p.capturePageId}
@@ -120,7 +110,7 @@ export function AddFormDialog({ disabled }: { disabled?: boolean }) {
               </div>
             )}
 
-            <div className="max-h-[60vh] overflow-y-auto">
+            <div className="-mx-5 max-h-[60vh] overflow-y-auto">
               {loading && (
                 <p className="flex items-center justify-center gap-2 px-5 py-12 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
@@ -128,18 +118,12 @@ export function AddFormDialog({ disabled }: { disabled?: boolean }) {
                 </p>
               )}
 
-              {error && (
-                <p className="flex items-start gap-2 px-5 py-8 text-sm text-destructive">
-                  <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                  {error}
-                </p>
-              )}
+              {error && <FormAlert className="mx-5 my-6">{error}</FormAlert>}
 
               {page?.error && (
-                <p className="flex items-start gap-2 px-5 py-8 text-sm text-destructive">
-                  <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                <FormAlert className="mx-5 my-6">
                   {page.pageName} could not be read: {page.error}
-                </p>
+                </FormAlert>
               )}
 
               {page && !page.error && page.forms.length === 0 && (
@@ -168,13 +152,12 @@ export function AddFormDialog({ disabled }: { disabled?: boolean }) {
               )}
             </div>
 
-            <footer className="border-t px-5 py-3 text-[11px] text-muted-foreground">
+            <p className="-mx-5 -mb-5 mt-4 border-t px-5 py-3 text-[11px] text-muted-foreground">
               A form you add starts with no project. Set that on its card, so its leads count
               towards the right launch.
-            </footer>
+            </p>
           </div>
-        </div>
-      )}
+      </Dialog>
     </>
   );
 }
@@ -288,7 +271,7 @@ function FormRow({
         </div>
       )}
 
-      {error && <p className="px-5 pb-3 pl-[3.75rem] text-xs text-destructive">{error}</p>}
+      {error && <FormAlert className="mx-5 mb-3 text-xs">{error}</FormAlert>}
     </li>
   );
 }

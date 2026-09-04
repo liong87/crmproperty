@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { uploadPropertyImage, deletePropertyImage, type PropertyImage } from "@/server/properties/images";
 import { resizeImageForUpload, formatBytes } from "@/lib/images/resize-client";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ui/confirm-button";
+import { FormAlert } from "@/components/ui/alert";
 
 export function ImageManager({
   propertyId,
@@ -60,18 +62,26 @@ export function ImageManager({
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {images.map((img) => (
-          <div key={img.id} className="group relative overflow-hidden rounded-md border">
+          <div key={img.id} className="overflow-hidden rounded-md border">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={img.url} alt={img.filename} className="h-32 w-full object-cover" />
             {canEdit && (
-              <button
-                type="button"
-                onClick={() => onDelete(img.id)}
-                disabled={pending}
-                className="absolute right-1 top-1 rounded bg-background/90 px-1.5 py-0.5 text-xs text-destructive shadow"
-              >
-                Delete
-              </button>
+              /* Below the photo rather than floating on it: deleting asks first now, and
+                 the question plus its two buttons need room the thumbnail does not have.
+                 A photo cannot be recovered from here — the agent would have to find the
+                 original on their phone again — so the question names the file. */
+              <div className="border-t p-1">
+                <ConfirmButton
+                  variant="ghost"
+                  onConfirm={() => onDelete(img.id)}
+                  question={`Delete ${img.filename}?`}
+                  confirmLabel="Delete photo"
+                  triggerLabel={`Delete photo ${img.filename}`}
+                  pending={pending}
+                >
+                  <span className="text-destructive">Delete</span>
+                </ConfirmButton>
+              </div>
             )}
           </div>
         ))}
@@ -88,8 +98,8 @@ export function ImageManager({
             disabled={pending}
             className="block w-full text-sm file:mr-3 file:rounded-md file:border file:bg-secondary file:px-3 file:py-2 file:text-sm"
           />
-          {status && <p className="text-xs text-muted-foreground">{status}</p>}
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {status && <p className="text-xs text-muted-foreground" role="status">{status}</p>}
+          {error && <FormAlert>{error}</FormAlert>}
           <p className="text-xs text-muted-foreground">
             JPEG, PNG or WebP · max 8 MB. Large photos are shrunk automatically before
             uploading.

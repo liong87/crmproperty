@@ -6,7 +6,7 @@ import { countStaleLeads, STALE_AFTER_DAYS } from "@/server/leads/stale";
 import { listUpcomingAppointments, countAppointmentsNeedingOutcome } from "@/server/appointments/queries";
 import { AppointmentList } from "@/components/appointments/appointment-list";
 import { getReportData } from "@/server/reports/queries";
-import { getFunnel, getFunnelTrend } from "@/server/reports/funnel";
+import { getFunnel, getFunnelTrend, type FunnelStage } from "@/server/reports/funnel";
 import { countDocumentsDue } from "@/server/deal-documents/queries";
 import { STATUS } from "@/lib/chart-colors";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -16,6 +16,19 @@ import { RangeFilter, parseRangeDays, rangeLabel } from "@/components/reports/ra
 import { lastNDays } from "@/lib/reports/range";
 import { PageTitle } from "@/components/ui/page-title";
 import { FollowUpList } from "@/components/activities/follow-up-list";
+
+/**
+ * Where a funnel stage's cohort can honestly be listed.
+ *
+ * Only the stages with a real destination are here. Nothing lists exactly the people
+ * who showed up or exactly the ones who converted, and pointing at a screen that means
+ * roughly the same thing is worse than offering no link at all.
+ */
+const FUNNEL_STAGE_HREF: Partial<Record<FunnelStage["key"], string>> = {
+  leads: "/leads",
+  appointments: "/appointments",
+  booked: "/pipeline",
+};
 
 export default async function DashboardPage({
   searchParams,
@@ -39,12 +52,19 @@ export default async function DashboardPage({
   ]);
   const overdue = followUps.filter((f) => f.overdue).length;
   // No-show rate is the one tile here that means good or bad, so it is the only one
-  // that earns a status colour.
+  // that earns a status colour — and the only one that needs the verdict in words
+  // beside it, because hue on its own says nothing on a mono screen or to a reader who
+  // cannot separate the three.
   const noShowTone =
     funnel.noShowRate == null ? undefined
       : funnel.noShowRate > 0.3 ? STATUS.critical
       : funnel.noShowRate > 0.15 ? STATUS.warning
       : STATUS.good;
+  const noShowNote =
+    funnel.noShowRate == null ? undefined
+      : funnel.noShowRate > 0.3 ? "Too high"
+      : funnel.noShowRate > 0.15 ? "Watch this"
+      : "Healthy";
   const firstName = user.name.split(" ")[0] ?? user.name;
   // Malaysia time, so the greeting matches the agent's actual afternoon.
   const hour = Number(
@@ -93,8 +113,15 @@ export default async function DashboardPage({
             Last {rangeLabel(days).toLowerCase()}
           </span>
         </CardHeader>
+        {/* Each stage names a cohort, so where a list of that cohort exists the stage
+            label opens it. The stages that have no list stay plain text rather than
+            pointing somewhere that only approximately means the same thing. */}
         <FunnelBand
-          stages={funnel.stages.map((st) => ({ label: st.label, value: st.count }))}
+          stages={funnel.stages.map((st) => ({
+            label: st.label,
+            value: st.count,
+            href: FUNNEL_STAGE_HREF[st.key],
+          }))}
         />
       </Card>
 
@@ -104,12 +131,18 @@ export default async function DashboardPage({
         {/* openLeads, not totalLeads: a disqualified lead is finished work, and
             showing it here made the tile useless as a "do I have anything to chase"
             signal. */}
+        {/* Open leads is exactly the working queue's active tab — same statuses, same
+            count — so the tile opens the list it was counted from. */}
         <StatTile
           label="Open leads"
           value={String(report.openLeads)}
           icon={Inbox}
+          href="/working-leads"
           hint={report.totalLeads !== report.openLeads ? `${report.totalLeads} total` : undefined}
         />
+        {/* No link: qualified spans two statuses (appointment and closed) and /leads
+            filters on one, so every candidate URL would list a different set of rows
+            than the number above it. */}
         <StatTile label="Qualified" value={String(report.qualifiedLeads)} icon={UserCheck}
           hint={`${Math.round(report.conversionRate * 100)}% conversion`} />
         <StatTile
@@ -117,6 +150,8 @@ export default async function DashboardPage({
           value={funnel.noShowRate == null ? "—" : `${Math.round(funnel.noShowRate * 100)}%`}
           icon={Activity}
           tone={noShowTone}
+          toneNote={noShowNote}
+          href="/appointments"
           hint="kept or missed"
         />
         <StatTile
@@ -124,6 +159,7 @@ export default async function DashboardPage({
           value={String(appts.length)}
           icon={CalendarCheck}
           accent
+          href="/appointments"
           hint={toWriteUp > 0 ? `${toWriteUp} to write up` : undefined}
           spark={trend.map((t) => t.appointments)}
         />
@@ -150,7 +186,13 @@ export default async function DashboardPage({
         </Link>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/*
+        grid-cols-1 is load-bearing, not tidiness. Without an explicit single column the
+        implicit track sizes to the cards' MAX-content, and one truncated remark inside
+        (white-space: nowrap) made that 1256px — which is why the dashboard body scrolled
+        sideways at every width. minmax(0, 1fr) clamps the track to the container.
+      */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
@@ -176,7 +218,7 @@ export default async function DashboardPage({
         </Card>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <QuickLink href="/leads" title="Leads" desc="Capture & qualify inquiries" />
         <QuickLink href="/properties" title="Properties" desc="Browse & manage listings" />
         <QuickLink href="/pipeline" title="Pipeline" desc="Move deals to close" />
@@ -191,10 +233,18 @@ export default async function DashboardPage({
 
 function QuickLink({ href, title, desc }: { href: string; title: string; desc: string }) {
   return (
-    <Link href={href} className="group rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-secondary/40">
+    <Link
+      href={href}
+      className="group rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-secondary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    >
       <div className="font-medium">{title}</div>
       <div className="text-sm text-muted-foreground">{desc}</div>
-      <span className="mt-2 inline-block text-sm text-primary opacity-0 transition-opacity group-hover:opacity-100">Open →</span>
+      {/* group-focus-within, not group-hover alone: keyboard focus lands on the link
+          itself, and an affordance that only answers a pointer is invisible to the
+          person who has none. */}
+      <span className="mt-2 inline-block text-sm text-primary opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none">
+        Open →
+      </span>
     </Link>
   );
 }

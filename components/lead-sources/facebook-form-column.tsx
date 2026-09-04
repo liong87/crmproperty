@@ -8,6 +8,7 @@ import { AddFormDialog } from "./add-form-dialog";
 import { FieldMapDialog } from "./field-map-dialog";
 import type { LeadFormSourceRow } from "@/server/lead-sources/queries";
 import { cn } from "@/lib/utils";
+import { FormAlert } from "@/components/ui/alert";
 
 export interface FormRow extends LeadFormSourceRow {
   /** Name of the Facebook page this form came in through, if we know it. */
@@ -251,7 +252,7 @@ function FormCard({
         </div>
       )}
 
-      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+      {error && <FormAlert className="mt-2">{error}</FormAlert>}
     </div>
   );
 }

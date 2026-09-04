@@ -5,7 +5,9 @@ import { createUnitType, updateUnitType, deleteUnitType } from "@/server/project
 import type { ProjectUnitType } from "@/lib/db/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Field } from "@/components/ui/field";
+import { FormAlert } from "@/components/ui/alert";
+import { ConfirmButton } from "@/components/ui/confirm-button";
 import { formatMYR, pricePerSqft } from "@/lib/utils";
 
 interface Draft {
@@ -147,21 +149,43 @@ export function UnitTypeManager({
     });
   }
 
+  /*
+   * One block, rendered for whichever row is open — add and edit are never both on
+   * screen, so the ids stay unique. The labels are wired through the shared `Field`:
+   * the local helper this replaced printed a <Label> with no htmlFor, leaving eight
+   * priced inputs announcing as an unnamed "edit text".
+   */
   const fields = (
     <>
       <div className="grid gap-3 sm:grid-cols-2">
-        <DraftField label="Label"><Input placeholder="Type A" value={draft.label} onChange={(e) => set("label", e.target.value)} /></DraftField>
-        <DraftField label="Built-up (sqft)"><Input type="number" min="0" value={draft.builtUpSqft} onChange={(e) => set("builtUpSqft", e.target.value)} /></DraftField>
+        <Field id="ut-label" label="Label" required>
+          {(p) => <Input {...p} placeholder="Type A" value={draft.label} onChange={(e) => set("label", e.target.value)} />}
+        </Field>
+        <Field id="ut-builtUpSqft" label="Built-up (sqft)">
+          {(p) => <Input {...p} type="number" min="0" value={draft.builtUpSqft} onChange={(e) => set("builtUpSqft", e.target.value)} />}
+        </Field>
       </div>
       <div className="grid gap-3 sm:grid-cols-4">
-        <DraftField label="Bedrooms"><Input type="number" min="0" value={draft.bedrooms} onChange={(e) => set("bedrooms", e.target.value)} /></DraftField>
-        <DraftField label="Bathrooms"><Input type="number" min="0" value={draft.bathrooms} onChange={(e) => set("bathrooms", e.target.value)} /></DraftField>
-        <DraftField label="Car parks"><Input type="number" min="0" value={draft.carParks} onChange={(e) => set("carParks", e.target.value)} /></DraftField>
-        <DraftField label="Units of this type"><Input type="number" min="0" value={draft.totalUnits} onChange={(e) => set("totalUnits", e.target.value)} /></DraftField>
+        <Field id="ut-bedrooms" label="Bedrooms">
+          {(p) => <Input {...p} type="number" min="0" value={draft.bedrooms} onChange={(e) => set("bedrooms", e.target.value)} />}
+        </Field>
+        <Field id="ut-bathrooms" label="Bathrooms">
+          {(p) => <Input {...p} type="number" min="0" value={draft.bathrooms} onChange={(e) => set("bathrooms", e.target.value)} />}
+        </Field>
+        <Field id="ut-carParks" label="Car parks">
+          {(p) => <Input {...p} type="number" min="0" value={draft.carParks} onChange={(e) => set("carParks", e.target.value)} />}
+        </Field>
+        <Field id="ut-totalUnits" label="Units of this type">
+          {(p) => <Input {...p} type="number" min="0" value={draft.totalUnits} onChange={(e) => set("totalUnits", e.target.value)} />}
+        </Field>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <DraftField label="List price (RM)"><Input type="number" min="0" value={draft.listPriceRM} onChange={(e) => set("listPriceRM", e.target.value)} /></DraftField>
-        <DraftField label="Nett price after rebate (RM)"><Input type="number" min="0" value={draft.nettPriceRM} onChange={(e) => set("nettPriceRM", e.target.value)} /></DraftField>
+        <Field id="ut-listPriceRM" label="List price (RM)" required>
+          {(p) => <Input {...p} type="number" min="0" value={draft.listPriceRM} onChange={(e) => set("listPriceRM", e.target.value)} />}
+        </Field>
+        <Field id="ut-nettPriceRM" label="Nett price after rebate (RM)">
+          {(p) => <Input {...p} type="number" min="0" value={draft.nettPriceRM} onChange={(e) => set("nettPriceRM", e.target.value)} />}
+        </Field>
       </div>
     </>
   );
@@ -209,7 +233,16 @@ export function UnitTypeManager({
                 {canEdit && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" disabled={pending} onClick={() => startEdit(u)}>Edit</Button>
-                    <Button size="sm" variant="ghost" disabled={pending} onClick={() => onRemove(u.id)}>Remove</Button>
+                    {/* Removing a type destroys the priced row agents quote from, and
+                        anything already pointing at it. Never one click. */}
+                    <ConfirmButton
+                      onConfirm={() => onRemove(u.id)}
+                      question={`Remove ${u.label}?`}
+                      confirmLabel="Remove unit type"
+                      pending={pending}
+                    >
+                      Remove
+                    </ConfirmButton>
                   </div>
                 )}
               </>
@@ -218,7 +251,7 @@ export function UnitTypeManager({
         ))}
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <FormAlert>{error}</FormAlert>}
 
       {canEdit && !adding && editingId === null && (
         <Button size="sm" variant="outline" onClick={startAdd}>Add unit type</Button>
@@ -235,8 +268,4 @@ export function UnitTypeManager({
       )}
     </div>
   );
-}
-
-function DraftField({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="space-y-1.5"><Label className="text-xs">{label}</Label>{children}</div>;
 }

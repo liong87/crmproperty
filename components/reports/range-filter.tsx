@@ -30,7 +30,13 @@ export function rangeLabel(days: number): string {
 
 export function RangeFilter({ days, basePath = "/reports" }: { days: number; basePath?: string }) {
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    /*
+     * The max-width is what lets this wrap. PageTitle puts its actions in a shrink-0
+     * flex item, so without a definite cap this row keeps its 421px max-content width
+     * and pushes the whole dashboard sideways on a phone. Capped to the page gutter, it
+     * wraps onto a second line instead.
+     */
+    <div className="flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-1">
       {RANGES.map((r) => {
         const active = r.days === days;
         return (

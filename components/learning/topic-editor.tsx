@@ -12,6 +12,7 @@ import {
 } from "@/server/learning/actions";
 import type { TopicCard } from "@/server/learning/queries";
 import { cn } from "@/lib/utils";
+import { FormAlert } from "@/components/ui/alert";
 
 /**
  * My uploads — a leader's own topics, drafts included.
@@ -111,7 +112,7 @@ export function TopicEditor({ topics }: { topics: TopicCard[] }) {
               Cancel
             </button>
           </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <FormAlert>{error}</FormAlert>}
         </div>
       )}
 
@@ -234,7 +235,7 @@ function TopicRow({ topic }: { topic: TopicCard }) {
       </div>
 
       {open && <ChapterForm topicId={topic.id} onDone={() => setOpen(false)} />}
-      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+      {error && <FormAlert className="mt-2">{error}</FormAlert>}
     </div>
   );
 }
@@ -398,7 +399,7 @@ function ChapterForm({ topicId, onDone }: { topicId: string; onDone: () => void 
           {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
           Add chapter
         </button>
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <FormAlert>{error}</FormAlert>}
       </div>
     </div>
   );

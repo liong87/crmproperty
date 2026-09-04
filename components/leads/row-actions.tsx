@@ -1,8 +1,9 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, Loader2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { deleteLeads } from "@/server/leads/actions";
+import { ConfirmButton } from "@/components/ui/confirm-button";
 import { EditLeadDialog, type EditableLead } from "./edit-lead-dialog";
 
 /**
@@ -11,30 +12,32 @@ import { EditLeadDialog, type EditableLead } from "./edit-lead-dialog";
  * Always focusable, never merely hidden: `opacity-0` with `focus-within` and
  * `group-hover` keeps the buttons reachable by keyboard and always present on touch,
  * where there is no hover to reveal them.
+ *
+ * Failures are reported UPWARD rather than printed here. This cell is pinned and
+ * roughly 6rem wide; "That lead became a contact — delete it from Contacts instead."
+ * rendered inside it is a column of single words.
  */
 export function LeadRowActions({
-  lead, projects, canDelete,
+  lead, projects, canDelete, onError,
 }: {
   lead: EditableLead;
   projects: { id: string; name: string }[];
   canDelete: boolean;
+  onError: (message: string | null) => void;
 }) {
   const router = useRouter();
   const [editing, setEditing] = React.useState(false);
-  const [armed, setArmed] = React.useState(false);
   const [pending, setPending] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
 
   function remove() {
     setPending(true);
-    setError(null);
+    onError(null);
     void (async () => {
       const res = await deleteLeads([lead.id]);
       setPending(false);
-      setArmed(false);
-      if (!res.success) return setError(res.error ?? "Could not delete.");
+      if (!res.success) return onError(res.error ?? "Could not delete.");
       if (res.data.skipped > 0) {
-        return setError("That lead became a contact — delete it from Contacts instead.");
+        return onError("That lead became a contact — delete it from Contacts instead.");
       }
       router.refresh();
     })();
@@ -47,40 +50,26 @@ export function LeadRowActions({
           type="button"
           onClick={() => setEditing(true)}
           aria-label={`Edit ${lead.name}`}
-          className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Pencil className="h-4 w-4" />
+          <Pencil aria-hidden="true" className="h-4 w-4" />
         </button>
 
         {canDelete && (
-          armed ? (
-            /* Names the lead rather than asking "are you sure?" — a generic confirm is
-               dismissed by reflex, and this removes a client's enquiry record. */
-            <span className="flex items-center gap-1 whitespace-nowrap text-xs">
-              <span className="text-muted-foreground">Delete {lead.name}?</span>
-              <button type="button" onClick={remove} disabled={pending}
-                className="rounded-md px-1.5 py-0.5 font-semibold text-destructive hover:bg-destructive/10">
-                {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Yes"}
-              </button>
-              <button type="button" onClick={() => setArmed(false)}
-                className="rounded-md px-1.5 py-0.5 text-muted-foreground hover:bg-secondary">
-                No
-              </button>
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setArmed(true)}
-              aria-label={`Delete ${lead.name}`}
-              className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          )
+          /* Names the lead rather than asking "are you sure?" — a generic confirm is
+             dismissed by reflex, and this removes a client's enquiry record. */
+          <ConfirmButton
+            question={`Delete ${lead.name}?`}
+            confirmLabel="Delete"
+            triggerLabel={`Delete ${lead.name}`}
+            pending={pending}
+            onConfirm={remove}
+            className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100"
+          >
+            <Trash2 aria-hidden="true" className="h-4 w-4" />
+          </ConfirmButton>
         )}
       </div>
-
-      {error && <p className="mt-1 text-right text-xs text-destructive">{error}</p>}
 
       {editing && (
         <EditLeadDialog lead={lead} projects={projects} onClose={() => setEditing(false)} />

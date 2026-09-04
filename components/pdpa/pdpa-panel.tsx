@@ -3,6 +3,7 @@ import * as React from "react";
 import { hardDeleteContact } from "@/server/pdpa/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { FormAlert } from "@/components/ui/alert";
 
 /** Admin-only PDPA controls: export JSON + right-to-erasure hard delete. */
 export function PdpaPanel({ contactId }: { contactId: string }) {
@@ -39,7 +40,7 @@ export function PdpaPanel({ contactId }: { contactId: string }) {
             onChange={(e) => setConfirm(e.target.value)}
             className="h-10 w-40 rounded-md border border-input bg-background px-3 text-sm"
           />
-          {error && <p className="text-destructive">{error}</p>}
+          {error && <FormAlert>{error}</FormAlert>}
           <div>
             <Button variant="destructive" disabled={pending || confirm !== "DELETE"} onClick={onDelete}>
               {pending ? "Deleting…" : "Permanently delete"}

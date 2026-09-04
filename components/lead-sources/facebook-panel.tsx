@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { FormAlert } from "@/components/ui/alert";
 
 interface CustomQuestion { key: string; label: string; options: string }
 
@@ -180,7 +181,7 @@ export function FacebookPanel({
       </div>
 
       {note && <p className="rounded-md bg-secondary px-3 py-2 text-sm">{note}</p>}
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <FormAlert>{error}</FormAlert>}
 
       {building && (
         <div className="space-y-4 rounded-lg border p-4">

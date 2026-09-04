@@ -10,7 +10,7 @@ export default async function NewProjectPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <h1 className="text-xl font-semibold">New Project</h1>
+      <h1 className="font-display text-2xl font-bold tracking-tight">New project</h1>
       <ProjectForm mode="create" />
     </div>
   );

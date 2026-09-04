@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { FormAlert } from "@/components/ui/alert";
 
 interface StageDraft { label: string; releaseBp: string; dueDays: string }
 interface Draft {
@@ -181,7 +182,7 @@ export function SchemeEditor({ schemes }: { schemes: SchemeWithStages[] }) {
           Use this scheme by default on new deals
         </label>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <FormAlert>{error}</FormAlert>}
 
         <div className="flex gap-2 border-t pt-3">
           <Button size="sm" disabled={pending} onClick={save}>
@@ -234,7 +235,7 @@ export function SchemeEditor({ schemes }: { schemes: SchemeWithStages[] }) {
         </div>
       ))}
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <FormAlert>{error}</FormAlert>}
 
       <Button size="sm" variant="outline" onClick={() => { setDraft(emptyDraft()); setError(null); }}>
         New scheme

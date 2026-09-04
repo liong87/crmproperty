@@ -39,6 +39,8 @@ export default async function LeadsPage({
     listProjectOptions(),
   ]);
   const pages = Math.max(1, Math.ceil(total / pageSize));
+  /** Any narrowing at all — what the empty state and the Clear control both key off. */
+  const filtered = Boolean(status || sp.q);
 
   /** Keep every filter when one of them changes — losing a search on sort is maddening. */
   const withParams = (over: Record<string, string | undefined>) => {
@@ -88,15 +90,32 @@ export default async function LeadsPage({
         {sp.status && <input type="hidden" name="status" value={sp.status} />}
         {sp.sort && <input type="hidden" name="sort" value={sp.sort} />}
         <div className="relative min-w-[16rem] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          {/* The magnifier is decoration and the placeholder disappears on the first
+              keystroke, so the field needs a name of its own. */}
+          <label htmlFor="lead-search" className="sr-only">
+            Search leads by name, phone or email
+          </label>
+          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
+            id="lead-search"
             name="q"
+            type="search"
             defaultValue={sp.q ?? ""}
             placeholder="Search name, phone, email…"
             className="h-10 w-full rounded-xl border border-input bg-card pl-9 pr-4 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
         </div>
+        {/* The explicit button stays. Enter submits, but on touch there is no Enter key
+            in sight and a search box with no button reads as not yet wired up. */}
         <Button type="submit" variant="outline">Search</Button>
+        {filtered && (
+          /* One control that undoes every filter at once. Clearing them one chip at a
+             time is fine when you remember what you set; after a sort and a search it
+             is guesswork. */
+          <Link href="/leads" className={cn(buttonVariants({ variant: "ghost" }))}>
+            Clear filters
+          </Link>
+        )}
       </form>
 
       {/* Status as chips rather than a <select>: the current filter is visible without
@@ -109,10 +128,28 @@ export default async function LeadsPage({
       </div>
 
       {items.length === 0 ? (
+        /* Two different situations wearing one message. "No leads match" wants the
+           filters widened; "no leads at all" wants a lead created, and offering the
+           wrong one of those is why the old copy could offer neither. */
         <EmptyState
           icon={Inbox}
-          title="No leads found"
-          hint="Capture a new lead or adjust your filters."
+          title={filtered ? "No leads match these filters" : "No leads yet"}
+          hint={
+            filtered
+              ? "Nothing here matches your search and status filter together. Clear them to see the whole database."
+              : "Capture the first one, or bring a list in from Facebook, Google or a spreadsheet."
+          }
+          action={
+            filtered ? (
+              <Link href="/leads" className={cn(buttonVariants({ variant: "outline" }))}>
+                Clear filters
+              </Link>
+            ) : (
+              <Link href="/leads/new" className={cn(buttonVariants())}>
+                <Plus className="h-4 w-4" /> Add lead
+              </Link>
+            )
+          }
         />
       ) : (
         <LeadsTable

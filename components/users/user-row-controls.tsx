@@ -4,16 +4,21 @@ import { useRouter } from "next/navigation";
 import { setUserRole, setUserActive, deleteUser } from "@/server/users/actions";
 import { USER_ROLE } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ui/confirm-button";
+import { FormAlert } from "@/components/ui/alert";
 
 type Role = (typeof USER_ROLE)[number];
 
 export function UserRowControls({
   userId,
+  name,
   role,
   active,
   disabled,
 }: {
   userId: string;
+  /** Named in the delete question — a row of identical buttons is easy to mis-hit. */
+  name: string;
   role: Role;
   active: boolean;
   disabled?: boolean;
@@ -23,7 +28,6 @@ export function UserRowControls({
   const [error, setError] = React.useState<string | null>(null);
   const [localRole, setLocalRole] = React.useState<Role>(role);
   const [localActive, setLocalActive] = React.useState(active);
-  const [confirmDelete, setConfirmDelete] = React.useState(false);
 
   function onRoleChange(next: Role) {
     setError(null);
@@ -41,7 +45,6 @@ export function UserRowControls({
     setError(null);
     const next = !localActive;
     setLocalActive(next);
-    setConfirmDelete(false);
     startTransition(async () => {
       const res = await setUserActive({ userId, active: next });
       if (!res.success) {
@@ -57,7 +60,6 @@ export function UserRowControls({
       const res = await deleteUser(userId);
       if (!res.success) {
         setError(res.error);
-        setConfirmDelete(false);
         return;
       }
       router.refresh();
@@ -71,7 +73,7 @@ export function UserRowControls({
         disabled={disabled || pending}
         onChange={(e) => onRoleChange(e.target.value as Role)}
         className="h-9 rounded-md border border-input bg-background px-2 text-sm disabled:opacity-50"
-        aria-label="Role"
+        aria-label={`Role for ${name}`}
       >
         {USER_ROLE.map((r) => (
           <option key={r} value={r}>{r}</option>
@@ -88,23 +90,18 @@ export function UserRowControls({
       </Button>
 
       {!localActive && !disabled && (
-        confirmDelete ? (
-          <span className="flex items-center gap-1">
-            <Button type="button" size="sm" variant="destructive" disabled={pending} onClick={onDelete}>
-              {pending ? "Deleting…" : "Confirm"}
-            </Button>
-            <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => setConfirmDelete(false)}>
-              Cancel
-            </Button>
-          </span>
-        ) : (
-          <Button type="button" size="sm" variant="ghost" className="text-destructive" disabled={pending} onClick={() => setConfirmDelete(true)}>
-            Delete
-          </Button>
-        )
+        <ConfirmButton
+          className="text-destructive"
+          onConfirm={onDelete}
+          question={`Delete ${name}?`}
+          confirmLabel={pending ? "Deleting…" : "Delete user"}
+          pending={pending}
+        >
+          Delete
+        </ConfirmButton>
       )}
 
-      {error && <span className="text-xs text-destructive">{error}</span>}
+      {error && <FormAlert className="w-full">{error}</FormAlert>}
     </div>
   );
 }

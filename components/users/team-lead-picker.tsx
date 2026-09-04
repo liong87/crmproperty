@@ -3,6 +3,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { setUserTeamLead } from "@/server/users/actions";
 import { Select } from "@/components/ui/select";
+import { FormAlert } from "@/components/ui/alert";
 import type { TeamMember } from "@/server/users/hierarchy";
 
 /**
@@ -54,7 +55,7 @@ export function TeamLeadPicker({
           <option key={l.id} value={l.id}>{l.name}</option>
         ))}
       </Select>
-      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+      {error && <FormAlert className="mt-1">{error}</FormAlert>}
     </div>
   );
 }

@@ -27,7 +27,7 @@ function Note({ tone, text }: { tone: "info" | "warn" | "stop"; text: string }) 
   );
 }
 
-function BlockView({ block }: { block: Block }) {
+function BlockView({ block, sectionTitle }: { block: Block; sectionTitle: string }) {
   switch (block.kind) {
     case "p":
       return <p className="text-sm leading-relaxed text-muted-foreground">{block.text}</p>;
@@ -79,8 +79,10 @@ function BlockView({ block }: { block: Block }) {
       return <Note tone={block.tone} text={block.text} />;
     case "table":
       return (
-        // Table already provides its own overflow container.
-        <Table>
+        // Table already provides its own named, focusable overflow region. The name is
+        // section plus first column, not section alone: Status vocabulary holds three
+        // tables, and three regions called the same thing are three dead ends.
+        <Table label={`${sectionTitle} — ${block.head[0] ?? "reference"}`}>
           <THead>
             <TR>{block.head.map((h) => <TH key={h}>{h}</TH>)}</TR>
           </THead>
@@ -110,7 +112,7 @@ export default async function HelpPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold">Guide</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">User guide</h1>
         <p className="text-sm text-muted-foreground">
           How to use {APP_NAME}, from a lead arriving to a unit being booked.
         </p>
@@ -146,7 +148,7 @@ export default async function HelpPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {s.blocks.map((b, i) => <BlockView key={i} block={b} />)}
+            {s.blocks.map((b, i) => <BlockView key={i} block={b} sectionTitle={s.title} />)}
           </CardContent>
         </Card>
       ))}
