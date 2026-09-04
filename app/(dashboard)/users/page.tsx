@@ -7,6 +7,7 @@ import { UserRowControls } from "@/components/users/user-row-controls";
 import { TeamLeadPicker } from "@/components/users/team-lead-picker";
 import { listPossibleLeads } from "@/server/users/hierarchy";
 import { USER_ROLE } from "@/lib/constants";
+import { roleLabel } from "@/lib/constants";
 
 type Role = (typeof USER_ROLE)[number];
 
@@ -78,7 +79,7 @@ export default async function UsersPage() {
                     disabled={u.id === me.id}
                   />
                 ) : (
-                  <Badge>{u.role}</Badge>
+                  <Badge>{roleLabel(u.role)}</Badge>
                 )}
               </TD>
             </TR>

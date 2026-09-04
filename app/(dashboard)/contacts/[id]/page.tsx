@@ -42,8 +42,12 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       <Card>
         <CardHeader><CardTitle>Details</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 gap-3 text-sm">
-          <Field label="Phone" value={contact.phone} />
-          <Field label="Email" value={contact.email ?? "—"} />
+          <Field label="Phone" value={contact.phone} href={`tel:${contact.phone}`} />
+          <Field
+            label="Email"
+            value={contact.email ?? "—"}
+            href={contact.email ? `mailto:${contact.email}` : undefined}
+          />
           <Field label="Interest" value={contact.interest ?? "—"} />
           <Field label="Budget" value={`${formatMYR(contact.budgetMin)}${contact.budgetMax ? ` – ${formatMYR(contact.budgetMax)}` : ""}`} />
           <Field label="Nationality" value={contact.nationality ?? "—"} />
@@ -116,6 +120,38 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
-  return <div><div className="text-xs text-muted-foreground">{label}</div><div>{value}</div></div>;
+function Field({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value: string;
+  /**
+   * Makes the value tappable — `tel:` or `mailto:`.
+   *
+   * A qualified client's number was plain text here. This is the record an agent opens
+   * to ring somebody they are already working; not being able to dial from it is the
+   * kind of friction that sends people back to their phone's own contacts app, which
+   * is where client history stops being recorded.
+   *
+   * h-11 on the tap target: 44px is the smallest thing reliably hit one-handed.
+   */
+  href?: string;
+}) {
+  return (
+    <div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      {href ? (
+        <a
+          href={href}
+          className="-mx-1 inline-flex h-11 items-center rounded-lg px-1 font-medium text-primary underline underline-offset-4 hover:brightness-110"
+        >
+          {value}
+        </a>
+      ) : (
+        <div>{value}</div>
+      )}
+    </div>
+  );
 }

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { statusLabel } from "@/lib/constants";
 
 const fmt = (d: Date | null) =>
   d == null
@@ -73,7 +74,7 @@ export function StaleLeadList({
                   {l.name}
                 </Link>
                 <Badge className={tone(l.idleDays)}>{l.idleDays} days quiet</Badge>
-                <Badge variant="outline">{l.status}</Badge>
+                <Badge variant="outline">{statusLabel(l.status)}</Badge>
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {l.phone} · {l.assignedName ?? "Unassigned"} · last activity {fmt(l.lastActivityAt)}

@@ -2,18 +2,6 @@
 export const APP_NAME = "Lanthorn Properties CRM";
 
 /**
- * The agency this instance belongs to, as it should appear to the outside world.
- *
- * Separate from APP_NAME on purpose: APP_NAME labels the TOOL and shows up in
- * the signed-in shell, while this is the BRAND on the public page an agent might
- * send to a recruit. Renaming the tool everywhere is a one-line change to
- * APP_NAME if that is ever wanted; it should not be forced by wanting the
- * landing page to say Lanthorn.
- */
-export const AGENCY_NAME = "Lanthorn";
-export const AGENCY_LEGAL_NAME = "Lanthorn Properties Sdn Bhd";
-
-/**
  * Lead status — a CALL OUTCOME, not a lifecycle stage.
  *
  * "Contacted" told you somebody had touched the lead and nothing about what happened.
@@ -55,6 +43,20 @@ const GROUP_OF = new Map<string, LeadStageGroup>(
 export const statusGroup = (status: string): LeadStageGroup => GROUP_OF.get(status) ?? "new";
 export const statusLabel = (status: string): string =>
   LEAD_STATUS_META.find((s) => s.value === status)?.label ?? status;
+
+/**
+ * A role as a person would say it.
+ *
+ * The Users screen printed the database value, so a team leader's badge read
+ * "team_lead" — an underscore and a truncated word, on the one screen that exists to
+ * tell an administrator who is who.
+ */
+const ROLE_LABEL: Record<string, string> = {
+  admin: "Admin",
+  team_lead: "Team Lead",
+  agent: "Agent",
+};
+export const roleLabel = (role: string): string => ROLE_LABEL[role] ?? role;
 
 const byGroup = (...groups: LeadStageGroup[]): string[] =>
   LEAD_STATUS_META.filter((s) => groups.includes(s.group)).map((s) => s.value);

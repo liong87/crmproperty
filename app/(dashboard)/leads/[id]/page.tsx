@@ -17,7 +17,8 @@ import { listAssignableAgents } from "@/server/leads/queries";
 import { listAppointmentsForClient } from "@/server/appointments/queries";
 import { ScheduleAppointment } from "@/components/appointments/schedule-appointment";
 import { AppointmentList } from "@/components/appointments/appointment-list";
-import { APP_NAME } from "@/lib/constants";
+import { APP_NAME, statusLabel } from "@/lib/constants";
+import { sourceLabel } from "@/lib/leads/source-label";
 import { formatMYR, formatCampaignTrail } from "@/lib/utils";
 import { leadStatusTone } from "@/lib/status";
 import { canEditOwned } from "@/server/auth/ownership";
@@ -41,7 +42,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">{lead.name}</h1>
-          <Badge className={leadStatusTone(lead.status)}>{lead.status}</Badge>
+          {/* statusLabel: the raw slug is "no-pick-up" / "unmatched-req". */}
+          <Badge className={leadStatusTone(lead.status)}>{statusLabel(lead.status)}</Badge>
         </div>
         <div className="flex items-center gap-2">
           {editable && <Link href={`/leads/${lead.id}/edit`}><Button size="sm" variant="outline">Edit</Button></Link>}
@@ -54,12 +56,19 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       <Card>
         <CardHeader><CardTitle>Details</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 gap-3 text-sm">
-          <Field label="Phone" value={lead.phone} />
-          <Field label="Email" value={lead.email ?? "—"} />
+          <Field label="Phone" value={lead.phone} href={`tel:${lead.phone}`} />
+          <Field
+            label="Email"
+            value={lead.email ?? "—"}
+            href={lead.email ? `mailto:${lead.email}` : undefined}
+          />
           <Field label="Interest" value={lead.interest ?? "—"} />
           <Field label="Budget" value={`${formatMYR(lead.budgetMin)}${lead.budgetMax ? ` – ${formatMYR(lead.budgetMax)}` : ""}`} />
           <Field label="Preferred areas" value={lead.preferredAreas ?? "—"} />
-          <Field label="Source" value={`${lead.source}${lead.sourceDetail ? ` (${lead.sourceDetail})` : ""}`} />
+          {/* sourceLabel, not the raw column. This rendered "meta" and
+              "meta form 1613980423612055" — a database value and an ad-platform id
+              shown to a salesperson. */}
+          <Field label="Source" value={sourceLabel(lead.source, lead.utmSource, lead.sourceDetail)} />
           {campaignTrail && <Field label="Campaign" value={campaignTrail} />}
           <Field label="Consent" value={lead.consentGivenAt ? `Given (${lead.consentSource ?? "n/a"})` : "Not recorded"} />
         </CardContent>
@@ -131,11 +140,39 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value: string;
+  /**
+   * Makes the value tappable — `tel:` or `mailto:`.
+   *
+   * The phone number on this page used to be plain text. This is the screen an agent
+   * opens on the way to a viewing, on a phone, to ring the client; it was the one
+   * place in the whole product where the number could not be dialled. The Working
+   * leads card already did this, which made the omission look like a rule rather than
+   * an oversight.
+   *
+   * h-11 on the tap target: 44px is the smallest thing reliably hit one-handed.
+   */
+  href?: string;
+}) {
   return (
     <div>
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div>{value}</div>
+      {href ? (
+        <a
+          href={href}
+          className="-mx-1 inline-flex h-11 items-center rounded-lg px-1 font-medium text-primary underline underline-offset-4 hover:brightness-110"
+        >
+          {value}
+        </a>
+      ) : (
+        <div>{value}</div>
+      )}
     </div>
   );
 }

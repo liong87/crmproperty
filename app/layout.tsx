@@ -23,7 +23,15 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  /*
+   * NO maximumScale. It was set to 1, which disables pinch-to-zoom app-wide — two
+   * lines below a comment about agents working from phones.
+   *
+   * That is a WCAG 1.4.4 failure, but the practical harm is plainer: this app shows
+   * price lists, unit numbers and scanned SPAs on a six-inch screen, and an agent
+   * standing in a sales gallery could not zoom in on any of them. Nobody would report
+   * that as a bug; they would squint, then use WhatsApp instead.
+   */
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
