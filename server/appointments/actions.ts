@@ -24,6 +24,7 @@ import { monitoring } from "@/lib/monitoring";
 import type { ActionResult } from "@/types";
 import { assertCanEditOwned, assertCanEditOwnedAny } from "@/server/auth/ownership";
 import { openDealForBooking } from "./booking-internal";
+import { resolveSplit } from "@/lib/leads/co-broke";
 
 const scheduleSchema = z
   .object({
@@ -44,16 +45,21 @@ const scheduleSchema = z
   });
 
 /**
- * Who owns this client, and may the current user act for them?
+ * Who owns this client, who sourced them, and may the current user act for them?
  *
- * Returns the owning agent's id so the appointment is assigned to whoever works the
- * client, not whoever happened to book it — a manager scheduling on an agent's behalf
- * should put it in the agent's diary, not their own.
+ * `owner` is the agent working the client, so the appointment lands in their diary
+ * rather than in the diary of whoever happened to book it — a manager scheduling on an
+ * agent's behalf is not taking the appointment.
+ *
+ * `sourcedBy` is set only when the lead was HANDED OVER by a colleague, and is the
+ * agent who brought it in. See the note on `leads.setter_id`: an internal co-broke
+ * keeps the first agent's claim, and this is where that claim turns into the
+ * setter/closer split the commission engine already knows how to pay.
  */
 async function resolveClientOwner(
   me: Awaited<ReturnType<typeof requireDbUser>>,
   d: { contactId?: string | null; leadId?: string | null },
-): Promise<string | null> {
+): Promise<{ owner: string | null; sourcedBy: string | null }> {
   if (d.contactId) {
     const [row] = await db
       .select({ owner: contacts.assignedTo })
@@ -61,15 +67,17 @@ async function resolveClientOwner(
       .where(and(eq(contacts.id, d.contactId), isNull(contacts.deletedAt)));
     if (!row) throw new Error("CLIENT_NOT_FOUND");
     await assertCanEditOwned(me, row.owner);
-    return row.owner;
+    // A contact carries no hand-off claim: conversion happens after the split has
+    // already been recorded on the appointment that produced the deal.
+    return { owner: row.owner, sourcedBy: null };
   }
   const [row] = await db
-    .select({ owner: leads.assignedTo })
+    .select({ owner: leads.assignedTo, sourcedBy: leads.setterId })
     .from(leads)
     .where(and(eq(leads.id, d.leadId!), isNull(leads.deletedAt)));
   if (!row) throw new Error("CLIENT_NOT_FOUND");
   await assertCanEditOwned(me, row.owner);
-  return row.owner;
+  return { owner: row.owner, sourcedBy: row.sourcedBy };
 }
 
 /** A closer must be a real, active member of staff — not any UUID a form supplies. */
@@ -87,8 +95,22 @@ export async function scheduleAppointment(input: unknown): Promise<ActionResult<
   try {
     const me = await requireDbUser();
     const d = scheduleSchema.parse(input);
-    const owner = await resolveClientOwner(me, d);
-    const closerId = await assertValidCloser(d.closerId);
+    const { owner, sourcedBy } = await resolveClientOwner(me, d);
+    const explicitCloser = await assertValidCloser(d.closerId);
+
+    /*
+     * INTERNAL CO-BROKE. On a lead a colleague handed over, the agent who sourced it is
+     * the setter and the agent working it now is the closer — exactly the pair
+     * `deal_commission_splits` pays out on. The rule itself lives in lib/leads/co-broke
+     * so it can be tested: every wrong answer here still produces a valid-looking
+     * appointment, and only shows up as somebody's commission going to the wrong person.
+     */
+    const { setterId, closerId } = resolveSplit({
+      sourcedBy,
+      owner,
+      explicitCloser,
+      fallback: me.id,
+    });
 
     const [row] = await db
       .insert(appointments)
@@ -97,7 +119,7 @@ export async function scheduleAppointment(input: unknown): Promise<ActionResult<
         projectId: d.projectId ?? null,
         contactId: d.contactId ?? null,
         leadId: d.leadId ?? null,
-        assignedTo: owner ?? me.id,
+        assignedTo: setterId,
         closerId,
         scheduledAt: new Date(d.scheduledAt),
         status: "scheduled",

@@ -110,6 +110,25 @@ export const leads = pgTable(
      */
     status: varchar("status", { length: 30 }).notNull().default("new"),
     assignedTo: uuid("assigned_to").references(() => users.id, { onDelete: "set null" }),
+    /**
+     * The agent who SOURCED this lead, when that is no longer the agent working it.
+     *
+     * Set the first time a lead is handed to a colleague and never overwritten, so a
+     * lead passed twice still credits the person who actually brought it in. Null on
+     * the overwhelming majority of leads — the owner sourced it and there is nobody
+     * else to name.
+     *
+     * This is what makes an INTERNAL CO-BROKE different from a pass-on. A pass-on
+     * takes the lead off one agent and gives it to another; a co-broke moves the work
+     * but keeps the first agent's claim, and an agent with no claim has every reason
+     * to sit on a lead they cannot close rather than hand it to someone who can.
+     *
+     * It is deliberately a claim on the LEAD rather than a commission row: nothing is
+     * owed until something closes. When an appointment is booked, this becomes the
+     * appointment's setter and the current owner becomes the closer — which is the
+     * split `deal_commission_splits` already knows how to pay.
+     */
+    setterId: uuid("setter_id").references(() => users.id, { onDelete: "set null" }),
     consentGivenAt: timestamp("consent_given_at", { withTimezone: true }),
     consentSource: varchar("consent_source", { length: 255 }),
     convertedToContactId: uuid("converted_to_contact_id"), // FK added in relations to avoid cycle

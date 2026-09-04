@@ -22,6 +22,8 @@ import { monitoring } from "@/lib/monitoring";
 
 export type NotificationKind =
   | "lead-passed-on"
+  /** An agent gave a lead to a colleague and kept the setter's claim on it. */
+  | "lead-handed-over"
   | "lead-assigned"
   | "document-due"
   | "appointment-reminder"

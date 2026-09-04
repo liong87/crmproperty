@@ -6,6 +6,8 @@ import { Phone, MessageCircle, CalendarPlus, Check, Loader2, Clock } from "lucid
 import { logActivity } from "@/server/activities/actions";
 import { statusLabel } from "@/lib/constants";
 import { RemarkThread } from "./remark-thread";
+import { HandOverButton } from "./hand-over-button";
+import type { AssignableUser } from "@/server/users/queries";
 import type { WorkingLead } from "@/server/leads/working";
 import { Badge } from "@/components/ui/badge";
 import { leadStatusTone } from "@/lib/status";
@@ -30,7 +32,16 @@ const relTime = (d: Date | null): string => {
  * dormancy badge all move together. A button that only updated a counter would make
  * the metric a lie within a week.
  */
-export function WorkingLeadCard({ lead, waTemplate }: { lead: WorkingLead; waTemplate: string }) {
+export function WorkingLeadCard({
+  lead,
+  waTemplate,
+  colleagues = [],
+}: {
+  lead: WorkingLead;
+  waTemplate: string;
+  /** Who this lead can be handed to. Empty hides the control entirely. */
+  colleagues?: AssignableUser[];
+}) {
   const router = useRouter();
   const [pending, start] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
@@ -133,6 +144,9 @@ export function WorkingLeadCard({ lead, waTemplate }: { lead: WorkingLead; waTem
           <CalendarPlus className="h-3.5 w-3.5" /> Book
         </Link>
 
+        {/* Last of the three, and quietest: handing a lead over is a considered
+            decision, not something to sit under a thumb beside "Called". */}
+        <HandOverButton leadId={lead.id} leadName={lead.name} colleagues={colleagues} />
       </div>
 
       {/* The remark thread. Status moves only from in here, so every change carries

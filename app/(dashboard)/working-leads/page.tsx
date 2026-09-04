@@ -7,6 +7,7 @@ import {
   listWorkingLeads, countWorkingTabs, getFollowUpRate, LIST_CAP, type WorkingTab,
 } from "@/server/leads/working";
 import { WorkingLeadCard } from "@/components/leads/working-lead-card";
+import { listAssignableUsers } from "@/server/users/queries";
 import { FilterDropdown, ActiveFilterChip, type FilterOption } from "@/components/leads/filter-dropdown";
 import { statusLabel } from "@/lib/constants";
 import { QueueSearch } from "@/components/leads/queue-search";
@@ -47,11 +48,16 @@ export default async function WorkingLeadsPage({
   const statusSel = asList(sp.status);
   const waOnly = sp.wa === "1";
 
-  const [rows, counts, rate] = await Promise.all([
+  const [rows, counts, rate, staff] = await Promise.all([
     listWorkingLeads(me, tab, { search }),
     countWorkingTabs(me, { search }),
     getFollowUpRate(me, 7),
+    listAssignableUsers(),
   ]);
+
+  // Everyone but you. Handing a lead to yourself is not a thing, and offering it as an
+  // option is the sort of detail that makes a control feel unfinished.
+  const colleagues = staff.filter((u) => u.id !== me.id);
 
   /*
    * Facets come from the rows the search returned, BEFORE the chips are applied — so
@@ -195,7 +201,7 @@ export default async function WorkingLeadsPage({
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
           {items.map((l) => (
-            <WorkingLeadCard key={l.id} lead={l} waTemplate={waTemplate} />
+            <WorkingLeadCard key={l.id} lead={l} waTemplate={waTemplate} colleagues={colleagues} />
           ))}
         </div>
       )}
