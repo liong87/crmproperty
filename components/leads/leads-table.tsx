@@ -22,6 +22,8 @@ import { Button } from "@/components/ui/button";
 import { formatMYR, cn } from "@/lib/utils";
 import { leadStatusTone } from "@/lib/status";
 import { statusLabel } from "@/lib/constants";
+import { who } from "@/lib/user-name";
+import { useMeId } from "@/lib/me-context";
 import { AssignCell } from "./assign-cell";
 import { LeadRowActions } from "./row-actions";
 import { StatusCell } from "./status-cell";
@@ -89,6 +91,7 @@ export function LeadsTable({
   projects?: { id: string; name: string }[];
 }) {
   const canAssign = assignees.length > 0;
+  const meId = useMeId();
   const router = useRouter();
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [armed, setArmed] = React.useState(false);
@@ -216,7 +219,7 @@ export function LeadsTable({
                     users={assignees}
                   />
                 ) : (
-                  l.assigneeName ?? "Unassigned"
+                  who(l.assigneeName, l.assignedTo, meId)
                 )}
               </TD>
               <TD>

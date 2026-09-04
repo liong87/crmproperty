@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Users2, Phone, MessageCircle, Inbox } from "lucide-react";
 import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
+import { who } from "@/lib/user-name";
 import { listTeamMembers } from "@/server/users/hierarchy";
 import { getAgentActivity } from "@/server/reports/activity";
 import { RangeFilter, parseRangeDays, rangeLabel } from "@/components/reports/range-filter";
@@ -80,7 +81,7 @@ export default async function TeamPage({
                     const a = byId.get(m.id);
                     return (
                       <TR key={m.id}>
-                        <TD className="font-medium">{m.name}</TD>
+                        <TD className="font-medium">{who(m.name, m.id, me.id)}</TD>
                         <TD>
                           <span className="inline-flex items-center gap-1.5">
                             <Phone className="h-3.5 w-3.5 text-muted-foreground" />

@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { who } from "@/lib/user-name";
+import { useMeId } from "@/lib/me-context";
 import { Textarea } from "@/components/ui/textarea";
 import { appointmentStatusTone, appointmentOutcomeTone, humaniseSlug } from "@/lib/status";
 
@@ -26,6 +28,7 @@ const timeFmt = new Intl.DateTimeFormat("en-MY", {
 /** One appointment, with the write-up form revealed on demand. */
 function AppointmentCard({ v }: { v: AppointmentRow }) {
   const router = useRouter();
+  const meId = useMeId();
   const [writing, setWriting] = React.useState(false);
   const [outcome, setOutcome] = React.useState<string>("interested");
   const [remark, setRemark] = React.useState("");
@@ -74,9 +77,11 @@ function AppointmentCard({ v }: { v: AppointmentRow }) {
             {v.clientPhone ? <span className="text-muted-foreground"> · {v.clientPhone}</span> : null}
           </div>
           <div className="mt-0.5 text-xs text-muted-foreground">
-            {v.setterName ? `Set by ${v.setterName}` : "Unassigned"}
+            {v.setterName ? `Set by ${who(v.setterName, v.setterId, meId)}` : "Unassigned"}
             {/* Only worth naming a closer when it is not the setter closing their own. */}
-            {v.closerName && v.closerName !== v.setterName ? ` · Closing: ${v.closerName}` : ""}
+            {v.closerName && v.closerName !== v.setterName
+              ? ` · Closing: ${who(v.closerName, v.closerId, meId)}`
+              : ""}
           </div>
           {v.remark && <p className="mt-1 text-sm">{v.remark}</p>}
           {v.notes && <p className="mt-1 text-sm text-muted-foreground">{v.notes}</p>}

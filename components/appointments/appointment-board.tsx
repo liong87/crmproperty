@@ -7,6 +7,7 @@ import { moveAppointmentToColumn } from "@/server/appointments/actions";
 import type { AppointmentRow } from "@/server/appointments/queries";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { who } from "@/lib/user-name";
 
 const timeFmt = new Intl.DateTimeFormat("en-MY", {
   weekday: "short", day: "numeric", month: "short",
@@ -71,12 +72,6 @@ export function bannerTone(a: { scheduledAt: Date; status: string }): string {
   if (days < 1) return "bg-amber-100 text-amber-800 dark:bg-amber-500/25 dark:text-amber-100";
   if (days < 4) return "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/25 dark:text-emerald-200";
   return "bg-slate-100 text-slate-600 dark:bg-slate-500/25 dark:text-slate-200";
-}
-
-/** A person's name, marked when it is the viewer. Unassigned is stated, not blank. */
-function who(name: string | null, id: string | null, meId: string): string {
-  if (!name) return "Unassigned";
-  return id === meId ? `${name} (You)` : name;
 }
 
 export interface BoardColumnData {

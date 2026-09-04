@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { UserRowControls } from "@/components/users/user-row-controls";
 import { TeamLeadPicker } from "@/components/users/team-lead-picker";
 import { listPossibleLeads } from "@/server/users/hierarchy";
+import { who } from "@/lib/user-name";
 import { USER_ROLE } from "@/lib/constants";
 import { roleLabel } from "@/lib/constants";
 
@@ -51,7 +52,7 @@ export default async function UsersPage() {
         <TBody>
           {users.map((u) => (
             <TR key={u.id}>
-              <TD className="font-medium">{u.name}</TD>
+              <TD className="font-medium">{who(u.name, u.id, me.id)}</TD>
               <TD className="text-muted-foreground">{u.email}</TD>
               <TD>
                 <Badge variant={u.active ? "secondary" : "outline"}>{u.active ? "active" : "inactive"}</Badge>

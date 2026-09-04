@@ -6,6 +6,8 @@ import { Check, ChevronDown, Loader2, Search } from "lucide-react";
 import { assignLead } from "@/server/leads/actions";
 import type { AssignableUser } from "@/server/users/queries";
 import { cn } from "@/lib/utils";
+import { who } from "@/lib/user-name";
+import { useMeId } from "@/lib/me-context";
 
 /**
  * Reassign a lead from the list, without leaving it.
@@ -29,6 +31,7 @@ export function AssignCell({
   users: AssignableUser[];
 }) {
   const router = useRouter();
+  const meId = useMeId();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [pending, start] = React.useTransition();
@@ -109,7 +112,7 @@ export function AssignCell({
         )}
       >
         {pending && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />}
-        <span className="truncate">{currentName ?? "Unassigned"}</span>
+        <span className="truncate">{who(currentName, currentId, meId)}</span>
         <ChevronDown className="ml-auto h-3.5 w-3.5 shrink-0 opacity-50" />
       </button>
 

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentDbUser, isTeamLeadOrAbove } from "@/lib/auth";
+import { who } from "@/lib/user-name";
 import { getReportData } from "@/server/reports/queries";
 import { getFunnel, getFunnelTrend } from "@/server/reports/funnel";
 import { getAgentActivity } from "@/server/reports/activity";
@@ -166,7 +167,9 @@ export default async function ReportsPage({
       {funnel.byAgent.length > 0 && (
         <FunnelBreakdown
           title="By agent"
-          rows={funnel.byAgent}
+          /* Your own row is marked, so a team lead scanning five names finds theirs
+             without reading every one. */
+          rows={funnel.byAgent.map((r) => ({ ...r, label: who(r.label, r.id, me.id) }))}
           emptyHint="No activity in this window yet."
           columns={{ appointments: "Set", showedUp: "Showed", booked: "Booked" }}
           note="Appointments are credited to whoever set them; show-ups and bookings to whoever ran the presentation."

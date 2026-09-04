@@ -7,6 +7,7 @@ import { countActiveWorkingLeads } from "@/server/leads/working";
 import { APP_NAME } from "@/lib/constants";
 import { COMMISSION_ENABLED } from "@/lib/features";
 import { BookOpen } from "lucide-react";
+import { MeProvider } from "@/lib/me-context";
 
 const ROLE_LABEL: Record<string, string> = {
   admin: "Administrator",
@@ -104,6 +105,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   ];
 
   return (
+    /*
+     * MeProvider carries the viewer's own id to every Client Component below, so a name
+     * that is yours renders as "Name (You)" wherever colleagues' names appear beside it.
+     * See lib/me-context.tsx for why this is a context and not a prop.
+     */
+    <MeProvider id={user.id}>
     <div className="app-shell min-h-dvh sm:flex">
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col sm:flex">
@@ -149,5 +156,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <main className="mx-auto w-full max-w-5xl flex-1 p-4 sm:p-6">{children}</main>
       </div>
     </div>
+    </MeProvider>
   );
 }
