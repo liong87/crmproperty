@@ -26,6 +26,7 @@
  */
 import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
+import { withDbRetry } from "@/lib/db/retry";
 import { leads, appointments, projects, users, deals, dealStages, type User } from "@/lib/db/schema";
 import { ownershipFilter, ownershipFilterAny, isTeamLeadOrAbove } from "@/lib/auth";
 
@@ -156,7 +157,7 @@ export async function getFunnel(user: User, window: ReportWindow): Promise<Funne
     leadsByAgent,
     apptsSetByAgent,
     apptsClosedByAgent,
-  ] = await Promise.all([
+  ] = await withDbRetry(() => Promise.all([
     db.select({ c: count() }).from(leads).where(liveLead),
 
     db
@@ -235,7 +236,7 @@ export async function getFunnel(user: User, window: ReportWindow): Promise<Funne
       .from(appointments)
       .where(liveAppt)
       .groupBy(sql`coalesce(${appointments.closerId}, ${appointments.assignedTo})`),
-  ]).catch((err: unknown) => {
+  ]), "funnel").catch((err: unknown) => {
     /*
      * TEMPORARY DIAGNOSTIC — remove once the intermittent dashboard 500 is named.
      *

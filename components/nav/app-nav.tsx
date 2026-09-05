@@ -73,6 +73,22 @@ export function AppNav({ groups, variant }: { groups: NavGroup[]; variant: "side
       <Link
         key={l.href}
         href={l.href}
+        /*
+         * No prefetch, and this is a LOAD decision rather than a style one.
+         *
+         * Every sidebar link that entered the viewport made Next fetch that route from
+         * the server. One visit to Dashboard therefore also rendered Inbox, Working
+         * leads, Appointments, Leads, Pipeline, Leads capture, Reports and Help —
+         * eight extra Worker invocations, each opening its own database connections,
+         * for pages nobody asked for. Clicking around quickly multiplied that into
+         * dozens of concurrent renders competing for one Hyperdrive connection pool,
+         * which is where the intermittent dashboard failures came from.
+         *
+         * An agent clicks ONE of fifteen links. Prefetching the other fourteen buys a
+         * few hundred milliseconds on one of them and pays for it on every page load;
+         * `loading.tsx` already covers the wait with a skeleton.
+         */
+        prefetch={false}
         aria-current={active(l.href) ? "page" : undefined}
         className={cn(
           "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
@@ -161,6 +177,7 @@ export function AppNav({ groups, variant }: { groups: NavGroup[]; variant: "side
           <Link
             key={l.href}
             href={l.href}
+            prefetch={false}
             aria-current={active(l.href) ? "page" : undefined}
             className={cn(
               "flex shrink-0 flex-col items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-medium transition-colors",

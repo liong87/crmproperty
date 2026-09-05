@@ -84,11 +84,20 @@ function createClient() {
        * against whichever statement it happened to be holding — which is why the
        * failing query was different every time and never the one at fault.
        *
-       * Three leaves headroom for Clerk plus any other subrequest. It costs almost
-       * nothing: Hyperdrive owns the real pool server-side, the hop is local, and
-       * postgres-js pipelines the eight funnel queries over the sockets it has.
+       * ONE, after five and three both still failed under rapid navigation.
+       *
+       * The per-invocation cap was not the whole story: clicking Dashboard repeatedly
+       * puts several requests in flight at once, each with its own client, and the
+       * ceiling they share is HYPERDRIVE's connection pool — which is not visible from
+       * inside the Worker. Sockets-per-request is the only term in that product we
+       * control, so it goes to the floor.
+       *
+       * One is what the non-Hyperdrive production path already uses, for the same
+       * reason (see defaultMax below). It costs little here: postgres-js PIPELINES
+       * statements over a single connection rather than serialising round trips, the
+       * hop to Hyperdrive is local, and Hyperdrive owns the real pool server-side.
        */
-      max: 3,
+      max: 1,
       // Avoids an extra round-trip on every connection. Safe here: the schema uses
       // no custom array types.
       fetch_types: false,
