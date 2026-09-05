@@ -125,10 +125,6 @@ export default async function InboxPage({
   const followUps = show === "late" ? lateFollowUps : allFollowUps;
   const notifications = show === "late" ? [] : allNotifications;
 
-  /** How many DEALS the paperwork spans — the sort reorders deals, so this is what
-   *  decides whether a sort control has anything to do. */
-  const dealCount = new Set(docs.map((d) => d.dealId)).size;
-
   /** Is there anything for the right-hand column to hold? */
   const hasRecord = notifications.length > 0;
 
@@ -219,15 +215,17 @@ export default async function InboxPage({
               {docsOverdue > 0 && ` · ${docsOverdue} overdue`}
             </p>
             {/*
-              Hidden below TWO deals — the threshold was three, which hid the control
-              from anyone with a couple of bookings and made it look missing. One deal
-              cannot be reordered, so one is the only case where a sort does nothing;
-              from two upwards it does something and is shown.
+              Always shown, and that is deliberate. It was gated on deal count twice —
+              first at three, then at two — and both times the person looking for it saw
+              nothing and assumed it was broken. A control that appears and disappears
+              depending on how much data you happen to have is worse than one that is
+              occasionally redundant: predictable beats tidy. With a single deal the sort
+              simply has nothing to reorder, which costs one line of screen and no
+              confusion.
 
               Chips rather than a second Segmented: the All/Late tabs own the loud
               treatment, and two gradient controls compete for the same glance.
             */}
-            {dealCount >= 2 && (
             <div role="group" aria-label="Sort paperwork" className="flex flex-wrap items-center gap-1.5 pt-1">
               {(Object.keys(SORT_LABEL) as PaperworkSort[]).map((k) => (
                 <FilterChip
@@ -238,7 +236,6 @@ export default async function InboxPage({
                 />
               ))}
             </div>
-            )}
           </CardHeader>
           <CardContent className="px-0 pb-2">
             {/*
@@ -283,12 +280,16 @@ export default async function InboxPage({
                           className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open/deal:rotate-90 motion-reduce:transition-none"
                         />
                         <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-                          <Link
-                            href={`/deals/${first.dealId}`}
-                            className="truncate font-medium hover:underline"
-                          >
-                            {first.contactName}
-                          </Link>
+                          {/*
+                            PLAIN TEXT, NOT A LINK — a <summary> is itself a control,
+                            and a link inside one is a control inside a control: axe
+                            flags it "nested-interactive", and in practice a keyboard
+                            user tabs onto the link, presses Enter expecting to expand
+                            the row, and is navigated away instead. The link to the deal
+                            lives in the expanded panel below, where it can be reached
+                            without ambiguity.
+                          */}
+                          <span className="truncate font-medium">{first.contactName}</span>
                           {first.subjectTitle && (
                             /* Bounded and nowrap: a project name is unpredictable in
                                length ("Lanthorn Residences @ KL Eco City") and a pill
@@ -319,7 +320,7 @@ export default async function InboxPage({
                         )}
                       </summary>
 
-                      <ul className="pb-2 pl-12 pr-5">
+                      <ul className="pb-1 pl-12 pr-5">
                         {group.map((d) => {
                           const late = d.daysUntilDue < 0;
                           return (
@@ -355,6 +356,18 @@ export default async function InboxPage({
                           );
                         })}
                       </ul>
+
+                      {/* The way through to the deal, now that the heading is not a
+                          link. Inside the disclosure, so it is only reachable once the
+                          row is open — the same place the documents themselves are. */}
+                      <p className="pb-3 pl-12 pr-5">
+                        <Link
+                          href={`/deals/${first.dealId}`}
+                          className="text-[13px] font-medium text-primary underline underline-offset-4"
+                        >
+                          Open {first.contactName}&rsquo;s deal
+                        </Link>
+                      </p>
                     </details>
                   </li>
                 );

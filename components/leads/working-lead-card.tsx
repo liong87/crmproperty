@@ -85,7 +85,15 @@ export function WorkingLeadCard({
   )}`;
 
   return (
-    <div className="rounded-xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
+    /*
+      min-w-0 because this card is a GRID ITEM, and a grid item's default
+      `min-width: auto` means it will not shrink below its own content. One long remark
+      preview therefore widened the card to 589px inside a 358px column and pushed the
+      whole page sideways on a phone — `truncate` further down never got the chance to
+      act, because nothing above it was allowed to be narrower than the text. Only
+      reproducible once leads had real remarks on them.
+    */
+    <div className="min-w-0 rounded-xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <Link href={`/leads/${lead.id}`} className="block truncate font-medium hover:underline">

@@ -98,14 +98,19 @@ export function RemarkThread({
       <button
         type="button"
         onClick={() => { setOpen(true); setError(null); }}
-        className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-secondary"
+        /* min-w-0 on the button itself: without it the flex item refuses to shrink
+           below its content and `truncate` on the child never engages — the preview
+           of a two-line remark stretched the whole card to 605px inside a 390px
+           phone. Only visible once real remarks existed, which is why an empty
+           database hid it. */
+        className="flex w-full min-w-0 items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-secondary"
       >
         {latestAt ? (
           <>
             <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium tabular-nums text-primary">
               {stamp(latestAt)}
             </span>
-            <span className="truncate text-xs text-muted-foreground">{latest}</span>
+            <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{latest}</span>
           </>
         ) : (
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
