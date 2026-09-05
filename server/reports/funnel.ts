@@ -235,7 +235,40 @@ export async function getFunnel(user: User, window: ReportWindow): Promise<Funne
       .from(appointments)
       .where(liveAppt)
       .groupBy(sql`coalesce(${appointments.closerId}, ${appointments.assignedTo})`),
-  ]);
+  ]).catch((err: unknown) => {
+    /*
+     * TEMPORARY DIAGNOSTIC — remove once the intermittent dashboard 500 is named.
+     *
+     * Drizzle wraps every failure as `Failed query: <sql> params: <...>` and puts the
+     * REAL error in `.cause`. Next logs only `.message`, so `wrangler tail` has twice
+     * shown us the envelope and never the letter — which is how a serialisation theory
+     * survived two rounds of evidence that did not actually support it.
+     *
+     * postgres-js distinguishes itself here: a PostgresError carries `code` (a
+     * SQLSTATE) plus `severity`/`routine`, while a transport failure carries
+     * `CONNECT_TIMEOUT`, `CONNECTION_CLOSED` or similar. A Workers isolate violation
+     * says "Cannot perform I/O on behalf of a different request". Those three point at
+     * three completely different fixes, and nothing above distinguishes them.
+     */
+    const chain: Record<string, unknown>[] = [];
+    let e: unknown = err;
+    for (let depth = 0; e && depth < 5; depth++) {
+      const o = e as { name?: string; message?: string; code?: unknown; errno?: unknown; severity?: unknown; routine?: unknown; detail?: unknown; cause?: unknown };
+      chain.push({
+        depth,
+        name: o.name,
+        message: typeof o.message === "string" ? o.message.slice(0, 300) : undefined,
+        code: o.code,
+        errno: o.errno,
+        severity: o.severity,
+        routine: o.routine,
+        detail: o.detail,
+      });
+      e = o.cause;
+    }
+    console.error("[funnel] query failed — cause chain:", JSON.stringify(chain));
+    throw err;
+  });
 
   const totalLeads = leadTotals[0]?.c ?? 0;
   const t = apptTotals[0] ?? { total: 0, showedUp: 0, noShow: 0, booked: 0 };
