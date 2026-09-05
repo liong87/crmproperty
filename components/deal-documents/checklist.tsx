@@ -7,6 +7,7 @@ import {
 } from "@/server/deal-documents/actions";
 import type { ChecklistItem } from "@/server/deal-documents/queries";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ui/confirm-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -161,9 +162,23 @@ export function DealChecklist({
                         }}
                       />
                     </label>
-                    <Button size="sm" variant="ghost" disabled={pending} onClick={() => run(() => removeChecklistItem(item.id))}>
+                    {/*
+                      Confirmed, and it names the document. Removing a line from a
+                      paperwork checklist is not "undo-able by re-adding it": nobody is
+                      chasing that document afterwards, and the omission is invisible —
+                      the item simply stops appearing in the Inbox. That is the failure
+                      this checklist exists to prevent.
+                    */}
+                    <ConfirmButton
+                      size="sm"
+                      variant="ghost"
+                      pending={pending}
+                      question={`Remove "${item.label}" from this deal?`}
+                      confirmLabel="Remove"
+                      onConfirm={() => run(() => removeChecklistItem(item.id))}
+                    >
                       Remove
-                    </Button>
+                    </ConfirmButton>
                   </div>
                 )}
               </div>

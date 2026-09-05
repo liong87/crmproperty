@@ -38,6 +38,29 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../lib/db/client";
 import { documentRequirements, dealDocuments } from "../lib/db/schema";
 
+/**
+ * The canonical order, mirroring scripts/seed-document-checklist-template.ts.
+ *
+ * The seed script only ever INSERTS — it skips any label already present, and never
+ * updates it. So "Booking fee receipt", which survived from the legacy set, kept that
+ * set's sort order and sat in the wrong place on every new checklist. Resyncing here
+ * makes the code the source of truth for the ORDER as well as the membership.
+ */
+const CANONICAL_ORDER: Record<string, number> = {
+  "Booking / Reservation Form": 1,
+  "Booking fee receipt": 2,
+  "Buyer IC / Passport Copy": 3,
+  "Letter of Appointment (Panel Lawyer)": 4,
+  "Sales Form": 5,
+  "Consent Letter": 6,
+  "Income / Loan Supporting Documents": 7,
+  "Loan Approval Letter": 8,
+  "Sale and Purchase Agreement (SPA)": 9,
+  "Change Unit Form": 10,
+  "Cancellation Form": 11,
+  "BGB Form": 12,
+};
+
 const APPLY = (process.env.APPLY ?? "") !== "";
 
 /** Exact labels, case-sensitive — "Loan approval letter" must go, "Loan Approval Letter" must stay. */
@@ -90,6 +113,30 @@ async function main() {
         await db
           .update(documentRequirements)
           .set({ deletedAt: new Date() })
+          .where(eq(documentRequirements.id, r.id));
+      }
+    }
+  }
+
+  // Resync the order of what remains.
+  const live = await db
+    .select({ id: documentRequirements.id, label: documentRequirements.label, sortOrder: documentRequirements.sortOrder })
+    .from(documentRequirements)
+    .where(and(eq(documentRequirements.pipeline, "project"), isNull(documentRequirements.deletedAt)));
+
+  const misordered = live.filter(
+    (r) => CANONICAL_ORDER[r.label] != null && CANONICAL_ORDER[r.label] !== r.sortOrder,
+  );
+  if (misordered.length > 0) {
+    console.log("");
+    for (const r of misordered) {
+      console.log(
+        `  ${APPLY ? "reordering" : "would reorder"} "${r.label}"  ${r.sortOrder} → ${CANONICAL_ORDER[r.label]}`,
+      );
+      if (APPLY) {
+        await db
+          .update(documentRequirements)
+          .set({ sortOrder: CANONICAL_ORDER[r.label] })
           .where(eq(documentRequirements.id, r.id));
       }
     }

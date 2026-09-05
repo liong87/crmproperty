@@ -103,6 +103,23 @@
   }
 
   /*
+   * Scroll padding for the sticky bars.
+   *
+   * On a phone the app stacks TWO sticky elements — the header at top-0 and the nav
+   * strip at top-[57px] — roughly 105px of permanently occupied viewport. Without
+   * this, anything the browser scrolls to lands underneath them: a focused row reached
+   * by Tab, and every `#main` skip-link landing. WCAG 2.4.11 (Focus Not Obscured).
+   *
+   * Bound to the same breakpoint as the bars themselves; from `sm` up the navigation
+   * is a lateral sidebar and nothing overlays the top of the page.
+   */
+  @media (max-width: 639px) {
+    html {
+      scroll-padding-top: 7rem;
+    }
+  }
+
+  /*
    * A visible focus ring on every interactive element, including plain links, which
    * previously relied on the UA default and lost it wherever `outline-none` was set
    * for a custom ring.
@@ -268,3 +285,7 @@
   }
 }
 
+
+/* SANDBOX ONLY */
+.font-sandbox-sans { --font-sans: ui-sans-serif, system-ui, sans-serif; }
+.font-sandbox-display { --font-display: Georgia, serif; }
