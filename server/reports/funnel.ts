@@ -189,6 +189,14 @@ export async function getFunnel(user: User, window: ReportWindow): Promise<Funne
    * Matching on the client rather than on client-plus-subject is the conservative
    * direction otherwise: it can only ever leave a booking out, never invent one.
    *
+   * THE WINDOW HERE MUST MATCH `liveAppt` — same column, same bounds. It did not, and
+   * that broke it in production within a day: `liveAppt` moved to `created_at` while
+   * this subquery still asked about `scheduled_at`, so a booking taken today for a
+   * viewing NEXT WEEK was counted on the appointment side (created in the window) and
+   * again on the deal side (no appointment found in the window). One client, two
+   * bookings, and a dashboard reading 3 where 2 had happened. Whatever `liveAppt`
+   * counts, this must exclude.
+   *
    * Grouped by project AND owner in one query so the headline, the By project table and
    * the By agent table all move together — three separate counts is how they drift.
    */
@@ -200,8 +208,8 @@ export async function getFunnel(user: User, window: ReportWindow): Promise<Funne
       where (a.contact_id = ${deals.contactId} or l.converted_to_contact_id = ${deals.contactId})
         and a.outcome = 'booked'
         and a.deleted_at is null
-        and a.scheduled_at >= ${fromIso}::timestamptz
-        and a.scheduled_at <= ${toIso}::timestamptz
+        and a.created_at >= ${fromIso}::timestamptz
+        and a.created_at <= ${toIso}::timestamptz
     )`,
     sql`${deals.createdAt} >= ${fromIso}::timestamptz`,
     sql`${deals.createdAt} <= ${toIso}::timestamptz`,

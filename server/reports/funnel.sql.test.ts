@@ -106,8 +106,8 @@ const directDeals = and(
     where (a.contact_id = ${deals.contactId} or l.converted_to_contact_id = ${deals.contactId})
       and a.outcome = 'booked'
       and a.deleted_at is null
-      and a.scheduled_at >= ${from.toISOString()}::timestamptz
-      and a.scheduled_at <= ${to.toISOString()}::timestamptz
+      and a.created_at >= ${from.toISOString()}::timestamptz
+      and a.created_at <= ${to.toISOString()}::timestamptz
   )`,
   sql`${deals.createdAt} >= ${from.toISOString()}::timestamptz`,
   sql`${deals.createdAt} <= ${to.toISOString()}::timestamptz`,
@@ -128,5 +128,22 @@ describe("appointment-less bookings", () => {
     const { sql: text } = db.select({ c: count() }).from(deals).where(directDeals).toSQL();
     expect(text).toContain("converted_to_contact_id");
     expect(text).toContain("a.contact_id");
+  });
+});
+
+describe("the dedupe window matches the appointment window", () => {
+  /*
+   * These two are one rule in two places. When they drifted apart — liveAppt on
+   * created_at, the NOT EXISTS still on scheduled_at — a booking taken today for a
+   * viewing next week counted twice, once as an appointment and once as a deal.
+   * Production read 3 bookings where 2 had happened.
+   */
+  it("both sides ask about created_at, and neither about scheduled_at", () => {
+    const appt = db.select({ c: count() }).from(appointments).where(liveAppt).toSQL().sql;
+    const direct = db.select({ c: count() }).from(deals).where(directDeals).toSQL().sql;
+    expect(appt).toContain("created_at");
+    expect(appt).not.toContain("scheduled_at");
+    expect(direct).toContain("a.created_at");
+    expect(direct).not.toContain("a.scheduled_at");
   });
 });
