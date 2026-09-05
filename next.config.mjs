@@ -14,6 +14,21 @@
  */
 const CLERK_FAPI = "https://clerk.lanthornproperties.com";
 
+/*
+ * Cloudflare Web Analytics.
+ *
+ * The zone injects `beacon.min.js` into every HTML response, so this script is not
+ * ours and does not appear anywhere in the source — it showed up only as a
+ * report-only `script-src-elem` violation in `wrangler tail`.
+ *
+ * script-src ONLY. Cloudflare's docs distinguish the two install paths: an
+ * auto-injected beacon reports back to `'self'` (already allowed), while a manually
+ * embedded one posts to cloudflareinsights.com. Ours is auto-injected — no
+ * connect-src violation was ever reported for it — so widening connect-src as well
+ * would loosen the policy for a request that is never made.
+ */
+const CF_INSIGHTS = "https://static.cloudflareinsights.com";
+
 const nextConfig = {
   reactStrictMode: true,
 
@@ -111,7 +126,7 @@ const nextConfig = {
               // dev-instance tooling. 'unsafe-inline' is here because Next emits
               // inline bootstrap scripts; removing it needs nonces, which is a
               // separate piece of work.
-              `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.accounts.dev https://*.clerk.com ${CLERK_FAPI}`,
+              `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.accounts.dev https://*.clerk.com ${CLERK_FAPI} ${CF_INSIGHTS}`,
               "worker-src 'self' blob:",
               // Tailwind is compiled to a stylesheet, but Next injects inline styles.
               "style-src 'self' 'unsafe-inline'",
