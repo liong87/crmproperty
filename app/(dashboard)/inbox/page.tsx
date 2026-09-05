@@ -9,7 +9,7 @@ import { InboxList } from "@/components/notifications/inbox-list";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChevronRight, Inbox as InboxIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Segmented } from "@/components/ui/segmented";
+import { Segmented, FilterChip } from "@/components/ui/segmented";
 import { EmptyState } from "@/components/ui/empty-state";
 
 export const metadata = { title: "Inbox" };
@@ -49,15 +49,51 @@ const dateFmt = new Intl.DateTimeFormat("en-MY", {
  */
 type InboxFilter = "all" | "late";
 
+/**
+ * How the paperwork groups are ordered.
+ *
+ * Three axes, and NOT a reverse-date toggle. Outlook offers ascending/descending
+ * because for mail both directions are legitimate; in a work queue "latest first" puts
+ * the thing about to expire at the bottom, so the only function of that control is to
+ * hide it. These three each answer a different question instead:
+ *
+ *   due    — what is most urgent (the default, and right almost always)
+ *   count  — who is furthest behind, which urgency cannot tell you: one deal with a
+ *            single late document is not the same problem as one with nine outstanding
+ *   client — where is the name I am looking for, when scrolling beats searching
+ */
+type PaperworkSort = "due" | "count" | "client";
+
+const SORT_LABEL: Record<PaperworkSort, string> = {
+  due: "Soonest due",
+  count: "Most outstanding",
+  client: "Client A–Z",
+};
+
 export default async function InboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ show?: string }>;
+  searchParams: Promise<{ show?: string; sort?: string }>;
 }) {
   const me = await getCurrentDbUser();
   if (!me) redirect("/sign-in");
 
-  const show: InboxFilter = (await searchParams).show === "late" ? "late" : "all";
+  const sp = await searchParams;
+  const show: InboxFilter = sp.show === "late" ? "late" : "all";
+  const sort: PaperworkSort =
+    sp.sort === "count" || sp.sort === "client" ? sp.sort : "due";
+
+  /** Keep whichever control you are NOT touching. Both live in the URL, so a filtered,
+   *  sorted inbox is a link somebody can send to a colleague. */
+  const hrefWith = (over: { show?: InboxFilter; sort?: PaperworkSort }) => {
+    const next = new URLSearchParams();
+    const s2 = over.show ?? show;
+    const o2 = over.sort ?? sort;
+    if (s2 !== "all") next.set("show", s2);
+    if (o2 !== "due") next.set("sort", o2);
+    const qs = next.toString();
+    return `/inbox${qs ? `?${qs}` : ""}`;
+  };
 
   const [allNotifications, allFollowUps, allDocs] = await Promise.all([
     listNotifications(me.id),
@@ -93,12 +129,12 @@ export default async function InboxPage({
         <Segmented
           items={[
             {
-              href: "/inbox",
+              href: hrefWith({ show: "all" }),
               label: "All",
               count: allDocs.length + allFollowUps.length + allNotifications.length,
               active: show === "all",
             },
-            { href: "/inbox?show=late", label: "Late", count: lateCount, active: show === "late" },
+            { href: hrefWith({ show: "late" }), label: "Late", count: lateCount, active: show === "late" },
           ]}
         />
       </div>
@@ -150,6 +186,19 @@ export default async function InboxPage({
               Next 14 days, plus anything already overdue
               {docsOverdue > 0 && ` · ${docsOverdue} overdue`}
             </p>
+            {/* Chips, not a second Segmented: the tabs above own the loud treatment,
+                and a sort is a secondary choice. Two gradient controls on one screen
+                compete for the same glance. */}
+            <div role="group" aria-label="Sort paperwork" className="flex flex-wrap items-center gap-1.5 pt-1">
+              {(Object.keys(SORT_LABEL) as PaperworkSort[]).map((k) => (
+                <FilterChip
+                  key={k}
+                  href={hrefWith({ sort: k })}
+                  label={SORT_LABEL[k]}
+                  active={sort === k}
+                />
+              ))}
+            </div>
           </CardHeader>
           <CardContent className="px-0 pb-2">
             {/*
@@ -170,7 +219,17 @@ export default async function InboxPage({
                   (acc[d.dealId] ||= []).push(d);
                   return acc;
                 }, {}),
-              ).map((group) => {
+              )
+                .sort((a, b) => {
+                  if (sort === "count") return b.length - a.length;
+                  if (sort === "client") return a[0]!.contactName.localeCompare(b[0]!.contactName);
+                  // Soonest due: compare each deal by its most urgent document, not by
+                  // its first — a deal whose second item is overdue outranks one whose
+                  // first is due next week.
+                  const soonest = (g: typeof docs) => Math.min(...g.map((d) => d.daysUntilDue));
+                  return soonest(a) - soonest(b);
+                })
+                .map((group) => {
                 const first = group[0]!;
                 const overdueCount = group.filter((d) => d.daysUntilDue < 0).length;
                 const soonest = group.reduce((a, b) => (a.daysUntilDue <= b.daysUntilDue ? a : b));
