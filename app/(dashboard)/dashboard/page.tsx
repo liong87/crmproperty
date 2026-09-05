@@ -18,6 +18,14 @@ import { PageTitle } from "@/components/ui/page-title";
 import { FollowUpList } from "@/components/activities/follow-up-list";
 
 /**
+ * The visible h1 is a greeting — "Good morning, Aisyah" — which is the right tone for
+ * the screen an agent opens twenty times a day. It is the wrong NAME for it: the tab,
+ * the history entry and the bookmark all read as a greeting with no clue which page it
+ * is. Metadata carries the name; the heading keeps the warmth.
+ */
+export const metadata = { title: "Dashboard" };
+
+/**
  * Where a funnel stage's cohort can honestly be listed.
  *
  * Only the stages with a real destination are here. Nothing lists exactly the people
@@ -85,13 +93,16 @@ export default async function DashboardPage({
       </PageTitle>
 
       {docsDue.overdue > 0 && (
+        /* Tokens, not an inline hex. `STATUS.critical` is a fixed light-mode colour
+           applied through `style`, so this banner kept a light border and light red
+           text on the dark canvas — the one element on the page that ignored the
+           theme. The destructive token is defined for both. */
         <Link
           href="/inbox"
-          className="block rounded-xl border p-4 transition-colors hover:bg-muted/40"
-          style={{ borderColor: STATUS.critical }}
+          className="block rounded-xl border border-destructive/40 bg-destructive/5 p-4 transition-colors hover:bg-destructive/10"
         >
           <p className="text-sm">
-            <strong className="font-semibold" style={{ color: STATUS.critical }}>
+            <strong className="font-semibold text-destructive">
               {docsDue.overdue} document{docsDue.overdue === 1 ? " is" : "s are"} overdue
             </strong>{" "}
             across your deals. An expired loan approval is the commonest way a booking
@@ -170,17 +181,22 @@ export default async function DashboardPage({
       {staleCount > 0 && (
         <Link
           href="/leads/stale"
-          className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm transition-colors hover:bg-amber-100"
+          /* `amber-50/100/200/900` are raw palette values with no dark counterpart:
+             in dark mode this was near-black text on a pale yellow card. The amber in
+             this design system is the `accent` token, which is defined for both
+             themes — used here as border and tint only, with body text left on the
+             foreground token so contrast holds either way. */
+          className="flex items-center justify-between gap-3 rounded-xl border border-accent/50 bg-accent/10 p-3 text-sm transition-colors hover:bg-accent/20"
         >
-          <span className="flex items-center gap-2 text-amber-900">
-            <Snowflake className="h-4 w-4 shrink-0" />
+          <span className="flex items-center gap-2 text-foreground">
+            <Snowflake aria-hidden="true" className="h-4 w-4 shrink-0 text-accent" />
             <span>
               <strong className="font-semibold">{staleCount}</strong>{" "}
               {staleCount === 1 ? "lead has" : "leads have"} had nothing logged for{" "}
               {STALE_AFTER_DAYS} days or more
             </span>
           </span>
-          <span className="shrink-0 font-medium text-amber-900 underline underline-offset-2">
+          <span className="shrink-0 font-medium underline underline-offset-2">
             Review
           </span>
         </Link>
