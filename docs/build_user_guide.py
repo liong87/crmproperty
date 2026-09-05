@@ -423,6 +423,13 @@ def story():
         ["Users <i>(manager)</i>", "Approving accounts and setting roles"],
     ], [44 * mm, CONTENT_W - 44 * mm]))
 
+    s.append(Paragraph(
+        "<b>Search everything.</b> The search box at the top of the sidebar looks across "
+        "leads, contacts, projects and properties at once, so you do not have to guess "
+        "which screen a name is filed under. Press <b>Ctrl-K</b> (<b>Cmd-K</b> on a Mac) "
+        "from anywhere to open it without reaching for the mouse; type, then press "
+        "<b>Enter</b> on the result you want.", S["body"]))
+
     s += section("3", "Your dashboard")
     s.append(Paragraph(
         "The dashboard answers one question: <i>what needs me today?</i> It shows your "
@@ -654,14 +661,57 @@ def story():
     s += section("13", "Inbox")
 
     s.append(Paragraph(
-        "Everything still open, on one screen. <b>Paperwork due</b> sits above the "
-        "follow-ups: anything due in the next 14 days plus anything already overdue, "
-        "soonest first, with the client and project named. Overdue items never drop off, "
-        "even once they are past that window.", S["body"]))
+        "Everything still open, on one screen: paperwork with a deadline, the follow-ups "
+        "you promised, and your notifications.", S["body"]))
+
+    s.append(Paragraph("All and Late", S["h2"]))
     s.append(Paragraph(
-        "Below it, your follow-ups \u2014 every date you set while logging activity \u2014 and "
-        "your notifications, including the weekly summary of leads and bookings.", S["body"]))
-    s.append(figure("13-inbox", "The Inbox."))
+        "The two tabs at the top right carry their own counts. <b>All</b> is the full "
+        "picture. <b>Late</b> strips it back to what has already passed its date \u2014 "
+        "overdue paperwork and overdue follow-ups, nothing else. Start on Late when you "
+        "have ten minutes and want them spent on the right things.", S["body"]))
+
+    s.append(Paragraph("Paperwork due", S["h2"]))
+    s.append(Paragraph(
+        "Anything due in the next 14 days, plus anything already overdue. Overdue items "
+        "never drop off, even once they are well past that window.", S["body"]))
+    s.append(Paragraph(
+        "Items are grouped <b>by client</b>, one row per booking, with the project named "
+        "and a count of what is still outstanding. Click a row to open it and see the "
+        "individual documents; a booking with something overdue opens by itself, so the "
+        "case that matters is never hidden behind a click. The right-hand end of each row "
+        "is the one number that decides whether it needs you today \u2014 a red "
+        "<b>overdue</b> count, or the date the next item falls due.", S["body"]))
+
+    s.append(Paragraph("Sorting", S["h2"]))
+    s.append(table([
+        ["Sort", "Use it when"],
+        ["Soonest due", "The default. What is most urgent, first."],
+        ["Client A\u2013Z", "You know whose file you are looking for and scrolling beats searching."],
+        ["Newest lead", "You want the freshest bookings on top, even if nothing in them is late yet."],
+    ], [40 * mm, CONTENT_W - 40 * mm]))
+    s.append(Paragraph(
+        "The sort is remembered in the page address, so a sorted Inbox is a link you can "
+        "send to a colleague and they will see what you saw.", S["body"]))
+
+    s.append(Paragraph("Follow-ups and notifications", S["h2"]))
+    s.append(Paragraph(
+        "Below the paperwork sit your follow-ups \u2014 every date you set while logging "
+        "activity. Notifications sit in their own column on a wide screen: leads assigned "
+        "to you, bookings, and the weekly summary.", S["body"]))
+
+    s.append(Paragraph("Keeping it clean", S["h2"]))
+    s.append(Paragraph(
+        "Notifications are not meant to be kept forever. <b>Mark all read</b> silences the "
+        "unread dots but leaves the record on the page. <b>Clear read</b> takes the tidied "
+        "ones off it, and asks you to confirm first because it acts on more rows than you "
+        "can see at once. A single row can be dismissed on its own with the \u00d7 at its "
+        "right-hand end \u2014 no confirmation, because a one-row mistake is obvious.", S["body"]))
+    s.append(figure("13-inbox", "The Inbox: paperwork grouped by client, with the sort controls above it."))
+    s.append(callout(
+        "<b>Nothing here is deleted outright.</b> Cleared and dismissed notifications are "
+        "hidden, not destroyed, and older ones are purged on a schedule. Paperwork and "
+        "follow-ups are never cleared from this screen \u2014 they leave it by being done."))
     s.append(callout(
         "<b>There is no separate Reminders screen.</b> Follow-ups and paperwork used to "
         "live on their own page; both answered &ldquo;what needs me?&rdquo;, so an agent had "

@@ -65,6 +65,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     blocks: [
       { kind: "p", text: "The dashboard answers one question: what needs me today? Lead and pipeline counts, follow-ups due, and two warnings that appear only when they matter — a red banner counting overdue documents, and a count of leads that have gone quiet." },
       { kind: "note", tone: "info", text: "No news means no banner. A permanent “0 overdue” row is furniture people learn to skip, so those warnings are absent entirely when there is nothing wrong. If you see one, it is real." },
+      { kind: "p", text: "The search box at the top of the sidebar looks across leads, contacts, projects and properties at once, so you do not have to guess which screen a name is filed under. Press Ctrl-K (Cmd-K on a Mac) from anywhere to open it without reaching for the mouse, then Enter on the result you want." },
       { kind: "figure", src: "02-dashboard.jpg", caption: "The dashboard.", w: 1341, h: 866 },
     ],
   },
@@ -204,7 +205,21 @@ export const HELP_SECTIONS: HelpSection[] = [
   {
     id: "reminders", n: 11, part: "Staying on top", title: "Inbox",
     blocks: [
-      { kind: "p", text: "Everything still open, on one screen. Paperwork due sits above the follow-ups: anything due in the next 14 days plus anything already overdue, soonest first, with the client and project named. Overdue items never drop off. Below it, your follow-ups — every date you set while logging activity — and your notifications, including the weekly summary." },
+      { kind: "p", text: "Everything still open, on one screen: paperwork with a deadline, the follow-ups you promised, and your notifications." },
+      { kind: "p", text: "The two tabs at the top right carry their own counts. All is the full picture; Late strips it back to what has already passed its date — overdue paperwork and overdue follow-ups, nothing else. Start on Late when you have ten minutes and want them spent on the right things." },
+      { kind: "p", text: "Paperwork due shows anything falling due in the next 14 days plus anything already overdue, and overdue items never drop off. Items are grouped by client, one row per booking, with the project named and a count of what is still outstanding. Click a row to see the individual documents; a booking with something overdue opens by itself. The right-hand end of each row is the number that decides whether it needs you today — a red overdue count, or the date the next item falls due." },
+      {
+        kind: "table",
+        head: ["Sort", "Use it when"],
+        rows: [
+          ["Soonest due", "The default. What is most urgent, first"],
+          ["Client A–Z", "You know whose file you want and scrolling beats searching"],
+          ["Newest lead", "You want the freshest bookings on top, even if nothing in them is late yet"],
+        ],
+      },
+      { kind: "p", text: "The sort is kept in the page address, so a sorted Inbox is a link you can send to a colleague and they will see what you saw." },
+      { kind: "p", text: "Notifications are not meant to be kept forever. Mark all read silences the unread dots but leaves the record on the page; Clear read takes the tidied ones off it, and asks you to confirm first because it acts on more rows than you can see at once. A single row can be dismissed on its own with the × at its right-hand end." },
+      { kind: "note", tone: "info", text: "Nothing here is deleted outright. Cleared and dismissed notifications are hidden, not destroyed, and older ones are purged on a schedule. Paperwork and follow-ups are never cleared from this screen — they leave it by being done." },
       { kind: "note", tone: "info", text: "There is no separate Reminders screen. Follow-ups and paperwork used to live on their own page; both answered “what needs me?”, so there were two places to check and people reliably checked neither. They are one screen now." },
       { kind: "figure", src: "13-inbox.jpg", caption: "The Inbox.", w: 1341, h: 866 },
     ],
