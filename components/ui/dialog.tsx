@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -88,7 +89,22 @@ export function Dialog({
 
   if (!open) return null;
 
-  return (
+  /*
+   * PORTALLED TO <body>, and it has to be.
+   *
+   * A dialog opened from a table row renders inside that row's cell, and the leads
+   * table pins two columns with `sticky z-10`. A z-index creates a stacking context,
+   * so `z-50` on the overlay only outranks things INSIDE the same cell — every later
+   * row's pinned cell still paints over it. The dialog looked correct and its buttons
+   * were unclickable, which Playwright caught as "subtree intercepts pointer events".
+   *
+   * Escaping to the body puts the overlay in the root stacking context, where z-50
+   * means what it appears to mean. Rendered only after mount, since `document` does
+   * not exist while the server renders this.
+   */
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
       onMouseDown={(e) => {
@@ -129,6 +145,7 @@ export function Dialog({
         {children}
         {footer && <div className="mt-5 flex flex-wrap items-center justify-end gap-2">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

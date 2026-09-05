@@ -2,9 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Inbox, Search, Plus, Upload } from "lucide-react";
 import { getCurrentDbUser } from "@/lib/auth";
-import { listLeadsPaginated, parseLeadSort, type LeadStatus } from "@/server/leads/queries";
+import { listLeadsPaginated, parseLeadSort, type LeadStatus, listAssignableAgents } from "@/server/leads/queries";
 import { listAssignableUsers } from "@/server/users/queries";
 import { listProjectOptions } from "@/server/projects/queries";
+import { listPickableListings } from "@/server/matching/queries";
+
 import { LEAD_STATUS, statusLabel } from "@/lib/constants";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -33,10 +35,15 @@ export default async function LeadsPage({
    * the data boundary are the same line.
    */
   const canAssign = me.role !== "agent";
-  const [{ items, total, pageSize }, assignees, projects] = await Promise.all([
+  const [{ items, total, pageSize }, assignees, projects, listings, closers] = await Promise.all([
     listLeadsPaginated(me, { search: sp.q, status, page, sort }),
     canAssign ? listAssignableUsers() : Promise.resolve([]),
     listProjectOptions(),
+    // For the row-level "Schedule appointment" dialog. In the same Promise.all rather
+    // than awaited further down: three sequential round trips below the fold would
+    // delay the table itself, which is the thing people came for.
+    listPickableListings(),
+    listAssignableAgents(),
   ]);
   const pages = Math.max(1, Math.ceil(total / pageSize));
   /** Any narrowing at all — what the empty state and the Clear control both key off. */
@@ -196,6 +203,16 @@ export default async function LeadsPage({
           projects={projects}
           sort={sort}
           sortHrefs={sortHrefs}
+          /*
+           * Booking a viewing straight from the row. Loaded once for the page and
+           * shared by every row — the dialog mounts only for the lead you open, so a
+           * hundred-row list still sends one copy of the options.
+           */
+          scheduling={{
+            listings,
+            projects,
+            agents: closers.filter((a) => a.id !== me.id),
+          }}
         />
       )}
 

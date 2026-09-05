@@ -31,6 +31,8 @@ import { LeadRowActions } from "./row-actions";
 import { StatusCell } from "./status-cell";
 import { BulkBar } from "./bulk-bar";
 import { sourceLabel } from "@/lib/leads/source-label";
+import { statusGroup } from "@/lib/constants";
+import type { SchedulingProps } from "@/components/appointments/schedule-appointment";
 import type { AssignableUser } from "@/server/users/queries";
 
 export interface LeadRow {
@@ -90,6 +92,7 @@ export function LeadsTable({
   sort,
   sortHrefs,
   projects = [],
+  scheduling,
 }: {
   rows: LeadRow[];
   /** Admin only. Without it this renders exactly as the table did before. */
@@ -108,6 +111,13 @@ export function LeadsTable({
   sortHrefs?: Record<string, string>;
   /** Products for the edit modal. Empty for an agent, who cannot reassign a product. */
   projects?: { id: string; name: string }[];
+  /**
+   * Projects and listings an appointment can be booked against, plus the colleagues it
+   * can be handed to. Passed once for the whole table and shared by every row — the
+   * dialog is only mounted for the row you open, so this costs one payload, not one
+   * per lead.
+   */
+  scheduling?: Omit<SchedulingProps, "leadId" | "contactId">;
 }) {
   const canAssign = assignees.length > 0;
   const meId = useMeId();
@@ -303,6 +313,10 @@ export function LeadsTable({
                     projects={projects}
                     canDelete={canDelete}
                     onError={setError}
+                    /* Not on a lead that is finished with: a closed lead is a contact
+                       now and books from Contacts, and a dead one is not being worked
+                       at all. */
+                    scheduling={statusGroup(l.status) === "dead" || l.status === "closed" ? undefined : scheduling}
                   />
                 </TD>
               </TR>

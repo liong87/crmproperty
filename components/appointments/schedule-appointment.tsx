@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { FormAlert } from "@/components/ui/alert";
+import { Dialog } from "@/components/ui/dialog";
 import { localInputToIso, formatMYR } from "@/lib/utils";
 
 export interface PickableProject {
@@ -28,22 +29,32 @@ export interface PickableProject {
  * conversion, the same helper the follow-up reminder uses. An appointment booked for
  * "3pm" must mean 3pm in Kuala Lumpur regardless of the device's clock.
  */
-export function ScheduleAppointment({
-  contactId,
-  leadId,
-  listings,
-  projects,
-  agents,
-}: {
+export interface SchedulingProps {
   contactId?: string;
   leadId?: string;
   listings: PickableListing[];
   projects: PickableProject[];
   /** Colleagues who can be handed the presentation. Empty hides the closer field. */
   agents?: { id: string; name: string }[];
-}) {
+}
+
+/**
+ * The fields, with no chrome of their own.
+ *
+ * Split out so the same form can be an inline panel on a client's page and a dialog
+ * over a table row. Duplicating it was the alternative, and a scheduling form that
+ * exists twice is a scheduling form that will disagree with itself.
+ */
+function SchedulingFields({
+  contactId,
+  leadId,
+  listings,
+  projects,
+  agents,
+  onDone,
+  onCancel,
+}: SchedulingProps & { onDone: () => void; onCancel: () => void }) {
   const router = useRouter();
-  const [open, setOpen] = React.useState(false);
   // One value encoding both kind and id, e.g. "project:uuid" — see the note above.
   const [subject, setSubject] = React.useState("");
   const [closerId, setCloserId] = React.useState("");
@@ -51,8 +62,6 @@ export function ScheduleAppointment({
   const [notes, setNotes] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [pending, start] = React.useTransition();
-
-  const nothingToShow = listings.length === 0 && projects.length === 0;
 
   function submit() {
     setError(null);
@@ -72,25 +81,17 @@ export function ScheduleAppointment({
         notes: notes || null,
       });
       if (!res.success) return setError(res.error);
-      setOpen(false);
       setSubject("");
       setCloserId("");
       setWhen("");
       setNotes("");
       router.refresh();
+      onDone();
     });
   }
 
-  if (!open) {
-    return (
-      <Button variant="outline" onClick={() => setOpen(true)} disabled={nothingToShow}>
-        {nothingToShow ? "Nothing to show yet" : "Schedule appointment"}
-      </Button>
-    );
-  }
-
   return (
-    <div className="space-y-3 rounded-lg border p-3">
+    <div className="space-y-3">
       <div className="space-y-1.5">
         <Label htmlFor="apptSubject">Project or listing</Label>
         <Select id="apptSubject" value={subject} onChange={(e) => setSubject(e.target.value)}>
@@ -156,10 +157,72 @@ export function ScheduleAppointment({
         <Button onClick={submit} disabled={pending}>
           {pending ? "Scheduling…" : "Schedule"}
         </Button>
-        <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
+        <Button variant="ghost" onClick={onCancel} disabled={pending}>
           Cancel
         </Button>
       </div>
     </div>
+  );
+}
+
+/** True when there is nothing an appointment could be against. */
+const nothingToShow = (p: SchedulingProps) =>
+  p.listings.length === 0 && p.projects.length === 0;
+
+/**
+ * The inline panel, as it has always appeared on a lead's and a contact's page.
+ */
+export function ScheduleAppointment(props: SchedulingProps) {
+  const [open, setOpen] = React.useState(false);
+  const empty = nothingToShow(props);
+
+  if (!open) {
+    return (
+      <Button variant="outline" onClick={() => setOpen(true)} disabled={empty}>
+        {empty ? "Nothing to show yet" : "Schedule appointment"}
+      </Button>
+    );
+  }
+  return (
+    <div className="rounded-lg border p-3">
+      <SchedulingFields {...props} onDone={() => setOpen(false)} onCancel={() => setOpen(false)} />
+    </div>
+  );
+}
+
+/**
+ * The same form in a dialog, for a table row.
+ *
+ * Booking a viewing is the commonest thing an agent does to a lead, and it cost three
+ * navigations: open the lead, scroll to the panel, come back to the list to do the
+ * next one. From the row it is one click and the list is still underneath.
+ *
+ * Controlled by the caller rather than owning a trigger: the row already has a button
+ * strip, and a second component drawing its own button there would not line up with
+ * the others.
+ */
+export function ScheduleAppointmentDialog({
+  open,
+  onClose,
+  clientName,
+  ...props
+}: SchedulingProps & { open: boolean; onClose: () => void; clientName: string }) {
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={`Schedule appointment — ${clientName}`}
+      description={
+        nothingToShow(props)
+          ? "There are no projects or listings to show yet."
+          : "Malaysia time. The lead moves to Appointment once this is saved."
+      }
+    >
+      {nothingToShow(props) ? (
+        <Button variant="ghost" onClick={onClose}>Close</Button>
+      ) : (
+        <SchedulingFields {...props} onDone={onClose} onCancel={onClose} />
+      )}
+    </Dialog>
   );
 }

@@ -7,6 +7,9 @@ import {
   listWorkingLeads, countWorkingTabs, getFollowUpRate, LIST_CAP, type WorkingTab,
 } from "@/server/leads/working";
 import { WorkingLeadCard } from "@/components/leads/working-lead-card";
+import { listPickableListings } from "@/server/matching/queries";
+import { listProjectOptions } from "@/server/projects/queries";
+import { listAssignableAgents } from "@/server/leads/queries";
 import { listAssignableUsers } from "@/server/users/queries";
 import { FilterDropdown, ActiveFilterChip, type FilterOption } from "@/components/leads/filter-dropdown";
 import { statusLabel } from "@/lib/constants";
@@ -51,12 +54,22 @@ export default async function WorkingLeadsPage({
   const statusSel = asList(sp.status);
   const waOnly = sp.wa === "1";
 
-  const [rows, counts, rate, staff] = await Promise.all([
+  const [rows, counts, rate, staff, listings, apptProjects, closers] = await Promise.all([
     listWorkingLeads(me, tab, { search }),
     countWorkingTabs(me, { search }),
     getFollowUpRate(me, 7),
     listAssignableUsers(),
+    // For booking in place from a card. Fetched with everything else rather than after
+    // it, so the queue is not held up by options most cards will never open.
+    listPickableListings(),
+    listProjectOptions(),
+    listAssignableAgents(),
   ]);
+  const scheduling = {
+    listings,
+    projects: apptProjects,
+    agents: closers.filter((a) => a.id !== me.id),
+  };
 
   // Everyone but you. Handing a lead to yourself is not a thing, and offering it as an
   // option is the sort of detail that makes a control feel unfinished.
@@ -256,7 +269,7 @@ export default async function WorkingLeadsPage({
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
           {items.map((l) => (
-            <WorkingLeadCard key={l.id} lead={l} waTemplate={waTemplate} colleagues={colleagues} />
+            <WorkingLeadCard key={l.id} lead={l} waTemplate={waTemplate} colleagues={colleagues} scheduling={scheduling} />
           ))}
         </div>
       )}

@@ -7,6 +7,10 @@ import { logActivity } from "@/server/activities/actions";
 import { statusLabel } from "@/lib/constants";
 import { RemarkThread } from "./remark-thread";
 import { CoBrokeButton } from "./co-broke-button";
+import {
+  ScheduleAppointmentDialog,
+  type SchedulingProps,
+} from "@/components/appointments/schedule-appointment";
 import type { AssignableUser } from "@/server/users/queries";
 import type { WorkingLead } from "@/server/leads/working";
 import { Badge } from "@/components/ui/badge";
@@ -38,14 +42,21 @@ export function WorkingLeadCard({
   lead,
   waTemplate,
   colleagues = [],
+  scheduling,
 }: {
   lead: WorkingLead;
   waTemplate: string;
   /** Who this lead can be handed to. Empty hides the control entirely. */
   colleagues?: AssignableUser[];
+  /**
+   * What an appointment could be against. Absent falls back to the link, so the card
+   * still works on any surface that has not passed it.
+   */
+  scheduling?: Omit<SchedulingProps, "leadId" | "contactId">;
 }) {
   const router = useRouter();
   const meId = useMeId();
+  const [booking, setBooking] = React.useState(false);
   const [pending, start] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
   const [done, setDone] = React.useState<string | null>(null);
@@ -167,12 +178,33 @@ export function WorkingLeadCard({
           WhatsApp
         </a>
 
-        <Link
-          href={`/leads/${lead.id}`}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors hover:bg-secondary"
-        >
-          <CalendarPlus className="h-3.5 w-3.5" /> Book
-        </Link>
+        {/*
+          Book without leaving the queue.
+
+          This used to be a link to the lead's page, which meant: open the lead, scroll
+          to the scheduling panel, book, then come back and find your place again — for
+          the single commonest thing done from this screen. The dialog does it in place
+          and the queue is still underneath when it closes.
+
+          Still a link when no options were passed, so nothing here can become a button
+          that opens an empty form.
+        */}
+        {scheduling ? (
+          <button
+            type="button"
+            onClick={() => setBooking(true)}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors hover:bg-secondary"
+          >
+            <CalendarPlus className="h-3.5 w-3.5" /> Book
+          </button>
+        ) : (
+          <Link
+            href={`/leads/${lead.id}`}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors hover:bg-secondary"
+          >
+            <CalendarPlus className="h-3.5 w-3.5" /> Book
+          </Link>
+        )}
 
         {/* Last of the three, and quietest: handing a lead over is a considered
             decision, not something to sit under a thumb beside "Called". */}
@@ -182,6 +214,16 @@ export function WorkingLeadCard({
           <CoBrokeButton leadId={lead.id} leadName={lead.name} colleagues={colleagues} />
         )}
       </div>
+
+      {scheduling && booking && (
+        <ScheduleAppointmentDialog
+          {...scheduling}
+          leadId={lead.id}
+          clientName={lead.name}
+          open
+          onClose={() => setBooking(false)}
+        />
+      )}
 
       {/* The remark thread. Status moves only from in here, so every change carries
           its reason and the follow-up history stays complete. */}

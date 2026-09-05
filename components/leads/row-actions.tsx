@@ -1,10 +1,14 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2 } from "lucide-react";
+import { CalendarPlus, Pencil, Trash2 } from "lucide-react";
 import { deleteLeads } from "@/server/leads/actions";
 import { ConfirmButton } from "@/components/ui/confirm-button";
 import { EditLeadDialog, type EditableLead } from "./edit-lead-dialog";
+import {
+  ScheduleAppointmentDialog,
+  type SchedulingProps,
+} from "@/components/appointments/schedule-appointment";
 
 /**
  * Edit and delete, revealed on row hover so the table stays quiet at rest.
@@ -18,15 +22,21 @@ import { EditLeadDialog, type EditableLead } from "./edit-lead-dialog";
  * rendered inside it is a column of single words.
  */
 export function LeadRowActions({
-  lead, projects, canDelete, onError,
+  lead, projects, canDelete, onError, scheduling,
 }: {
   lead: EditableLead;
   projects: { id: string; name: string }[];
   canDelete: boolean;
   onError: (message: string | null) => void;
+  /**
+   * What an appointment could be against. Absent hides the button entirely — an agent
+   * with no products to show is not helped by a control that can only fail.
+   */
+  scheduling?: Omit<SchedulingProps, "leadId" | "contactId">;
 }) {
   const router = useRouter();
   const [editing, setEditing] = React.useState(false);
+  const [scheduleOpen, setScheduleOpen] = React.useState(false);
   const [pending, setPending] = React.useState(false);
 
   function remove() {
@@ -46,6 +56,19 @@ export function LeadRowActions({
   return (
     <>
       <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
+        {scheduling && (
+          /* First in the strip because it is the commonest thing done to a lead, and
+             the eye reaches the leftmost icon first. */
+          <button
+            type="button"
+            onClick={() => setScheduleOpen(true)}
+            aria-label={`Schedule appointment with ${lead.name}`}
+            className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <CalendarPlus aria-hidden="true" className="h-4 w-4" />
+          </button>
+        )}
+
         <button
           type="button"
           onClick={() => setEditing(true)}
@@ -73,6 +96,16 @@ export function LeadRowActions({
 
       {editing && (
         <EditLeadDialog lead={lead} projects={projects} onClose={() => setEditing(false)} />
+      )}
+
+      {scheduling && scheduleOpen && (
+        <ScheduleAppointmentDialog
+          {...scheduling}
+          leadId={lead.id}
+          clientName={lead.name}
+          open
+          onClose={() => setScheduleOpen(false)}
+        />
       )}
     </>
   );
