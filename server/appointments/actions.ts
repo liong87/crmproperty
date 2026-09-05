@@ -17,7 +17,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { appointments, contacts, leads, activities, users } from "@/lib/db/schema";
 import { requireDbUser, canEdit, canEditAny, isTeamLeadOrAbove, AuthorizationError } from "@/lib/auth";
-import { APPOINTMENT_STATUS, APPOINTMENT_OUTCOME } from "@/lib/constants";
+import { APPOINTMENT_STATUS, APPOINTMENT_OUTCOME, APPOINTMENT_STATUSES } from "@/lib/constants";
 import { ok, fail } from "@/lib/action-result";
 import { notify } from "@/lib/notify";
 import { monitoring } from "@/lib/monitoring";
@@ -273,6 +273,8 @@ export async function recordAppointmentOutcome(input: unknown): Promise<ActionRe
       });
     }
 
+    await returnLeadToTheQueue(row.leadId, d.status, d.outcome ?? null);
+
     // Whatever the outcome — showed up, no-show or cancelled — the appointment is
     // dealt with, so it should leave the agent's reminder list.
     await closeAppointmentReminder(row);
@@ -281,6 +283,78 @@ export async function recordAppointmentOutcome(input: unknown): Promise<ActionRe
     return ok(undefined);
   } catch (err) {
     return handle(err, "recordAppointmentOutcome");
+  }
+}
+
+
+/**
+ * PUT A LEAD BACK IN THE CHASE QUEUE WHEN ITS VIEWING DID NOT END IN A BOOKING.
+ *
+ * The hole this closes: recording an outcome never touched `leads.status`. Setting a
+ * lead to "Appointment" is a one-way door — a lead lands on the Working Leads
+ * Appointment tab if its status is in the appointment group OR it has a `scheduled`
+ * appointment, and marking the appointment No show or Not interested clears only the
+ * second of those. The lead then sits on the tab an agent checks least, out of the
+ * Active queue that is ordered by how long something has been quiet, and is never
+ * chased again. Silently, and to the no-show — the most recoverable lead there is.
+ *
+ * A BOOKING IS THE EXCEPTION and must not come through here: `openDealForBooking`
+ * converts the lead, which sets it to "closed" on purpose. Rewriting that to
+ * "follow-up" afterwards would resurrect a client who is now a contact with a deal.
+ *
+ * Three guards, each for its own reason:
+ *  - only from the appointment group, so a lead an agent deliberately marked Blocked
+ *    or Not searching after the viewing keeps the status the agent chose;
+ *  - only when no OTHER appointment is still scheduled, because a client with a second
+ *    viewing next week belongs on the Appointment tab, not in the chase list;
+ *  - `follow-up` rather than `new`, because this person has been met or was due to be:
+ *    they are not a fresh enquiry and should not be worked like one.
+ */
+async function returnLeadToTheQueue(
+  leadId: string | null,
+  status: string,
+  outcome: string | null,
+): Promise<void> {
+  if (!leadId) return;
+  if (status === "scheduled") return;
+  if (status === "showed-up" && outcome === "booked") return;
+
+  const stillBooked = await db
+    .select({ id: appointments.id })
+    .from(appointments)
+    .where(
+      and(
+        eq(appointments.leadId, leadId),
+        eq(appointments.status, "scheduled"),
+        isNull(appointments.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (stillBooked.length > 0) return;
+
+  const [moved] = await db
+    .update(leads)
+    .set({ status: "follow-up" })
+    .where(
+      and(
+        eq(leads.id, leadId),
+        inArray(leads.status, APPOINTMENT_STATUSES),
+        isNull(leads.deletedAt),
+      ),
+    )
+    .returning({ id: leads.id });
+
+  // Said out loud on the thread the agent actually reads. A status that changes itself
+  // and does not say so is indistinguishable from one that changed by mistake.
+  if (moved) {
+    await addSystemRemark(
+      leadId,
+      outcome === "not-interested"
+        ? "Back in the working queue — viewing ended without a booking."
+        : status === "no-show"
+          ? "Back in the working queue — did not turn up."
+          : "Back in the working queue — viewing closed without a booking.",
+    );
   }
 }
 
@@ -403,6 +477,11 @@ export async function deleteAppointment(id: string): Promise<ActionResult<void>>
     if (!row) return fail("Appointment not found.");
 
     await db.update(appointments).set({ deletedAt: new Date() }).where(eq(appointments.id, id));
+    /* Same stranding as a no-show, by a different door: deleting the only appointment
+       leaves the lead sitting at status "Appointment" with nothing in the diary to
+       justify it, off the Active queue for good. "deleted" is passed as the status so
+       the helper's booked check cannot match. */
+    await returnLeadToTheQueue(row.leadId, "deleted", null);
     await closeAppointmentReminder(row);
     revalidateAll(row.contactId, row.leadId, row.propertyId, row.projectId);
     return ok(undefined);

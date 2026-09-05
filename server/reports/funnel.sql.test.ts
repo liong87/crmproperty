@@ -27,8 +27,10 @@ const to = new Date("2026-09-04T23:59:59Z");
 /** The predicate exactly as server/reports/funnel.ts builds it. */
 const liveAppt = and(
   isNull(appointments.deletedAt),
-  sql`${appointments.scheduledAt} >= ${from.toISOString()}::timestamptz`,
-  sql`${appointments.scheduledAt} <= ${to.toISOString()}::timestamptz`,
+  // createdAt, matching the source: the funnel counts appointments by when they were
+  // SET, so a viewing booked today for next week is not invisible until it happens.
+  sql`${appointments.createdAt} >= ${from.toISOString()}::timestamptz`,
+  sql`${appointments.createdAt} <= ${to.toISOString()}::timestamptz`,
 );
 const liveLead = and(
   isNull(leads.deletedAt),

@@ -120,10 +120,24 @@ export async function getFunnel(user: User, window: ReportWindow): Promise<Funne
     sql`${leads.createdAt} <= ${toIso}::timestamptz`,
     ownershipFilter(user, leads.assignedTo),
   );
+  /*
+   * WINDOWED ON WHEN THE APPOINTMENT WAS SET, NOT WHEN IT HAPPENS.
+   *
+   * This was `scheduledAt`, and it made the stage disagree with its own label. An agent
+   * who books three viewings this morning for next week saw "Appointments set: 0 of 3"
+   * all week, because none of those dates had arrived yet — the work was done and the
+   * funnel denied it. Worse, by the time they did land in the window, the leads that
+   * produced them had often aged out of it, so the row described two different cohorts
+   * and the conversion rate between the first two columns was meaningless.
+   *
+   * Creation date fixes both: every column of one row now describes the same cohort —
+   * of what was SET in this period, how much showed up and how much booked — which is
+   * the same rule `liveConverted` below already follows for deals.
+   */
   const liveAppt = and(
     isNull(appointments.deletedAt),
-    sql`${appointments.scheduledAt} >= ${fromIso}::timestamptz`,
-    sql`${appointments.scheduledAt} <= ${toIso}::timestamptz`,
+    sql`${appointments.createdAt} >= ${fromIso}::timestamptz`,
+    sql`${appointments.createdAt} <= ${toIso}::timestamptz`,
     // Setter or closer: an agent's own numbers must include presentations they ran
     // for somebody else's lead.
     ownershipFilterAny(user, [appointments.assignedTo, appointments.closerId]),
@@ -559,12 +573,16 @@ export async function getFunnelTrend(user: User, weeks = 12): Promise<TrendPoint
       group by 1
     `),
     db.execute(sql`
-      select to_char(date_trunc('week', ${appointments.scheduledAt} at time zone 'Asia/Kuala_Lumpur'), 'YYYY-MM-DD') as bucket,
+      -- Bucketed on when the appointment was SET, matching the funnel above it. These
+      -- two charts sit on one screen and must not disagree about the same week: with
+      -- the trend on scheduled_at and the funnel on created_at, a viewing booked today
+      -- for next month appeared in a future week here and in this month there.
+      select to_char(date_trunc('week', ${appointments.createdAt} at time zone 'Asia/Kuala_Lumpur'), 'YYYY-MM-DD') as bucket,
              count(*)::int as c,
              count(*) filter (where ${appointments.outcome} = 'booked')::int as booked
       from ${appointments}
       where ${appointments.deletedAt} is null
-        and ${appointments.scheduledAt} >= ${sinceIso}::timestamptz
+        and ${appointments.createdAt} >= ${sinceIso}::timestamptz
         ${own ? sql`and ${appointments.assignedTo} = ${user.id}` : sql``}
       group by 1
     `),
