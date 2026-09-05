@@ -28,6 +28,8 @@ export interface DueDocumentRow {
   contactName: string;
   /** The project or listing the deal is against. */
   subjectTitle: string | null;
+  /** When the deal (the lead) was created — the "newest lead first" sort. */
+  dealCreatedAt: Date;
 }
 
 /**
@@ -94,6 +96,7 @@ export async function listDocumentsDue(user: User, withinDays = 14, limit = 50):
       dueAt: dealDocuments.dueAt,
       required: dealDocuments.required,
       contactName: contacts.name,
+      dealCreatedAt: deals.createdAt,
       projectName: projects.name,
       propertyTitle: properties.title,
     })
@@ -127,6 +130,7 @@ export async function listDocumentsDue(user: User, withinDays = 14, limit = 50):
       required: r.required,
       contactName: r.contactName,
       subjectTitle: r.projectName ?? r.propertyTitle,
+      dealCreatedAt: r.dealCreatedAt,
     }));
 }
 

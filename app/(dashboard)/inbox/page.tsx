@@ -9,6 +9,7 @@ import { InboxList } from "@/components/notifications/inbox-list";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChevronRight, Inbox as InboxIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { Segmented, FilterChip } from "@/components/ui/segmented";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -62,7 +63,7 @@ type InboxFilter = "all" | "late";
  *            single late document is not the same problem as one with nine outstanding
  *   client — where is the name I am looking for, when scrolling beats searching
  */
-type PaperworkSort = "due" | "client";
+type PaperworkSort = "due" | "client" | "newest";
 
 /*
  * Two options, and there were three.
@@ -80,6 +81,9 @@ type PaperworkSort = "due" | "client";
 const SORT_LABEL: Record<PaperworkSort, string> = {
   due: "Soonest due",
   client: "Client A–Z",
+  /* Newest lead first: the deal's own created date, not the document's. An agent
+     chasing a fresh booking wants it at the top even when nothing in it is late yet. */
+  newest: "Newest lead",
 };
 
 export default async function InboxPage({
@@ -92,7 +96,8 @@ export default async function InboxPage({
 
   const sp = await searchParams;
   const show: InboxFilter = sp.show === "late" ? "late" : "all";
-  const sort: PaperworkSort = sp.sort === "client" ? "client" : "due";
+  const sort: PaperworkSort =
+    sp.sort === "client" ? "client" : sp.sort === "newest" ? "newest" : "due";
 
   /** Keep whichever control you are NOT touching. Both live in the URL, so a filtered,
    *  sorted inbox is a link somebody can send to a colleague. */
@@ -123,6 +128,9 @@ export default async function InboxPage({
   /** How many DEALS the paperwork spans — the sort reorders deals, so this is what
    *  decides whether a sort control has anything to do. */
   const dealCount = new Set(docs.map((d) => d.dealId)).size;
+
+  /** Is there anything for the right-hand column to hold? */
+  const hasRecord = notifications.length > 0;
 
   const overdue = lateFollowUps.length;
   const docsOverdue = lateDocs.length;
@@ -191,8 +199,17 @@ export default async function InboxPage({
         where there is width to use — on a laptop the right half of this page was
         empty while the left half scrolled.
       */}
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
+      {/*
+        The split only happens when there is something to split.
+
+        Two columns are right when both are occupied — work on the left, the record of
+        what happened on the right. With no notifications the right column is empty and
+        the paperwork card was squeezed into two thirds of the page for nothing, which
+        made a card holding one collapsed row look like a fragment floating in white
+        space. Empty right column, full width for the work.
+      */}
+      <div className={cn("grid grid-cols-1 items-start gap-4", hasRecord && "lg:grid-cols-3")}>
+        <div className={cn("space-y-4", hasRecord && "lg:col-span-2")}>
       {docs.length > 0 && (
         <Card>
           <CardHeader className="space-y-1">
@@ -202,19 +219,15 @@ export default async function InboxPage({
               {docsOverdue > 0 && ` · ${docsOverdue} overdue`}
             </p>
             {/*
-              Hidden below three deals, and that is the answer to "will this confuse an
-              agent". Two labels now, not three — see SORT_LABEL for why the third went.
-
-              An agent works two or three of their own bookings; a sort control above
-              two rows cannot change what they see, so it is pure interface tax on the
-              person least able to spare the attention. A principal looking at the whole
-              agency has fifteen and genuinely needs it. Same page, and the control
-              appears exactly when it starts doing something.
+              Hidden below TWO deals — the threshold was three, which hid the control
+              from anyone with a couple of bookings and made it look missing. One deal
+              cannot be reordered, so one is the only case where a sort does nothing;
+              from two upwards it does something and is shown.
 
               Chips rather than a second Segmented: the All/Late tabs own the loud
               treatment, and two gradient controls compete for the same glance.
             */}
-            {dealCount >= 3 && (
+            {dealCount >= 2 && (
             <div role="group" aria-label="Sort paperwork" className="flex flex-wrap items-center gap-1.5 pt-1">
               {(Object.keys(SORT_LABEL) as PaperworkSort[]).map((k) => (
                 <FilterChip
@@ -249,6 +262,8 @@ export default async function InboxPage({
               )
                 .sort((a, b) => {
                   if (sort === "client") return a[0]!.contactName.localeCompare(b[0]!.contactName);
+                  if (sort === "newest")
+                    return b[0]!.dealCreatedAt.getTime() - a[0]!.dealCreatedAt.getTime();
                   // Soonest due: compare each deal by its most urgent document, not by
                   // its first — a deal whose second item is overdue outranks one whose
                   // first is due next week.
