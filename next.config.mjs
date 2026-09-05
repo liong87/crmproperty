@@ -1,4 +1,19 @@
 /** @type {import('next').NextConfig} */
+/*
+ * Clerk's Frontend API host.
+ *
+ * A Clerk PRODUCTION instance is served from a CNAME on your own domain, so it matches
+ * neither `*.clerk.accounts.dev` (development instances) nor `*.clerk.com`. The
+ * report-only CSP caught this: `connect-src` was refusing the session `tokens` and
+ * `touch` calls, which are how a session stays alive. Report-only means nothing broke —
+ * but enforcing the policy without this line would have signed every agent out mid-shift
+ * and looked like an auth outage rather than a header change.
+ *
+ * Listed in script-src as well as connect-src: the same host serves clerk.js on a
+ * production instance, and a missing script-src entry fails closed and total.
+ */
+const CLERK_FAPI = "https://clerk.lanthornproperties.com";
+
 const nextConfig = {
   reactStrictMode: true,
 
@@ -96,20 +111,20 @@ const nextConfig = {
               // dev-instance tooling. 'unsafe-inline' is here because Next emits
               // inline bootstrap scripts; removing it needs nonces, which is a
               // separate piece of work.
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.accounts.dev https://*.clerk.com",
+              `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.accounts.dev https://*.clerk.com ${CLERK_FAPI}`,
               "worker-src 'self' blob:",
               // Tailwind is compiled to a stylesheet, but Next injects inline styles.
               "style-src 'self' 'unsafe-inline'",
               // Property photographs arrive as signed R2 URLs; data: covers the
               // client-side resize canvas; blob: covers object URLs for previews.
-              "img-src 'self' data: blob: https://*.r2.cloudflarestorage.com https://img.clerk.com",
+              `img-src 'self' data: blob: https://*.r2.cloudflarestorage.com https://img.clerk.com ${CLERK_FAPI}`,
               "font-src 'self' data:",
               // The sales kit uploads straight from the browser to R2 (presigned PUT),
               // so the bucket host must be reachable by fetch, not just as an image.
-              "connect-src 'self' https://*.r2.cloudflarestorage.com https://*.clerk.accounts.dev https://*.clerk.com",
+              `connect-src 'self' https://*.r2.cloudflarestorage.com https://*.clerk.accounts.dev https://*.clerk.com ${CLERK_FAPI}`,
               // Clerk renders sign-in components in an iframe on development
               // instances; production instances do not need this.
-              "frame-src 'self' https://*.clerk.accounts.dev https://*.clerk.com",
+              `frame-src 'self' https://*.clerk.accounts.dev https://*.clerk.com ${CLERK_FAPI}`,
               // Nothing here should ever be framed, or submit a form off-site.
               "frame-ancestors 'none'",
               "form-action 'self'",
