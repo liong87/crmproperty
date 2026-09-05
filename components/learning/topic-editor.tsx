@@ -226,7 +226,7 @@ function TopicRow({ topic }: { topic: TopicCard }) {
               type="button"
               onClick={() => setConfirming(true)}
               aria-label="Delete this topic"
-              className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive"
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive-ink"
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden />
             </button>

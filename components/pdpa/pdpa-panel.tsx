@@ -22,7 +22,7 @@ export function PdpaPanel({ contactId }: { contactId: string }) {
 
   return (
     <Card className="border-destructive/40">
-      <CardHeader><CardTitle className="text-destructive">PDPA — Personal Data</CardTitle></CardHeader>
+      <CardHeader><CardTitle className="text-destructive-ink">PDPA — Personal Data</CardTitle></CardHeader>
       <CardContent className="space-y-3 text-sm">
         <div>
           <a href={`/api/contacts/${contactId}/export`} className="underline" target="_blank" rel="noopener">

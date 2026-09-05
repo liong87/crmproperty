@@ -41,14 +41,14 @@ export function ActivityTimeline({ items }: { items: TimelineItem[] }) {
                     Mark done
                   </button>
                 )}
-                <button className="text-destructive underline" disabled={pending}
+                <button className="text-destructive-ink underline" disabled={pending}
                   onClick={() => start(async () => { await deleteActivity(a.id); router.refresh(); })}>
                   Delete
                 </button>
               </div>
             )}
             {!a.followUpAt && (
-              <button className="mt-2 text-xs text-destructive underline" disabled={pending}
+              <button className="mt-2 text-xs text-destructive-ink underline" disabled={pending}
                 onClick={() => start(async () => { await deleteActivity(a.id); router.refresh(); })}>
                 Delete
               </button>

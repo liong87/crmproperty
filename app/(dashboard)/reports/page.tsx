@@ -228,7 +228,7 @@ export default async function ReportsPage({
                         zero in a column of small numbers is easy to miss, and impossible
                         to spot at all once the colour is gone. */}
                     {a.calls === 0 ? (
-                      <TD className="text-right text-destructive">
+                      <TD className="text-right text-destructive-ink">
                         0 <span className="whitespace-nowrap">· none logged</span>
                       </TD>
                     ) : (

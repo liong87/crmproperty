@@ -102,7 +102,7 @@ export default async function DashboardPage({
           className="block rounded-xl border border-destructive/40 bg-destructive/5 p-4 transition-colors hover:bg-destructive/10"
         >
           <p className="text-sm">
-            <strong className="font-semibold text-destructive">
+            <strong className="font-semibold text-destructive-ink">
               {docsDue.overdue} document{docsDue.overdue === 1 ? " is" : "s are"} overdue
             </strong>{" "}
             across your deals. An expired loan approval is the commonest way a booking
@@ -189,7 +189,7 @@ export default async function DashboardPage({
           className="flex items-center justify-between gap-3 rounded-xl border border-accent/50 bg-accent/10 p-3 text-sm transition-colors hover:bg-accent/20"
         >
           <span className="flex items-center gap-2 text-foreground">
-            <Snowflake aria-hidden="true" className="h-4 w-4 shrink-0 text-accent" />
+            <Snowflake aria-hidden="true" className="h-4 w-4 shrink-0 text-accent-ink" />
             <span>
               <strong className="font-semibold">{staleCount}</strong>{" "}
               {staleCount === 1 ? "lead has" : "leads have"} had nothing logged for{" "}

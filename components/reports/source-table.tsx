@@ -156,7 +156,7 @@ export function FollowUpTable({
                     nothing to a greyscale printout or to a reader who cannot separate
                     it from the other figures in the column. */}
                 {r.rate !== null && r.rate === 0 && r.openLeads > 0 ? (
-                  <TD className="text-right font-medium tabular-nums text-destructive">
+                  <TD className="text-right font-medium tabular-nums text-destructive-ink">
                     {pct(r.rate)} <span className="whitespace-nowrap font-normal">· none worked</span>
                   </TD>
                 ) : (

@@ -263,7 +263,7 @@ function Pct({ value, onChange }: { value: string; onChange: (v: string) => void
 /** Running total, coloured. Wrong-while-you-type beats wrong-on-submit. */
 function Total({ value, ok }: { value: number; ok: boolean }) {
   return (
-    <span className={`tnum text-xs font-medium ${ok ? "text-muted-foreground" : "text-destructive"}`}>
+    <span className={`tnum text-xs font-medium ${ok ? "text-muted-foreground" : "text-destructive-ink"}`}>
       {value.toFixed(2)}% {ok ? "" : "— must total 100%"}
     </span>
   );

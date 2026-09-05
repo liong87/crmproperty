@@ -96,7 +96,7 @@ export function FieldMapDialog({
                   <div>
                     <Label htmlFor={`fm-${f.key}`}>
                       {f.label}
-                      {f.required && <span className="text-destructive"> *</span>}
+                      {f.required && <span className="text-destructive-ink"> *</span>}
                     </Label>
                     <p className="text-xs text-muted-foreground">{f.hint}</p>
                   </div>

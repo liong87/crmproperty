@@ -14,7 +14,7 @@ export const Label = React.forwardRef<
     {children}
     {required && (
       <>
-        <span aria-hidden="true" className="ml-0.5 text-destructive">
+        <span aria-hidden="true" className="ml-0.5 text-destructive-ink">
           *
         </span>
         <span className="sr-only"> (required)</span>

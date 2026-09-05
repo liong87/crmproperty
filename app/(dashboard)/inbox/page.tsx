@@ -62,11 +62,23 @@ type InboxFilter = "all" | "late";
  *            single late document is not the same problem as one with nine outstanding
  *   client — where is the name I am looking for, when scrolling beats searching
  */
-type PaperworkSort = "due" | "count" | "client";
+type PaperworkSort = "due" | "client";
 
+/*
+ * Two options, and there were three.
+ *
+ * The third sorted by how many documents a deal still owed — first called "Most
+ * outstanding", then "Most documents", and confusing under both names. The naming was
+ * a symptom: the control was redundant. Every group header already prints "10
+ * outstanding", so the count you would sort by is on screen before you sort, and the
+ * overdue pill already picks out the ones that hurt. A control that reorders by a
+ * number the reader can already see earns nothing and costs a decision.
+ *
+ * What is left explains itself without a tooltip, which is the bar a label has to
+ * clear.
+ */
 const SORT_LABEL: Record<PaperworkSort, string> = {
   due: "Soonest due",
-  count: "Most outstanding",
   client: "Client A–Z",
 };
 
@@ -80,8 +92,7 @@ export default async function InboxPage({
 
   const sp = await searchParams;
   const show: InboxFilter = sp.show === "late" ? "late" : "all";
-  const sort: PaperworkSort =
-    sp.sort === "count" || sp.sort === "client" ? sp.sort : "due";
+  const sort: PaperworkSort = sp.sort === "client" ? "client" : "due";
 
   /** Keep whichever control you are NOT touching. Both live in the URL, so a filtered,
    *  sorted inbox is a link somebody can send to a colleague. */
@@ -108,6 +119,10 @@ export default async function InboxPage({
   const docs = show === "late" ? lateDocs : allDocs;
   const followUps = show === "late" ? lateFollowUps : allFollowUps;
   const notifications = show === "late" ? [] : allNotifications;
+
+  /** How many DEALS the paperwork spans — the sort reorders deals, so this is what
+   *  decides whether a sort control has anything to do. */
+  const dealCount = new Set(docs.map((d) => d.dealId)).size;
 
   const overdue = lateFollowUps.length;
   const docsOverdue = lateDocs.length;
@@ -182,13 +197,24 @@ export default async function InboxPage({
         <Card>
           <CardHeader className="space-y-1">
             <CardTitle>Paperwork due</CardTitle>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[13px] text-muted-foreground">
               Next 14 days, plus anything already overdue
               {docsOverdue > 0 && ` · ${docsOverdue} overdue`}
             </p>
-            {/* Chips, not a second Segmented: the tabs above own the loud treatment,
-                and a sort is a secondary choice. Two gradient controls on one screen
-                compete for the same glance. */}
+            {/*
+              Hidden below three deals, and that is the answer to "will this confuse an
+              agent". Two labels now, not three — see SORT_LABEL for why the third went.
+
+              An agent works two or three of their own bookings; a sort control above
+              two rows cannot change what they see, so it is pure interface tax on the
+              person least able to spare the attention. A principal looking at the whole
+              agency has fifteen and genuinely needs it. Same page, and the control
+              appears exactly when it starts doing something.
+
+              Chips rather than a second Segmented: the All/Late tabs own the loud
+              treatment, and two gradient controls compete for the same glance.
+            */}
+            {dealCount >= 3 && (
             <div role="group" aria-label="Sort paperwork" className="flex flex-wrap items-center gap-1.5 pt-1">
               {(Object.keys(SORT_LABEL) as PaperworkSort[]).map((k) => (
                 <FilterChip
@@ -199,6 +225,7 @@ export default async function InboxPage({
                 />
               ))}
             </div>
+            )}
           </CardHeader>
           <CardContent className="px-0 pb-2">
             {/*
@@ -221,7 +248,6 @@ export default async function InboxPage({
                 }, {}),
               )
                 .sort((a, b) => {
-                  if (sort === "count") return b.length - a.length;
                   if (sort === "client") return a[0]!.contactName.localeCompare(b[0]!.contactName);
                   // Soonest due: compare each deal by its most urgent document, not by
                   // its first — a deal whose second item is overdue outranks one whose
@@ -262,17 +288,17 @@ export default async function InboxPage({
                               {first.subjectTitle}
                             </Badge>
                           )}
-                          <span className="text-xs tabular-nums text-muted-foreground">
+                          <span className="text-[13px] tabular-nums text-muted-foreground">
                             {group.length} outstanding
                           </span>
                         </span>
                         {/* The one number that decides whether this row needs you today. */}
                         {overdueCount > 0 ? (
-                          <span className="shrink-0 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-destructive">
+                          <span className="shrink-0 rounded-full bg-destructive/10 px-2.5 py-1 text-[13px] font-semibold tabular-nums text-destructive-ink">
                             {overdueCount} overdue
                           </span>
                         ) : (
-                          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                          <span className="shrink-0 text-[13px] tabular-nums text-muted-foreground">
                             {soonest.daysUntilDue === 0 ? "Due today" : dateFmt.format(soonest.dueAt)}
                           </span>
                         )}
@@ -284,7 +310,11 @@ export default async function InboxPage({
                           return (
                             <li
                               key={d.id}
-                              className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-1.5 text-sm"
+                              /* 15px, not 14. This is a reading list, not a data
+                                 table — the density argument that justifies small type
+                                 in the leads grid does not apply to ten rows with a
+                                 whole card to themselves. */
+                              className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2 text-[15px]"
                             >
                               <Link
                                 href={`/deals/${d.dealId}`}
@@ -296,8 +326,8 @@ export default async function InboxPage({
                               <span
                                 className={
                                   late
-                                    ? "shrink-0 text-xs font-semibold tabular-nums text-destructive"
-                                    : "shrink-0 text-xs tabular-nums text-muted-foreground"
+                                    ? "shrink-0 text-[13px] font-semibold tabular-nums text-destructive-ink"
+                                    : "shrink-0 text-[13px] tabular-nums text-muted-foreground"
                                 }
                               >
                                 {late

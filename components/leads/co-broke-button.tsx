@@ -96,7 +96,7 @@ export function CoBrokeButton({
         still splits with you.
       </p>
 
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && <p className="text-xs text-destructive-ink">{error}</p>}
 
       <div className="flex items-center gap-2">
         <button

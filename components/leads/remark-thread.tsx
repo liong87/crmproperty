@@ -170,7 +170,7 @@ export function RemarkThread({
         </button>
       </div>
 
-      {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
+      {error && <p className="mt-1.5 text-xs text-destructive-ink">{error}</p>}
     </div>
   );
 }

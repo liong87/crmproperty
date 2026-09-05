@@ -20,7 +20,7 @@ const fmt = (d: Date | null) =>
 
 /** Older than a month is a different kind of problem from older than a fortnight. */
 function tone(idleDays: number): string {
-  if (idleDays >= 45) return "bg-destructive/10 text-destructive";
+  if (idleDays >= 45) return "bg-destructive/10 text-destructive-ink";
   if (idleDays >= 30) return "bg-amber-100 text-amber-800";
   return "bg-muted text-muted-foreground";
 }
@@ -125,7 +125,7 @@ export function StaleLeadList({
         </div>
       ))}
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <p className="text-sm text-destructive-ink">{error}</p>}
     </div>
   );
 }

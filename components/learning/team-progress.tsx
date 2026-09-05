@@ -54,7 +54,7 @@ export function TeamProgressTable({ data }: { data: TeamProgressData }) {
               <TD
                 className={cn(
                   "text-right font-medium tabular-nums",
-                  r.overall === 0 ? "text-destructive" : r.overall === 1 ? "text-emerald-600" : "",
+                  r.overall === 0 ? "text-destructive-ink" : r.overall === 1 ? "text-emerald-600" : "",
                 )}
               >
                 {pct(r.overall)}
@@ -80,7 +80,7 @@ export function WhoWatched({ rows }: { rows: { name: string; watched: number; to
             <span
               className={cn(
                 "shrink-0 tabular-nums",
-                r.watched === 0 ? "text-destructive" : r.watched === r.total ? "text-emerald-600" : "text-muted-foreground",
+                r.watched === 0 ? "text-destructive-ink" : r.watched === r.total ? "text-emerald-600" : "text-muted-foreground",
               )}
             >
               {r.watched} / {r.total}

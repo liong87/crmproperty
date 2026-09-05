@@ -116,7 +116,7 @@ export function CsvImport({ canDistribute = false }: { canDistribute?: boolean }
             </p>
           )}
           {summary.errors.length > 0 && (
-            <ul className="mt-2 space-y-1 text-destructive">
+            <ul className="mt-2 space-y-1 text-destructive-ink">
               {summary.errors.slice(0, 10).map((e) => (
                 <li key={e.line}>Line {e.line}{e.name !== "(no name)" ? ` (${e.name})` : ""}: {e.error}</li>
               ))}

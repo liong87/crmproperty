@@ -195,7 +195,7 @@ export function WorkingLeadCard({
         />
       </div>
 
-      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+      {error && <p className="mt-2 text-xs text-destructive-ink">{error}</p>}
       {done && !error && !pending && (
         <p className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground">
           <Check className="h-3 w-3" /> Logged

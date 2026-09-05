@@ -159,7 +159,7 @@ export function StatusCell({
                   placeholder="What happened? (optional)"
                   className="mt-2 w-full border-0 border-b border-input bg-transparent py-1 text-sm outline-none placeholder:text-muted-foreground focus:border-primary disabled:opacity-60"
                 />
-                {error && <p role="alert" className="mt-1.5 text-xs text-destructive">{error}</p>}
+                {error && <p role="alert" className="mt-1.5 text-xs text-destructive-ink">{error}</p>}
                 <div className="mt-3 flex justify-end gap-1.5">
                   <button type="button" onClick={dismiss} disabled={pending}
                     className="rounded-lg px-2.5 py-1 text-xs text-muted-foreground hover:bg-secondary disabled:opacity-50">

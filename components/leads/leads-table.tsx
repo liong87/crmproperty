@@ -259,7 +259,7 @@ export function LeadsTable({
                 </TD>
                 {/* Unassigned is called out rather than left blank — an empty cell reads
                     as a rendering glitch, and a lead nobody owns needs to be noticed. */}
-                <TD className={canAssign ? "p-1" : l.assigneeName ? "" : "text-destructive"}>
+                <TD className={canAssign ? "p-1" : l.assigneeName ? "" : "text-destructive-ink"}>
                   {canAssign ? (
                     <AssignCell
                       leadId={l.id}

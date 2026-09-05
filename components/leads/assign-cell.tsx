@@ -108,7 +108,7 @@ export function AssignCell({
         aria-expanded={open}
         className={cn(
           "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary",
-          currentName ? "" : "font-medium text-destructive",
+          currentName ? "" : "font-medium text-destructive-ink",
         )}
       >
         {pending && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />}
@@ -116,7 +116,7 @@ export function AssignCell({
         <ChevronDown className="ml-auto h-3.5 w-3.5 shrink-0 opacity-50" />
       </button>
 
-      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+      {error && <p className="mt-1 text-xs text-destructive-ink">{error}</p>}
 
       {open && rect && typeof document !== "undefined" &&
         createPortal(

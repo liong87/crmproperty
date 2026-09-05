@@ -27,10 +27,20 @@
     --secondary-foreground: 179 55% 15%;
     --accent: 40 82% 52%;
     --accent-foreground: 30 50% 14%;
+    /*
+     * The amber is a FILL, never ink. As text on a white card it measures 2.11:1 —
+     * not "a bit low", unreadable, and it fails the 3:1 floor for icons too. The file
+     * already has this idea in `--stage-N-ink`: every fill gets a darker partner for
+     * anything drawn ON or NEXT TO it. This is that partner for the accent. 5.08:1.
+     */
+    --accent-ink: 40 95% 30%;
     --muted: 44 22% 93%;
     --muted-foreground: 186 9% 40%;
     --destructive: 6 63% 45%;
     --destructive-foreground: 40 33% 97%;
+    /* Light mode needs no separate ink — the fill reads 5.63:1 on a card. Declared
+       anyway so `text-destructive-ink` means the same thing in both themes. */
+    --destructive-ink: 6 63% 45%;
     --border: 44 22% 88%;
     --input: 44 22% 88%;
     --ring: 179 74% 26%;
@@ -62,10 +72,23 @@
     --secondary-foreground: 40 20% 92%;
     --accent: 40 75% 55%;
     --accent-foreground: 30 50% 12%;
+    /* On the dark card the bright amber is already 8.21:1, so ink and fill coincide. */
+    --accent-ink: 40 75% 55%;
     --muted: 180 18% 16%;
     --muted-foreground: 180 8% 62%;
-    --destructive: 6 63% 52%;
+    /*
+     * Darker than the old `52%`, which put the near-white label at 4.23:1 — under AA
+     * for the small semibold text every destructive button uses.
+     */
+    --destructive: 6 70% 46%;
     --destructive-foreground: 40 33% 97%;
+    /*
+     * And LIGHTER than the fill for destructive text, because the two jobs pull in
+     * opposite directions on a dark canvas: a fill must be dark enough for white text,
+     * ink must be light enough to read on the card. One value cannot do both — the old
+     * shared value gave 3.86:1 for error messages. 5.72:1.
+     */
+    --destructive-ink: 6 80% 65%;
     --border: 180 14% 20%;
     --input: 180 14% 20%;
     --ring: 172 52% 45%;

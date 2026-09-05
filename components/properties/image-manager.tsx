@@ -79,7 +79,7 @@ export function ImageManager({
                   triggerLabel={`Delete photo ${img.filename}`}
                   pending={pending}
                 >
-                  <span className="text-destructive">Delete</span>
+                  <span className="text-destructive-ink">Delete</span>
                 </ConfirmButton>
               </div>
             )}

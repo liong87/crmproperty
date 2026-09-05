@@ -64,7 +64,7 @@ export function LeadRowActions({
             triggerLabel={`Delete ${lead.name}`}
             pending={pending}
             onConfirm={remove}
-            className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100"
+            className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive-ink focus-visible:opacity-100"
           >
             <Trash2 aria-hidden="true" className="h-4 w-4" />
           </ConfirmButton>

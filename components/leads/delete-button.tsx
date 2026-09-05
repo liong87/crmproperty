@@ -41,7 +41,7 @@ export function DeleteLeadButton({ leadId }: { leadId: string }) {
       <Button size="sm" variant="ghost" disabled={pending} onClick={() => setArmed(false)}>
         Cancel
       </Button>
-      {error && <span className="text-xs text-destructive">{error}</span>}
+      {error && <span className="text-xs text-destructive-ink">{error}</span>}
     </div>
   );
 }

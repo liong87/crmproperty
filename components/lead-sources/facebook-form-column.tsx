@@ -221,7 +221,7 @@ function FormCard({
                 type="button"
                 onClick={() => setConfirming(true)}
                 aria-label="Remove this form"
-                className="shrink-0 rounded-md p-1 text-muted-foreground transition hover:bg-muted hover:text-destructive"
+                className="shrink-0 rounded-md p-1 text-muted-foreground transition hover:bg-muted hover:text-destructive-ink"
               >
                 <Trash2 className="h-3.5 w-3.5" aria-hidden />
               </button>

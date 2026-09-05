@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 /**
  * The one place a form or a row action announces a failure.
  *
- * Before this, every error in the app was a bare `<p className="text-destructive">`.
+ * Before this, every error in the app was a bare `<p className="text-destructive-ink">`.
  * There was not one `role="alert"` in `components/`, which means a failed save was
  * completely silent to a screen reader — the user pressed Save, nothing was read out,
  * and the record was not written.
@@ -38,7 +38,7 @@ export const FormAlert = React.forwardRef<
       className={cn(
         "flex items-start gap-2 rounded-xl border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         tone === "error"
-          ? "border-destructive/30 bg-destructive/5 text-destructive"
+          ? "border-destructive/30 bg-destructive/5 text-destructive-ink"
           : "border-primary/30 bg-primary/5 text-primary",
         className,
       )}

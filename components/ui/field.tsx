@@ -61,7 +61,7 @@ export function Field({
         </p>
       )}
       {error && (
-        <p id={errId} className="flex items-start gap-1.5 text-sm font-medium text-destructive">
+        <p id={errId} className="flex items-start gap-1.5 text-sm font-medium text-destructive-ink">
           {/* The icon is the non-colour half of the signal — the message must not depend
               on red alone. A bare "!" character did that job but read as a typo in the
               sentence it preceded. */}

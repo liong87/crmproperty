@@ -91,7 +91,7 @@ export function UserRowControls({
 
       {!localActive && !disabled && (
         <ConfirmButton
-          className="text-destructive"
+          className="text-destructive-ink"
           onConfirm={onDelete}
           question={`Delete ${name}?`}
           confirmLabel={pending ? "Deleting…" : "Delete user"}
