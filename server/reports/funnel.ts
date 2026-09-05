@@ -24,7 +24,7 @@
  * Every figure is scoped by the caller's role, using the same ownership rules as the
  * rest of the app: an agent sees their own numbers, a team lead sees the team's.
  */
-import { and, count, eq, gte, lte, inArray, isNull, sql } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { leads, appointments, projects, users, deals, dealStages, type User } from "@/lib/db/schema";
 import { ownershipFilter, ownershipFilterAny, isTeamLeadOrAbove } from "@/lib/auth";
@@ -93,16 +93,36 @@ export interface ReportWindow {
  */
 export async function getFunnel(user: User, window: ReportWindow): Promise<FunnelData> {
   const { from, to } = window;
+
+  /*
+   * ISO strings cast to ::timestamptz, NOT Date objects — trap 3 in
+   * claude/crm-workers-runtime-traps.md, and the third time it has bitten.
+   *
+   * Drizzle infers a parameter's type from the column it is compared against, and
+   * mixing raw `sql` into the same statement loses that inference, leaving postgres-js
+   * holding a Date it cannot serialise. Three of the eight queries below carry raw
+   * `sql` (`count(*) filter (...)`, `coalesce(...)`) while sharing these predicates,
+   * so the bounds have to be strings.
+   *
+   * It presented as an INTERMITTENT 500 on the dashboard naming an innocent query —
+   * `leadsByAgent`, which contains no raw SQL at all. All eight run in one Promise.all
+   * on a single pooled connection, and when one statement fails to serialise
+   * postgres-js can surface the error against whichever query it happens to be
+   * holding. Guarded by server/reports/funnel.sql.test.ts.
+   */
+  const fromIso = from.toISOString();
+  const toIso = to.toISOString();
+
   const liveLead = and(
     isNull(leads.deletedAt),
-    gte(leads.createdAt, from),
-    lte(leads.createdAt, to),
+    sql`${leads.createdAt} >= ${fromIso}::timestamptz`,
+    sql`${leads.createdAt} <= ${toIso}::timestamptz`,
     ownershipFilter(user, leads.assignedTo),
   );
   const liveAppt = and(
     isNull(appointments.deletedAt),
-    gte(appointments.scheduledAt, from),
-    lte(appointments.scheduledAt, to),
+    sql`${appointments.scheduledAt} >= ${fromIso}::timestamptz`,
+    sql`${appointments.scheduledAt} <= ${toIso}::timestamptz`,
     // Setter or closer: an agent's own numbers must include presentations they ran
     // for somebody else's lead.
     ownershipFilterAny(user, [appointments.assignedTo, appointments.closerId]),
@@ -120,8 +140,8 @@ export async function getFunnel(user: User, window: ReportWindow): Promise<Funne
    */
   const liveConverted = and(
     isNull(deals.deletedAt),
-    gte(deals.createdAt, from),
-    lte(deals.createdAt, to),
+    sql`${deals.createdAt} >= ${fromIso}::timestamptz`,
+    sql`${deals.createdAt} <= ${toIso}::timestamptz`,
     eq(dealStages.isWon, true),
     eq(dealStages.isTerminal, true),
     ownershipFilter(user, deals.assignedTo),
