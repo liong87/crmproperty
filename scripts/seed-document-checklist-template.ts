@@ -35,10 +35,20 @@ const PROJECT_DOCUMENT_CHECKLIST: {
   notes: string | null;
 }[] = [
   { label: "Booking / Reservation Form", sortOrder: 1, required: true, dueAfterDays: 0, notes: null },
-  { label: "Buyer IC / Passport Copy", sortOrder: 2, required: true, dueAfterDays: 3, notes: null },
+  {
+    // Promoted into this template on 5 Sep. It existed as a stray requirement row from
+    // the older generic checklist and was the one item there that named a real
+    // document rather than a stage, so it belongs here rather than being deleted.
+    label: "Booking fee receipt",
+    sortOrder: 2,
+    required: true,
+    dueAfterDays: 0,
+    notes: "Proof the booking fee was paid. Issued at booking, so it is due the same day.",
+  },
+  { label: "Buyer IC / Passport Copy", sortOrder: 3, required: true, dueAfterDays: 3, notes: null },
   {
     label: "Letter of Appointment (Panel Lawyer)",
-    sortOrder: 3,
+    sortOrder: 4,
     required: true,
     dueAfterDays: 7,
     notes:
@@ -47,20 +57,20 @@ const PROJECT_DOCUMENT_CHECKLIST: {
       "is cancelled and RM1,000 is refunded less a RM150 admin fee. Adjust the amounts " +
       "if your panel lawyer's terms differ.",
   },
-  { label: "Sales Form", sortOrder: 4, required: true, dueAfterDays: 7, notes: null },
-  { label: "Consent Letter", sortOrder: 5, required: true, dueAfterDays: 7, notes: null },
-  { label: "Income / Loan Supporting Documents", sortOrder: 6, required: true, dueAfterDays: 14, notes: null },
+  { label: "Sales Form", sortOrder: 5, required: true, dueAfterDays: 7, notes: null },
+  { label: "Consent Letter", sortOrder: 6, required: true, dueAfterDays: 7, notes: null },
+  { label: "Income / Loan Supporting Documents", sortOrder: 7, required: true, dueAfterDays: 14, notes: null },
   {
     label: "Loan Approval Letter",
-    sortOrder: 7,
+    sortOrder: 8,
     required: true,
     dueAfterDays: 60,
     notes: "Matches the letter of appointment's 2-month loan eligibility deadline.",
   },
-  { label: "Sale and Purchase Agreement (SPA)", sortOrder: 8, required: true, dueAfterDays: 90, notes: null },
-  { label: "Change Unit Form", sortOrder: 9, required: false, dueAfterDays: null, notes: "Only if the buyer switches units after booking." },
-  { label: "Cancellation Form", sortOrder: 10, required: false, dueAfterDays: null, notes: "Only if the booking is cancelled." },
-  { label: "BGB Form", sortOrder: 11, required: false, dueAfterDays: null, notes: null },
+  { label: "Sale and Purchase Agreement (SPA)", sortOrder: 9, required: true, dueAfterDays: 90, notes: null },
+  { label: "Change Unit Form", sortOrder: 10, required: false, dueAfterDays: null, notes: "Only if the buyer switches units after booking." },
+  { label: "Cancellation Form", sortOrder: 11, required: false, dueAfterDays: null, notes: "Only if the booking is cancelled." },
+  { label: "BGB Form", sortOrder: 12, required: false, dueAfterDays: null, notes: null },
 ];
 
 async function main() {

@@ -23,6 +23,8 @@
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "purge:leads": "tsx scripts/purge-stale-leads.ts",
     "purge:notifications": "tsx scripts/purge-notifications.ts",
+    "requirements:inspect": "tsx scripts/inspect-document-requirements.ts",
+    "checklist:fix": "tsx scripts/fix-project-checklist.ts",
     "cf:build": "opennextjs-cloudflare build",
     "db:check": "tsx scripts/db-check.ts",
     "db:local:up": "docker compose up -d && echo Waiting for postgres... && timeout 30",
