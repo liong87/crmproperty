@@ -148,6 +148,52 @@ export async function getFunnel(user: User, window: ReportWindow): Promise<Funne
     ownershipFilter(user, deals.assignedTo),
   );
 
+  /*
+   * Deals BOOKED WITHOUT AN APPOINTMENT.
+   *
+   * The three middle stages are counted from appointments, which is right for a lead
+   * that was called, booked in and presented to. But a deal can also be opened straight
+   * from the pipeline — a walk-in, a repeat buyer, a booking taken at the gallery and
+   * entered afterwards — and those carry no appointment at all. They were invisible
+   * here, so a board showing two Booked deals sat next to a funnel reading zero, and
+   * the funnel is the screen people distrust first.
+   *
+   * DOUBLE COUNTING is the whole difficulty. A deal opened by a booked appointment
+   * carries no reference back to it — `openDealForBooking` writes an activity note and
+   * nothing else — so the test has to be "does this client have a booked appointment in
+   * this window at all". If they do, that booking is already counted on the appointment
+   * side and the deal must not be counted again.
+   *
+   * The client is reached BY TWO ROUTES, and missing the second is how this would
+   * silently double count. An appointment booked against a LEAD keeps `contact_id`
+   * null: booking converts the lead and gives the DEAL the new contact, but never goes
+   * back to rewrite the appointment row. So a lead-booked appointment and the deal it
+   * created share no column at all — they are joined only through
+   * `leads.converted_to_contact_id`. Matching on the contact alone looked correct and
+   * counted every one of those bookings twice.
+   *
+   * Matching on the client rather than on client-plus-subject is the conservative
+   * direction otherwise: it can only ever leave a booking out, never invent one.
+   *
+   * Grouped by project AND owner in one query so the headline, the By project table and
+   * the By agent table all move together — three separate counts is how they drift.
+   */
+  const directDeals = and(
+    isNull(deals.deletedAt),
+    sql`not exists (
+      select 1 from ${appointments} a
+      left join ${leads} l on l.id = a.lead_id and l.deleted_at is null
+      where (a.contact_id = ${deals.contactId} or l.converted_to_contact_id = ${deals.contactId})
+        and a.outcome = 'booked'
+        and a.deleted_at is null
+        and a.scheduled_at >= ${fromIso}::timestamptz
+        and a.scheduled_at <= ${toIso}::timestamptz
+    )`,
+    sql`${deals.createdAt} >= ${fromIso}::timestamptz`,
+    sql`${deals.createdAt} <= ${toIso}::timestamptz`,
+    ownershipFilter(user, deals.assignedTo),
+  );
+
   const [
     leadTotals,
     apptTotals,
@@ -157,6 +203,7 @@ export async function getFunnel(user: User, window: ReportWindow): Promise<Funne
     leadsByAgent,
     apptsSetByAgent,
     apptsClosedByAgent,
+    directBooked,
   ] = await withDbRetry(() => Promise.all([
     db.select({ c: count() }).from(leads).where(liveLead),
 
@@ -236,6 +283,16 @@ export async function getFunnel(user: User, window: ReportWindow): Promise<Funne
       .from(appointments)
       .where(liveAppt)
       .groupBy(sql`coalesce(${appointments.closerId}, ${appointments.assignedTo})`),
+
+    db
+      .select({
+        projectId: deals.projectId,
+        agentId: deals.assignedTo,
+        c: count(),
+      })
+      .from(deals)
+      .where(directDeals)
+      .groupBy(deals.projectId, deals.assignedTo),
   ]), "funnel").catch((err: unknown) => {
     /*
      * TEMPORARY DIAGNOSTIC — remove once the intermittent dashboard 500 is named.
@@ -275,6 +332,10 @@ export async function getFunnel(user: User, window: ReportWindow): Promise<Funne
   const t = apptTotals[0] ?? { total: 0, showedUp: 0, noShow: 0, booked: 0 };
   const converted = convertedTotals[0]?.c ?? 0;
 
+  /** Bookings taken outside the appointment flow, folded into Booked. */
+  const directTotal = directBooked.reduce((n, r) => n + r.c, 0);
+  const bookedTotal = t.booked + directTotal;
+
   const stages: FunnelStage[] = [
     { key: "leads", label: "Leads", count: totalLeads, conversionFromPrevious: null, conversionFromLeads: null },
     {
@@ -294,9 +355,16 @@ export async function getFunnel(user: User, window: ReportWindow): Promise<Funne
     {
       key: "booked",
       label: "Booked",
-      count: t.booked,
-      conversionFromPrevious: share(t.booked, t.showedUp),
-      conversionFromLeads: share(t.booked, totalLeads),
+      count: bookedTotal,
+      /*
+       * Against Showed up, and it can now exceed 100%.
+       *
+       * That is not a bug to clamp: a walk-in booking is a real booking with no
+       * presentation above it in this funnel. A rate over 100% says "you booked more
+       * than you presented to", which is worth seeing rather than hiding.
+       */
+      conversionFromPrevious: share(bookedTotal, t.showedUp),
+      conversionFromLeads: share(bookedTotal, totalLeads),
     },
     {
       key: "converted",
@@ -304,7 +372,7 @@ export async function getFunnel(user: User, window: ReportWindow): Promise<Funne
       count: converted,
       // Against Booked, this reads as the survival rate through the bank — the single
       // number that says how much of what the board celebrates turns into commission.
-      conversionFromPrevious: share(converted, t.booked),
+      conversionFromPrevious: share(converted, bookedTotal),
       conversionFromLeads: share(converted, totalLeads),
     },
   ];
@@ -320,9 +388,17 @@ export async function getFunnel(user: User, window: ReportWindow): Promise<Funne
     // Denominator is appointments that reached a verdict. Counting still-scheduled ones
     // would make every fresh appointment look like a success and dilute the rate.
     noShowRate: share(t.noShow, t.showedUp + t.noShow),
-    byProject: merge(leadsByProject, apptsByProject, NO_PROJECT_LABEL),
+    byProject: addDirect(
+      merge(leadsByProject, apptsByProject, NO_PROJECT_LABEL),
+      directBooked.map((r) => ({ id: r.projectId, c: r.c })),
+      NO_PROJECT_LABEL,
+    ),
     byAgent: isTeamLeadOrAbove(user)
-      ? await mergeAgents(leadsByAgent, apptsSetByAgent, apptsClosedByAgent)
+      ? addDirect(
+          await mergeAgents(leadsByAgent, apptsSetByAgent, apptsClosedByAgent),
+          directBooked.map((r) => ({ id: r.agentId, c: r.c })),
+          NO_AGENT_LABEL,
+        )
       : [],
   };
 }
@@ -368,6 +444,36 @@ async function mergeAgents(
   }
 
   return [...byId.values()].sort((a, b) => b.booked - a.booked || b.appointments - a.appointments || b.leads - a.leads);
+}
+
+
+/**
+ * Fold appointment-less bookings into rows that were built from appointments.
+ *
+ * A project or agent can appear here for the first time — somebody whose only activity
+ * this period was a walk-in booking has no lead row and no appointment row, and leaving
+ * them out would make the table disagree with the headline it sits under.
+ *
+ * Re-sorted afterwards for the same reason: a row whose booking count just changed
+ * cannot keep a position that was ordered on the old number.
+ */
+function addDirect(
+  rows: FunnelRow[],
+  direct: Array<{ id: string | null; c: number }>,
+  nullLabel: string,
+): FunnelRow[] {
+  if (direct.length === 0) return rows;
+  const byId = new Map<string | null, FunnelRow>(rows.map((r) => [r.id, r]));
+  for (const d of direct) {
+    const key = d.id ?? null;
+    let row = byId.get(key);
+    if (!row) {
+      row = { id: key, label: nullLabel, leads: 0, appointments: 0, showedUp: 0, booked: 0, noShowRate: null };
+      byId.set(key, row);
+    }
+    row.booked += d.c;
+  }
+  return [...byId.values()].sort((a, b) => b.booked - a.booked || b.leads - a.leads || b.appointments - a.appointments);
 }
 
 type LeadGroup = { id: string | null; name: string | null; c: number };

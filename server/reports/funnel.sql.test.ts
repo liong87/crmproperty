@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { and, count, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { leads, appointments, users } from "@/lib/db/schema";
+import { leads, appointments, users, deals } from "@/lib/db/schema";
 
 /**
  * The same guard as by-source.sql.test.ts, for the funnel.
@@ -82,5 +82,49 @@ describe("funnel date bounds are never Date parameters", () => {
       .where(and(isNull(appointments.deletedAt), sql`${appointments.scheduledAt} >= ${from}`))
       .toSQL();
     expect(bad.params.some((p) => p instanceof Date)).toBe(true);
+  });
+});
+
+/**
+ * Bookings taken outside the appointment flow.
+ *
+ * Two things must hold, and the second is the one that bit. The predicate carries raw
+ * `sql`, so its bounds are ISO strings (trap 3, as above). And its NOT EXISTS has to
+ * reach the client by BOTH routes: an appointment booked against a lead keeps
+ * `contact_id` null forever — booking converts the lead and gives the deal the new
+ * contact without ever rewriting the appointment row — so a contact-only match finds
+ * nothing and counts that booking twice, once as an appointment and once as a deal.
+ * Verified against real rows: contact-only reported 20 bookings where 19 happened.
+ */
+const directDeals = and(
+  isNull(deals.deletedAt),
+  sql`not exists (
+    select 1 from ${appointments} a
+    left join ${leads} l on l.id = a.lead_id and l.deleted_at is null
+    where (a.contact_id = ${deals.contactId} or l.converted_to_contact_id = ${deals.contactId})
+      and a.outcome = 'booked'
+      and a.deleted_at is null
+      and a.scheduled_at >= ${from.toISOString()}::timestamptz
+      and a.scheduled_at <= ${to.toISOString()}::timestamptz
+  )`,
+  sql`${deals.createdAt} >= ${from.toISOString()}::timestamptz`,
+  sql`${deals.createdAt} <= ${to.toISOString()}::timestamptz`,
+);
+
+describe("appointment-less bookings", () => {
+  it("sends no Date", () => {
+    const q = db
+      .select({ projectId: deals.projectId, agentId: deals.assignedTo, c: count() })
+      .from(deals)
+      .where(directDeals)
+      .groupBy(deals.projectId, deals.assignedTo)
+      .toSQL();
+    expect(q.params.some((p) => p instanceof Date)).toBe(false);
+  });
+
+  it("excludes a booking reached through a converted lead, not just a direct contact", () => {
+    const { sql: text } = db.select({ c: count() }).from(deals).where(directDeals).toSQL();
+    expect(text).toContain("converted_to_contact_id");
+    expect(text).toContain("a.contact_id");
   });
 });
