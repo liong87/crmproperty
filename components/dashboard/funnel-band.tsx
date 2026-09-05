@@ -79,6 +79,51 @@ export function FunnelBand({
 }) {
   if (stages.length === 0) return null;
 
+  /*
+   * A funnel with nothing in it is worse than no funnel.
+   *
+   * The shape only says anything when the band NARROWS — that is the whole argument
+   * for drawing it as one band instead of five tiles. With three leads and no
+   * appointments yet, it renders 100% and then four 0%s at 48px, occupying the largest
+   * block on the page to report that nothing has happened. It does not read as "early
+   * days"; it reads as broken, which is the worst thing a chart can do.
+   *
+   * So below the threshold it says so in a sentence, and names the next step. The
+   * numbers are not hidden — they are stated plainly, which at this size is more
+   * information than the drawing carried.
+   */
+  const total = stages[0]?.value ?? 0;
+  const movedOn = stages.slice(1).reduce((sum, st) => sum + st.value, 0);
+  if (total === 0 || movedOn === 0) {
+    const first = stages[0]!;
+    const next = stages[1];
+    return (
+      <div className={cn("px-5 pb-5 pt-2", className)}>
+        <p className="text-sm text-muted-foreground">
+          {total === 0 ? (
+            <>No leads in this window yet. The funnel appears once there are some to follow.</>
+          ) : (
+            <>
+              <span className="font-semibold tabular-nums text-foreground">{total}</span>{" "}
+              {first.label.toLowerCase()}
+              {total === 1 ? "" : ""} so far, and none have reached{" "}
+              <span className="font-medium">{(next?.label ?? "the next stage").toLowerCase()}</span>.
+              The funnel appears once leads start moving.
+            </>
+          )}
+        </p>
+        {first.href && (
+          <Link
+            href={first.href}
+            className="mt-2 inline-block text-sm font-medium text-primary underline underline-offset-4"
+          >
+            Work the {first.label.toLowerCase()}
+          </Link>
+        )}
+      </div>
+    );
+  }
+
   const values = stages.map((s) => s.value);
   const max = values[0] ?? 0;
   const n = stages.length;
