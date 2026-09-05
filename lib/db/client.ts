@@ -68,10 +68,34 @@ function createClient() {
   // too, hence a small per-isolate max.
   if (hyperdrive) {
     return postgres(connectionString, {
-      max: 5,
+      /*
+       * THREE, not Cloudflare's example of five.
+       *
+       * A Worker invocation may hold at most SIX simultaneous outbound TCP
+       * connections; Cloudflare's `max: 5` assumes the database is the only thing
+       * opening any. It is not. The dashboard layout calls `syncCurrentUser()`, which
+       * is an HTTPS round trip to Clerk's API, and it runs concurrently with the
+       * funnel's EIGHT parallel queries — so a pool of five sat exactly on the cap
+       * with the RSC prefetch racing the real request beside it.
+       *
+       * Over the cap, the runtime closes a socket. postgres-js does not find out
+       * until it writes to it, and then reports
+       *   write CONNECTION_CLOSED <id>.hyperdrive.local:5432
+       * against whichever statement it happened to be holding — which is why the
+       * failing query was different every time and never the one at fault.
+       *
+       * Three leaves headroom for Clerk plus any other subrequest. It costs almost
+       * nothing: Hyperdrive owns the real pool server-side, the hop is local, and
+       * postgres-js pipelines the eight funnel queries over the sockets it has.
+       */
+      max: 3,
       // Avoids an extra round-trip on every connection. Safe here: the schema uses
       // no custom array types.
       fetch_types: false,
+      // Retire a socket rather than discover it is dead by writing to it. Within a
+      // single request this rarely fires; it matters for any client that outlives one.
+      idle_timeout: 10,
+      max_lifetime: 60,
       ssl: false,
       onnotice: () => {},
     });
