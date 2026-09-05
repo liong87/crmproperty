@@ -8,7 +8,14 @@
 import { checkEnv, formatEnvReport } from "@/lib/env";
 
 export async function register() {
-  const { fatal, warnings } = checkEnv();
+  /*
+   * `migrations: false` — this is the SERVER, and it never runs DDL.
+   *
+   * The pooler/DIRECT_DATABASE_URL warning is real and worth keeping for the CLI, but
+   * here it fired on every isolate start for a condition the Worker cannot hit. In a
+   * `wrangler tail` session chasing an actual fault it was most of the output.
+   */
+  const { fatal, warnings } = checkEnv({ migrations: false });
 
   if (warnings.length > 0) {
     console.warn(formatEnvReport(warnings, "[config] Warnings — some features are unavailable:"));

@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { AlertCircle } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
@@ -60,9 +61,11 @@ export function Field({
         </p>
       )}
       {error && (
-        <p id={errId} className="flex items-start gap-1 text-sm font-medium text-destructive">
-          {/* The glyph is the non-colour half of the signal. */}
-          <span aria-hidden="true">!</span>
+        <p id={errId} className="flex items-start gap-1.5 text-sm font-medium text-destructive">
+          {/* The icon is the non-colour half of the signal — the message must not depend
+              on red alone. A bare "!" character did that job but read as a typo in the
+              sentence it preceded. */}
+          <AlertCircle aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>{error}</span>
         </p>
       )}

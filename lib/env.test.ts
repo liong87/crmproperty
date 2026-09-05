@@ -90,6 +90,23 @@ describe("checkEnv — pooler / migrations", () => {
     expect(warnings.map((w) => w.variable)).toContain("DIRECT_DATABASE_URL");
   });
 
+  /*
+   * The Worker opts out: it never runs DDL, so the warning is advice about something
+   * that cannot happen there — and it was printed on every isolate start.
+   */
+  it("is silent when the caller says migrations do not run here", () => {
+    setRequired(); setStorage();
+    process.env.DATABASE_URL = "postgres://u:p@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres";
+    const { warnings } = checkEnv({ migrations: false });
+    expect(warnings.map((w) => w.variable)).not.toContain("DIRECT_DATABASE_URL");
+  });
+
+  it("still warns by default, so the CLI keeps the guard", () => {
+    setRequired(); setStorage();
+    process.env.DATABASE_URL = "postgres://u:p@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres";
+    expect(checkEnv().warnings.map((w) => w.variable)).toContain("DIRECT_DATABASE_URL");
+  });
+
   it("does not warn when the direct URL is provided", () => {
     setRequired(); setStorage();
     process.env.DATABASE_URL = "postgres://u:p@x.pooler.supabase.com:6543/postgres";

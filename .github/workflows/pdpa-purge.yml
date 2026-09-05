@@ -1,8 +1,13 @@
 name: PDPA retention purge
 
-# Hard-deletes UNCONVERTED leads older than 24 months, plus their activities,
-# documents (and the stored files), and message logs. Converted leads are kept —
-# they belong to a live client relationship.
+# Two retention jobs, one schedule.
+#
+# 1. Hard-deletes UNCONVERTED leads older than 24 months, plus their activities,
+#    documents (and the stored files), and message logs. Converted leads are kept —
+#    they belong to a live client relationship.
+# 2. Hard-deletes notifications older than 90 days. Their bodies carry client names,
+#    so they were personal data sitting outside the retention policy entirely — a
+#    client's name could outlive the lead it came from.
 #
 # This exists because scripts/purge-stale-leads.ts was written but never scheduled,
 # which meant the 24-month retention obligation was documented and not actually
@@ -48,6 +53,17 @@ jobs:
           S3_REGION: auto
           PURGE_DRY_RUN: ${{ inputs.dry_run == true && '1' || '' }}
         run: pnpm purge:leads
+
+      - name: Purge old notifications
+        # Separate step, and deliberately AFTER the lead purge: notification bodies
+        # carry client names (server/notifications/jobs.ts builds them from contact and
+        # project names), so they are personal data on a 90-day clock of their own.
+        # `if: always()` so a failure in the lead purge does not silently skip this one.
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DIRECT_URL }}
+          PURGE_DRY_RUN: ${{ inputs.dry_run == true && '1' || '' }}
+        run: pnpm purge:notifications
 
       - name: Note the outcome
         if: always()

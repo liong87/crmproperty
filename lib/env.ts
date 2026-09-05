@@ -90,7 +90,21 @@ export interface EnvProblem {
  * Check the environment. Returns problems rather than throwing, so the caller
  * decides whether to refuse to start (production) or warn (development).
  */
-export function checkEnv(): { fatal: EnvProblem[]; warnings: EnvProblem[] } {
+export interface CheckEnvOptions {
+  /**
+   * Include checks that only matter where MIGRATIONS run — the CLI scripts.
+   *
+   * Defaults to true so `pnpm db:migrate` and friends keep every guard. The deployed
+   * Worker passes false: it never runs DDL, so warning it that "migrations will fail"
+   * is advice about something that cannot happen there. It was printed on every
+   * isolate start — twice, in practice — which is noise in exactly the log you are
+   * reading when something is actually wrong.
+   */
+  migrations?: boolean;
+}
+
+export function checkEnv(options: CheckEnvOptions = {}): { fatal: EnvProblem[]; warnings: EnvProblem[] } {
+  const { migrations = true } = options;
   const fatal: EnvProblem[] = [];
   const warnings: EnvProblem[] = [];
 
@@ -183,7 +197,7 @@ export function checkEnv(): { fatal: EnvProblem[]; warnings: EnvProblem[] } {
     }
   }
 
-  if (!isSet("DIRECT_DATABASE_URL") && /:6543\//.test(process.env.DATABASE_URL ?? "")) {
+  if (migrations && !isSet("DIRECT_DATABASE_URL") && /:6543\//.test(process.env.DATABASE_URL ?? "")) {
     warnings.push({
       variable: "DIRECT_DATABASE_URL",
       problem: "DATABASE_URL points at a connection pooler and no direct URL is set.",
